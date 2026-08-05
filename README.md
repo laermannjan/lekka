@@ -36,3 +36,5 @@ docker compose up --build
 ```
 
 This builds the production image, runs it on `http://localhost:3000`, and persists the SQLite database in a named volume (`lekka-data`) mounted at `/app/data`.
+
+If you deploy behind a different host/port (a reverse proxy, a non-default port, a real domain), update the `ORIGIN` env var in `docker-compose.yml` to match — SvelteKit's Node adapter uses it to validate form submissions and rejects them otherwise.

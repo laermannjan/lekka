@@ -5,6 +5,14 @@ RUN corepack enable && \
 	rm -rf /var/lib/apt/lists/*
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
+# better-sqlite3's bundled prebuilt binary for this platform/arch is linked
+# against a newer glibc than node:24-slim (Debian bookworm) ships, so it
+# dlopen-fails at runtime. Drop it and compile from source instead, using the
+# node-gyp toolchain installed above.
+RUN for dir in node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3; do \
+		rm -f "$dir/prebuilds/$(node -p process.platform)-$(node -p process.arch).node"; \
+		( cd "$dir" && npx node-gyp rebuild --release ); \
+	done
 COPY . .
 # SvelteKit's build-time route analysis imports server modules, which need a
 # DATABASE_URL to open a (throwaway, build-only) SQLite handle.
