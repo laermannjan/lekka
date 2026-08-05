@@ -1181,6 +1181,63 @@ describe('recipes', () => {
 			]);
 		});
 
+		it('reverting restores each usage’s Alternative Ingredient as it was at that version', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, { instruction: 'Brown {{1}} of mince.' });
+			const beef = createIngredient({ baseTerm: 'beef mince' });
+			const turkey = createIngredient({ baseTerm: 'turkey mince' });
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: beef.id,
+				quantityValue: 500,
+				quantityUnit: 'g',
+				alternativeIngredientId: turkey.id
+			});
+
+			const [versionWithAlternative] = listRecipeVersions(recipe.id).slice(-1);
+
+			setUsageAlternative(usage.id, null);
+			expect(
+				getRecipe(recipe.id, defaultComposition.id)?.composition.steps[0].usages[0]
+					.alternativeIngredient
+			).toBeNull();
+
+			revertToVersion(recipe.id, versionWithAlternative.id);
+
+			const restoredUsage = getRecipe(recipe.id, defaultComposition.id)?.composition.steps[0]
+				.usages[0];
+			expect(restoredUsage?.alternativeIngredient?.baseTerm).toEqual('turkey mince');
+		});
+
+		it('reverting restores each usage’s and step’s Scaling Formula as it was at that version', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, {
+				instruction: 'Brown {{1}} of mince.',
+				duration: { kind: 'active', min: 10, unit: 'minutes' }
+			});
+			const beef = createIngredient({ baseTerm: 'beef mince' });
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: beef.id,
+				quantityValue: 500,
+				quantityUnit: 'g'
+			});
+			setQuantityScalingFormula(usage.id, { kind: 'rate_vs_servings', ratePercent: 50 });
+			setDurationScalingFormula(step.id, { kind: 'fixed' });
+
+			const [versionWithFormulas] = listRecipeVersions(recipe.id).slice(-1);
+
+			removeQuantityScalingFormula(usage.id);
+			removeDurationScalingFormula(step.id);
+
+			revertToVersion(recipe.id, versionWithFormulas.id);
+
+			const restoredStep = getRecipe(recipe.id, defaultComposition.id)?.composition.steps[0];
+			expect(restoredStep?.usages[0].scalingFormula?.kind).toEqual('rate_vs_servings');
+			expect(restoredStep?.usages[0].scalingFormula?.ratePercent).toEqual(50);
+			expect(restoredStep?.durationScalingFormula?.kind).toEqual('fixed');
+		});
+
 		it('reverting appends a new version rather than truncating history', () => {
 			const recipe = createRecipe('Chilli con carne');
 			const defaultComposition = getDefaultComposition(recipe.id);

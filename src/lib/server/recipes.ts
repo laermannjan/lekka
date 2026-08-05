@@ -8,6 +8,7 @@ import {
 	ingredientUsages,
 	recipes,
 	recipeVersions,
+	scalingFormulas,
 	steps,
 	DURATION_KINDS,
 	type Composition,
@@ -30,6 +31,7 @@ import {
 	getDurationScalingFormulasByStepIds,
 	getQuantityScalingFormulasByUsageIds
 } from './scaling';
+import { recordVersion, type RecipeSnapshot } from './recipe-versions';
 
 // A second reference to `ingredients`, so a Usage's primary Ingredient and
 // its optional Alternative Ingredient (see CONTEXT.md) can both be
@@ -78,107 +80,6 @@ function insertStep(
 	return tx
 		.insert(steps)
 		.values({ recipeId, ...content })
-		.returning()
-		.get();
-}
-
-// A self-contained capture of a Recipe's Step pool and every Composition
-// together - the unit `recordVersion` stores and `revertToVersion` restores
-// (see CONTEXT.md's Version: one shared timeline, no per-Variant history).
-// Row ids are the ones live at capture time; `revertToVersion` remaps them
-// to freshly-inserted rows rather than trying to resurrect the same ids.
-type RecipeSnapshot = {
-	compositions: Pick<Composition, 'id' | 'name' | 'isDefault' | 'seededFromCompositionId'>[];
-	steps: Pick<
-		Step,
-		'id' | 'instruction' | 'durationKind' | 'durationMin' | 'durationMax' | 'durationUnit'
-	>[];
-	compositionSteps: Pick<
-		CompositionStep,
-		'compositionId' | 'position' | 'poolStepId' | 'overrideStepId'
-	>[];
-	ingredientUsages: Pick<
-		IngredientUsage,
-		| 'stepId'
-		| 'ingredientId'
-		| 'position'
-		| 'quantityValue'
-		| 'quantityUnit'
-		| 'prepAttribute'
-		| 'note'
-	>[];
-};
-
-function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot {
-	const compositionRows = tx
-		.select()
-		.from(compositions)
-		.where(eq(compositions.recipeId, recipeId))
-		.all();
-	const stepRows = tx.select().from(steps).where(eq(steps.recipeId, recipeId)).all();
-
-	const compositionIds = compositionRows.map((c) => c.id);
-	const compositionStepRows =
-		compositionIds.length === 0
-			? []
-			: tx
-					.select()
-					.from(compositionSteps)
-					.where(inArray(compositionSteps.compositionId, compositionIds))
-					.all();
-
-	const stepIds = stepRows.map((s) => s.id);
-	const usageRows =
-		stepIds.length === 0
-			? []
-			: tx.select().from(ingredientUsages).where(inArray(ingredientUsages.stepId, stepIds)).all();
-
-	return {
-		compositions: compositionRows.map((c) => ({
-			id: c.id,
-			name: c.name,
-			isDefault: c.isDefault,
-			seededFromCompositionId: c.seededFromCompositionId
-		})),
-		steps: stepRows.map((s) => ({
-			id: s.id,
-			instruction: s.instruction,
-			durationKind: s.durationKind,
-			durationMin: s.durationMin,
-			durationMax: s.durationMax,
-			durationUnit: s.durationUnit
-		})),
-		compositionSteps: compositionStepRows.map((cs) => ({
-			compositionId: cs.compositionId,
-			position: cs.position,
-			poolStepId: cs.poolStepId,
-			overrideStepId: cs.overrideStepId
-		})),
-		ingredientUsages: usageRows.map((u) => ({
-			stepId: u.stepId,
-			ingredientId: u.ingredientId,
-			position: u.position,
-			quantityValue: u.quantityValue,
-			quantityUnit: u.quantityUnit,
-			prepAttribute: u.prepAttribute,
-			note: u.note
-		}))
-	};
-}
-
-// Records a new Version at the end of the Recipe's single shared timeline,
-// capturing the pool and every Composition together in one snapshot (see
-// CONTEXT.md). Called at the end of every mutating operation below, so the
-// timeline never has a gap where the live state doesn't match any Version.
-function recordVersion(
-	tx: Tx,
-	recipeId: number,
-	revertedFromVersionId: number | null = null
-): RecipeVersion {
-	const snapshot = captureRecipeSnapshot(tx, recipeId);
-	return tx
-		.insert(recipeVersions)
-		.values({ recipeId, snapshot: JSON.stringify(snapshot), revertedFromVersionId })
 		.returning()
 		.get();
 }
@@ -607,12 +508,19 @@ export function setUsageAlternative(
 		requireIngredient(alternativeIngredientId);
 	}
 
-	return db
-		.update(ingredientUsages)
-		.set({ alternativeIngredientId })
-		.where(eq(ingredientUsages.id, usageId))
-		.returning()
-		.get();
+	const step = db.select().from(steps).where(eq(steps.id, usage.stepId)).get();
+	if (!step) throw new StepNotFoundError(`No step ${usage.stepId}`);
+
+	return db.transaction((tx) => {
+		const updated = tx
+			.update(ingredientUsages)
+			.set({ alternativeIngredientId })
+			.where(eq(ingredientUsages.id, usageId))
+			.returning()
+			.get();
+		recordVersion(tx, step.recipeId);
+		return updated;
+	});
 }
 
 // A pool Step's other referrers - the Compositions (besides the one
@@ -1126,10 +1034,12 @@ export function revertToVersion(recipeId: number, versionId: number): RecipeVers
 				.run();
 		}
 
+		const usageIdMap = new Map<number, number>();
 		for (const u of snapshot.ingredientUsages) {
 			const newStepId = stepIdMap.get(u.stepId);
 			if (newStepId === undefined) continue;
-			tx.insert(ingredientUsages)
+			const inserted = tx
+				.insert(ingredientUsages)
 				.values({
 					stepId: newStepId,
 					ingredientId: u.ingredientId,
@@ -1137,7 +1047,43 @@ export function revertToVersion(recipeId: number, versionId: number): RecipeVers
 					quantityValue: u.quantityValue,
 					quantityUnit: u.quantityUnit,
 					prepAttribute: u.prepAttribute,
+					// The Alternative Ingredient is a global Ingredient reference,
+					// not a recipe-scoped row, so it needs no remapping - unlike
+					// `otherUsageId` on a Scaling Formula below.
+					alternativeIngredientId: u.alternativeIngredientId,
 					note: u.note
+				})
+				.returning()
+				.get();
+			usageIdMap.set(u.id, inserted.id);
+		}
+
+		// `otherUsageId` is the one Scaling Formula field that points at
+		// another recipe-scoped row (an Ingredient Usage) rather than a global
+		// or self-contained value, so it needs the same remap as everything
+		// above - dropped if its target usage didn't make it into this
+		// snapshot's Step (see CONTEXT.md: it's always a Usage on the same
+		// Step as the Duration it's attached to).
+		for (const f of snapshot.scalingFormulas) {
+			const newIngredientUsageId =
+				f.ingredientUsageId !== null ? (usageIdMap.get(f.ingredientUsageId) ?? null) : null;
+			const newStepId = f.stepId !== null ? (stepIdMap.get(f.stepId) ?? null) : null;
+			if (f.ingredientUsageId !== null && newIngredientUsageId === null) continue;
+			if (f.stepId !== null && newStepId === null) continue;
+			const newOtherUsageId =
+				f.otherUsageId !== null ? (usageIdMap.get(f.otherUsageId) ?? null) : null;
+			if (f.otherUsageId !== null && newOtherUsageId === null) continue;
+
+			tx.insert(scalingFormulas)
+				.values({
+					ingredientUsageId: newIngredientUsageId,
+					stepId: newStepId,
+					kind: f.kind,
+					ratePercent: f.ratePercent,
+					otherUsageId: newOtherUsageId,
+					perUnitAmount: f.perUnitAmount,
+					direction: f.direction,
+					thresholdSide: f.thresholdSide
 				})
 				.run();
 		}

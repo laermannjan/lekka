@@ -11,6 +11,7 @@ import {
 	type ScalingDirection,
 	type ScalingThresholdSide
 } from './db/schema';
+import { recordVersion } from './recipe-versions';
 
 export class InvalidScalingFormulaError extends Error {}
 export class ScalingUsageNotFoundError extends Error {}
@@ -77,12 +78,14 @@ export function setQuantityScalingFormula(
 		.where(eq(ingredientUsages.id, ingredientUsageId))
 		.get();
 	if (!usage) throw new ScalingUsageNotFoundError(`No ingredient usage ${ingredientUsageId}`);
+	const step = db.select().from(steps).where(eq(steps.id, usage.stepId)).get();
+	if (!step) throw new ScalingStepNotFoundError(`No step ${usage.stepId}`);
 
 	return db.transaction((tx) => {
 		tx.delete(scalingFormulas)
 			.where(eq(scalingFormulas.ingredientUsageId, ingredientUsageId))
 			.run();
-		return tx
+		const formula = tx
 			.insert(scalingFormulas)
 			.values({
 				ingredientUsageId,
@@ -91,13 +94,29 @@ export function setQuantityScalingFormula(
 			})
 			.returning()
 			.get();
+		recordVersion(tx, step.recipeId);
+		return formula;
 	});
 }
 
 // Removes an Ingredient Usage's Quantity Scaling Formula, if any - the
 // Quantity reverts to default strict-linear scaling.
 export function removeQuantityScalingFormula(ingredientUsageId: number): void {
-	db.delete(scalingFormulas).where(eq(scalingFormulas.ingredientUsageId, ingredientUsageId)).run();
+	const usage = db
+		.select()
+		.from(ingredientUsages)
+		.where(eq(ingredientUsages.id, ingredientUsageId))
+		.get();
+	if (!usage) return;
+	const step = db.select().from(steps).where(eq(steps.id, usage.stepId)).get();
+	if (!step) return;
+
+	db.transaction((tx) => {
+		tx.delete(scalingFormulas)
+			.where(eq(scalingFormulas.ingredientUsageId, ingredientUsageId))
+			.run();
+		recordVersion(tx, step.recipeId);
+	});
 }
 
 // Attaches a Scaling Formula to a Step's Duration, replacing any formula
@@ -135,7 +154,7 @@ export function setDurationScalingFormula(
 
 	return db.transaction((tx) => {
 		tx.delete(scalingFormulas).where(eq(scalingFormulas.stepId, stepId)).run();
-		return tx
+		const formula = tx
 			.insert(scalingFormulas)
 			.values({
 				stepId,
@@ -148,13 +167,21 @@ export function setDurationScalingFormula(
 			})
 			.returning()
 			.get();
+		recordVersion(tx, step.recipeId);
+		return formula;
 	});
 }
 
 // Removes a Step's Duration Scaling Formula, if any - the Duration reverts
 // to default constant (unaffected by servings).
 export function removeDurationScalingFormula(stepId: number): void {
-	db.delete(scalingFormulas).where(eq(scalingFormulas.stepId, stepId)).run();
+	const step = db.select().from(steps).where(eq(steps.id, stepId)).get();
+	if (!step) return;
+
+	db.transaction((tx) => {
+		tx.delete(scalingFormulas).where(eq(scalingFormulas.stepId, stepId)).run();
+		recordVersion(tx, step.recipeId);
+	});
 }
 
 // Every Quantity Scaling Formula among the given Usages, keyed by Usage id.
