@@ -6,6 +6,7 @@ import {
 	ingredients,
 	ingredientUsages,
 	recipes,
+	recipeVersions,
 	steps,
 	DURATION_KINDS,
 	type Composition,
@@ -14,6 +15,7 @@ import {
 	type Ingredient,
 	type IngredientUsage,
 	type Recipe,
+	type RecipeVersion,
 	type Step
 } from './db/schema';
 
@@ -29,6 +31,8 @@ export class IngredientNotFoundError extends Error {}
 export class BlankVariantNameError extends Error {}
 export class CompositionNotFoundError extends Error {}
 export class CompositionStepNotFoundError extends Error {}
+export class StepNotFoundError extends Error {}
+export class RecipeVersionNotFoundError extends Error {}
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -50,6 +54,107 @@ function insertStep(
 		.get();
 }
 
+// A self-contained capture of a Recipe's Step pool and every Composition
+// together - the unit `recordVersion` stores and `revertToVersion` restores
+// (see CONTEXT.md's Version: one shared timeline, no per-Variant history).
+// Row ids are the ones live at capture time; `revertToVersion` remaps them
+// to freshly-inserted rows rather than trying to resurrect the same ids.
+type RecipeSnapshot = {
+	compositions: Pick<Composition, 'id' | 'name' | 'isDefault' | 'seededFromCompositionId'>[];
+	steps: Pick<
+		Step,
+		'id' | 'instruction' | 'durationKind' | 'durationMin' | 'durationMax' | 'durationUnit'
+	>[];
+	compositionSteps: Pick<
+		CompositionStep,
+		'compositionId' | 'position' | 'poolStepId' | 'overrideStepId'
+	>[];
+	ingredientUsages: Pick<
+		IngredientUsage,
+		| 'stepId'
+		| 'ingredientId'
+		| 'position'
+		| 'quantityValue'
+		| 'quantityUnit'
+		| 'prepAttribute'
+		| 'note'
+	>[];
+};
+
+function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot {
+	const compositionRows = tx
+		.select()
+		.from(compositions)
+		.where(eq(compositions.recipeId, recipeId))
+		.all();
+	const stepRows = tx.select().from(steps).where(eq(steps.recipeId, recipeId)).all();
+
+	const compositionIds = compositionRows.map((c) => c.id);
+	const compositionStepRows =
+		compositionIds.length === 0
+			? []
+			: tx
+					.select()
+					.from(compositionSteps)
+					.where(inArray(compositionSteps.compositionId, compositionIds))
+					.all();
+
+	const stepIds = stepRows.map((s) => s.id);
+	const usageRows =
+		stepIds.length === 0
+			? []
+			: tx.select().from(ingredientUsages).where(inArray(ingredientUsages.stepId, stepIds)).all();
+
+	return {
+		compositions: compositionRows.map((c) => ({
+			id: c.id,
+			name: c.name,
+			isDefault: c.isDefault,
+			seededFromCompositionId: c.seededFromCompositionId
+		})),
+		steps: stepRows.map((s) => ({
+			id: s.id,
+			instruction: s.instruction,
+			durationKind: s.durationKind,
+			durationMin: s.durationMin,
+			durationMax: s.durationMax,
+			durationUnit: s.durationUnit
+		})),
+		compositionSteps: compositionStepRows.map((cs) => ({
+			compositionId: cs.compositionId,
+			position: cs.position,
+			poolStepId: cs.poolStepId,
+			overrideStepId: cs.overrideStepId
+		})),
+		ingredientUsages: usageRows.map((u) => ({
+			stepId: u.stepId,
+			ingredientId: u.ingredientId,
+			position: u.position,
+			quantityValue: u.quantityValue,
+			quantityUnit: u.quantityUnit,
+			prepAttribute: u.prepAttribute,
+			note: u.note
+		}))
+	};
+}
+
+// Records a new Version at the end of the Recipe's single shared timeline,
+// capturing the pool and every Composition together in one snapshot (see
+// CONTEXT.md). Called at the end of every mutating operation below, so the
+// timeline never has a gap where the live state doesn't match any Version.
+function recordVersion(
+	tx: Tx,
+	recipeId: number,
+	revertedFromVersionId: number | null = null
+): RecipeVersion {
+	const snapshot = captureRecipeSnapshot(tx, recipeId);
+	return tx
+		.insert(recipeVersions)
+		.values({ recipeId, snapshot: JSON.stringify(snapshot), revertedFromVersionId })
+		.returning()
+		.get();
+}
+
 export function createRecipe(title: string): Recipe {
 	const trimmed = title.trim().slice(0, MAX_TITLE_LENGTH);
 	if (!trimmed) throw new BlankTitleError('Title must not be blank');
@@ -57,6 +162,7 @@ export function createRecipe(title: string): Recipe {
 	return db.transaction((tx) => {
 		const recipe = tx.insert(recipes).values({ title: trimmed }).returning().get();
 		tx.insert(compositions).values({ recipeId: recipe.id, name: null, isDefault: true }).run();
+		recordVersion(tx, recipe.id);
 		return recipe;
 	});
 }
@@ -186,6 +292,7 @@ export function createVariant(
 				.run();
 		}
 
+		recordVersion(tx, recipeId);
 		return variant;
 	});
 }
@@ -267,6 +374,7 @@ export function addStep(
 			.returning()
 			.get();
 
+		recordVersion(tx, composition.recipeId);
 		return { step, compositionStep };
 	});
 }
@@ -274,12 +382,19 @@ export function addStep(
 export function updateStepInstruction(stepId: number, instruction: string): Step {
 	const trimmed = validateInstruction(instruction);
 
-	return db
-		.update(steps)
-		.set({ instruction: trimmed })
-		.where(eq(steps.id, stepId))
-		.returning()
-		.get();
+	const existing = db.select().from(steps).where(eq(steps.id, stepId)).get();
+	if (!existing) throw new StepNotFoundError(`No step ${stepId}`);
+
+	return db.transaction((tx) => {
+		const updated = tx
+			.update(steps)
+			.set({ instruction: trimmed })
+			.where(eq(steps.id, stepId))
+			.returning()
+			.get();
+		recordVersion(tx, existing.recipeId);
+		return updated;
+	});
 }
 
 // Overrides one Composition's slot with a full, Composition-local copy of
@@ -353,6 +468,7 @@ export function overrideStep(
 			tx.delete(steps).where(eq(steps.id, previousOverrideStepId)).run();
 		}
 
+		recordVersion(tx, composition.recipeId);
 		return overrideStepRow;
 	});
 }
@@ -378,6 +494,9 @@ export function addIngredientUsage(
 		.get();
 	if (!ingredient) throw new IngredientNotFoundError(`No ingredient with id ${input.ingredientId}`);
 
+	const step = db.select().from(steps).where(eq(steps.id, stepId)).get();
+	if (!step) throw new StepNotFoundError(`No step ${stepId}`);
+
 	const prepAttribute = input.prepAttribute?.trim() || null;
 	const note = input.note?.trim() || null;
 	const quantityUnit = input.quantityUnit?.trim() ?? '';
@@ -390,7 +509,7 @@ export function addIngredientUsage(
 			.all();
 		const position = existing.length + 1;
 
-		return tx
+		const usage = tx
 			.insert(ingredientUsages)
 			.values({
 				stepId,
@@ -403,6 +522,9 @@ export function addIngredientUsage(
 			})
 			.returning()
 			.get();
+
+		recordVersion(tx, step.recipeId);
+		return usage;
 	});
 }
 
@@ -462,6 +584,9 @@ export function removeStepFromComposition(
 		.get();
 	if (!row) throw new CompositionStepNotFoundError(`No composition step ${compositionStepId}`);
 
+	const composition = getCompositionById(row.compositionId);
+	if (!composition) throw new CompositionNotFoundError(`No composition ${row.compositionId}`);
+
 	db.transaction((tx) => {
 		const alsoIds = new Set(alsoFromCompositionIds);
 		const rowsToRemove =
@@ -495,6 +620,8 @@ export function removeStepFromComposition(
 		if (stillReferenced.length === 0) {
 			tx.delete(steps).where(eq(steps.id, row.poolStepId)).run();
 		}
+
+		recordVersion(tx, composition.recipeId);
 	});
 }
 
@@ -650,4 +777,109 @@ export function getRecipe(id: number, compositionId?: number): RecipeDetail | un
 	if (!composition) return undefined;
 
 	return { ...recipe, compositions: allCompositions, composition };
+}
+
+// A Recipe's Version history, oldest first - the single shared timeline
+// covering the Step pool and every Composition together (see CONTEXT.md).
+// A caller displaying "Version N" should use 1-indexed position in this
+// list; no version-number column is stored, so history stays append-only
+// even if entries are ever pruned.
+export function listRecipeVersions(recipeId: number): RecipeVersion[] {
+	return db
+		.select()
+		.from(recipeVersions)
+		.where(eq(recipeVersions.recipeId, recipeId))
+		.orderBy(asc(recipeVersions.id))
+		.all();
+}
+
+export function getRecipeVersionById(id: number): RecipeVersion | undefined {
+	return db.select().from(recipeVersions).where(eq(recipeVersions.id, id)).get();
+}
+
+// Reverts a Recipe to a prior Version, restoring the Step pool and every
+// Composition together, unambiguously - there's no per-Variant history to
+// reconcile (see CONTEXT.md). Rather than truncating the timeline, this
+// replaces the live state with the target Version's snapshot and then
+// records that restored state as a new Version at the end of the timeline,
+// so the fact something was reverted - and what was reverted away from -
+// stays in the history rather than being destroyed by it.
+export function revertToVersion(recipeId: number, versionId: number): RecipeVersion {
+	const version = getRecipeVersionById(versionId);
+	if (!version || version.recipeId !== recipeId) {
+		throw new RecipeVersionNotFoundError(`No version ${versionId} on recipe ${recipeId}`);
+	}
+	const snapshot = JSON.parse(version.snapshot) as RecipeSnapshot;
+
+	return db.transaction((tx) => {
+		// Cascades: deleting a Composition removes its composition_steps rows;
+		// deleting a Step removes any remaining composition_steps referencing it
+		// plus its ingredient_usages.
+		tx.delete(compositions).where(eq(compositions.recipeId, recipeId)).run();
+		tx.delete(steps).where(eq(steps.recipeId, recipeId)).run();
+
+		const stepIdMap = new Map<number, number>();
+		for (const s of snapshot.steps) {
+			const inserted = insertStep(tx, recipeId, {
+				instruction: s.instruction,
+				durationKind: s.durationKind,
+				durationMin: s.durationMin,
+				durationMax: s.durationMax,
+				durationUnit: s.durationUnit
+			});
+			stepIdMap.set(s.id, inserted.id);
+		}
+
+		const compositionIdMap = new Map<number, number>();
+		for (const c of snapshot.compositions) {
+			const inserted = tx
+				.insert(compositions)
+				.values({ recipeId, name: c.name, isDefault: c.isDefault, seededFromCompositionId: null })
+				.returning()
+				.get();
+			compositionIdMap.set(c.id, inserted.id);
+		}
+		// Second pass: `seededFromCompositionId` is informational lineage only
+		// (see CONTEXT.md) - remap it now that every Composition in the
+		// snapshot has a new id, dropping it if its source didn't make it into
+		// this snapshot.
+		for (const c of snapshot.compositions) {
+			if (c.seededFromCompositionId === null) continue;
+			const remappedSource = compositionIdMap.get(c.seededFromCompositionId);
+			if (remappedSource === undefined) continue;
+			tx.update(compositions)
+				.set({ seededFromCompositionId: remappedSource })
+				.where(eq(compositions.id, compositionIdMap.get(c.id)!))
+				.run();
+		}
+
+		for (const cs of snapshot.compositionSteps) {
+			const compositionId = compositionIdMap.get(cs.compositionId);
+			const poolStepId = stepIdMap.get(cs.poolStepId);
+			if (compositionId === undefined || poolStepId === undefined) continue;
+			const overrideStepId =
+				cs.overrideStepId !== null ? (stepIdMap.get(cs.overrideStepId) ?? null) : null;
+			tx.insert(compositionSteps)
+				.values({ compositionId, position: cs.position, poolStepId, overrideStepId })
+				.run();
+		}
+
+		for (const u of snapshot.ingredientUsages) {
+			const newStepId = stepIdMap.get(u.stepId);
+			if (newStepId === undefined) continue;
+			tx.insert(ingredientUsages)
+				.values({
+					stepId: newStepId,
+					ingredientId: u.ingredientId,
+					position: u.position,
+					quantityValue: u.quantityValue,
+					quantityUnit: u.quantityUnit,
+					prepAttribute: u.prepAttribute,
+					note: u.note
+				})
+				.run();
+		}
+
+		return recordVersion(tx, recipeId, versionId);
+	});
 }

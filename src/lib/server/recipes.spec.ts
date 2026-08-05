@@ -7,6 +7,7 @@ import {
 	ingredients,
 	ingredientUsages,
 	recipes,
+	recipeVersions,
 	steps
 } from './db/schema';
 import { createIngredient } from './ingredients';
@@ -19,6 +20,7 @@ import {
 	IngredientNotFoundError,
 	InvalidDurationError,
 	InvalidQuantityError,
+	RecipeVersionNotFoundError,
 	addIngredientUsage,
 	addStep,
 	createRecipe,
@@ -29,15 +31,18 @@ import {
 	getOtherCompositionsReferencingStep,
 	getRecipe,
 	listCompositions,
+	listRecipeVersions,
 	listRecipes,
 	overrideStep,
 	removeStepFromComposition,
 	renderInstruction,
+	revertToVersion,
 	updateStepInstruction
 } from './recipes';
 
 describe('recipes', () => {
 	beforeEach(() => {
+		db.delete(recipeVersions).run();
 		db.delete(ingredientUsages).run();
 		db.delete(compositionSteps).run();
 		db.delete(steps).run();
@@ -634,6 +639,128 @@ describe('recipes', () => {
 
 			const detail = getCompositionDetail(defaultComposition.id);
 			expect(detail?.steps.map((s) => s.instruction)).toEqual(['Two.', 'Three.']);
+		});
+	});
+
+	describe('version history', () => {
+		it('creates a first version alongside the recipe', () => {
+			const recipe = createRecipe('Chilli con carne');
+			expect(listRecipeVersions(recipe.id)).toHaveLength(1);
+		});
+
+		it('creates a new version on the shared timeline for every edit to the pool or a composition', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+
+			const { step, compositionStep } = addStep(defaultComposition.id, {
+				instruction: 'Brown the mince.'
+			});
+			const beef = createIngredient({ baseTerm: 'beef mince' });
+			addIngredientUsage(step.id, { ingredientId: beef.id, quantityValue: 500, quantityUnit: 'g' });
+			updateStepInstruction(step.id, 'Brown {{1}} of mince.');
+			const variant = createVariant(recipe.id, 'Chilli sin carne', defaultComposition.id);
+			removeStepFromComposition(compositionStep.id, [variant.id]);
+
+			// create, addStep, addIngredientUsage, updateStepInstruction,
+			// createVariant, removeStepFromComposition.
+			expect(listRecipeVersions(recipe.id)).toHaveLength(6);
+		});
+
+		it('lists versions oldest first', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+			addStep(defaultComposition.id, { instruction: 'Simmer.' });
+
+			const versionIds = listRecipeVersions(recipe.id).map((v) => v.id);
+			expect(versionIds).toEqual([...versionIds].sort((a, b) => a - b));
+		});
+
+		it('reverting restores the pool and every composition to that point, unambiguously', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+			const variant = createVariant(recipe.id, 'Chilli sin carne', defaultComposition.id);
+
+			const [versionBeforeSecondStep] = listRecipeVersions(recipe.id).slice(-1);
+
+			addStep(defaultComposition.id, { instruction: 'Simmer.' });
+			const variantCompositionStepId = getCompositionDetail(variant.id)!.steps[0].compositionStepId;
+			overrideStep(variantCompositionStepId, { instruction: 'Sauté mushrooms.' });
+
+			expect(getCompositionDetail(defaultComposition.id)?.steps).toHaveLength(2);
+			expect(getCompositionDetail(variant.id)?.steps[0].isOverride).toBe(true);
+
+			revertToVersion(recipe.id, versionBeforeSecondStep.id);
+
+			const restoredRecipe = getRecipe(recipe.id, defaultComposition.id);
+			const restoredVariant = getRecipe(recipe.id, variant.id);
+			expect(restoredRecipe?.composition.steps.map((s) => s.instruction)).toEqual([
+				'Brown the mince.'
+			]);
+			expect(restoredVariant?.composition.steps.map((s) => s.instruction)).toEqual([
+				'Brown the mince.'
+			]);
+			expect(restoredVariant?.composition.steps[0].isOverride).toBe(false);
+			// The recipe still has a default and a variant composition after
+			// reverting - lineage and composition count are restored too.
+			expect(restoredRecipe?.compositions).toHaveLength(2);
+		});
+
+		it('reverting carries over ingredient usages exactly as they were at that version', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, { instruction: 'Brown {{1}} of mince.' });
+			const beef = createIngredient({ baseTerm: 'beef mince' });
+			addIngredientUsage(step.id, { ingredientId: beef.id, quantityValue: 500, quantityUnit: 'g' });
+
+			const [versionWithOneUsage] = listRecipeVersions(recipe.id).slice(-1);
+
+			const mushrooms = createIngredient({ baseTerm: 'mushrooms' });
+			addIngredientUsage(step.id, {
+				ingredientId: mushrooms.id,
+				quantityValue: 200,
+				quantityUnit: 'g'
+			});
+
+			revertToVersion(recipe.id, versionWithOneUsage.id);
+
+			const detail = getRecipe(recipe.id, defaultComposition.id);
+			expect(detail?.composition.steps[0].usages.map((u) => u.ingredient.baseTerm)).toEqual([
+				'beef mince'
+			]);
+		});
+
+		it('reverting appends a new version rather than truncating history', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+
+			const versionsBeforeRevert = listRecipeVersions(recipe.id);
+			const target = versionsBeforeRevert[0];
+
+			const newVersion = revertToVersion(recipe.id, target.id);
+
+			const versionsAfterRevert = listRecipeVersions(recipe.id);
+			expect(versionsAfterRevert).toHaveLength(versionsBeforeRevert.length + 1);
+			expect(versionsAfterRevert.map((v) => v.id)).toEqual([
+				...versionsBeforeRevert.map((v) => v.id),
+				newVersion.id
+			]);
+			expect(newVersion.revertedFromVersionId).toEqual(target.id);
+		});
+
+		it('rejects reverting to a version from a different recipe', () => {
+			const recipeA = createRecipe('Chilli con carne');
+			const recipeB = createRecipe('Banana bread');
+			const versionOfB = listRecipeVersions(recipeB.id)[0];
+
+			expect(() => revertToVersion(recipeA.id, versionOfB.id)).toThrow(RecipeVersionNotFoundError);
+		});
+
+		it('rejects reverting to a non-existent version', () => {
+			const recipe = createRecipe('Chilli con carne');
+			expect(() => revertToVersion(recipe.id, 999999)).toThrow(RecipeVersionNotFoundError);
 		});
 	});
 });

@@ -270,3 +270,33 @@
 {:else}
 	<p>No ingredients yet.</p>
 {/if}
+
+<h2>Version history</h2>
+
+{#if form?.versionError}
+	<p role="alert">{form.versionError}</p>
+{/if}
+
+<p>
+	Every edit to the step pool or any composition creates a new version on one shared timeline.
+	Reverting restores the whole recipe - the pool and every composition - to that point.
+</p>
+
+<ol reversed>
+	{#each data.versions as version (version.id)}
+		<li value={version.number}>
+			<time datetime={version.createdAt}>{version.createdAt}</time>
+			{#if version.revertedFromVersionId !== null}
+				<em>(reverted from an earlier version)</em>
+			{/if}
+			{#if version.number === data.versions[0].number}
+				<strong>— current</strong>
+			{:else}
+				<form method="POST" action="?/revertToVersion">
+					<input type="hidden" name="versionId" value={version.id} />
+					<button type="submit">Revert to this version</button>
+				</form>
+			{/if}
+		</li>
+	{/each}
+</ol>

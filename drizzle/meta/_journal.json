@@ -36,6 +36,13 @@
       "when": 1785949844413,
       "tag": "0004_add_compositions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1785951448847,
+      "tag": "0005_add_recipe_versions",
+      "breakpoints": true
     }
   ]
 }

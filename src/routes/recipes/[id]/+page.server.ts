@@ -9,12 +9,15 @@ import {
 	IngredientNotFoundError,
 	InvalidDurationError,
 	InvalidQuantityError,
+	RecipeVersionNotFoundError,
 	addIngredientUsage,
 	addStep,
 	createVariant,
 	getRecipe,
+	listRecipeVersions,
 	overrideStep,
 	removeStepFromComposition,
+	revertToVersion,
 	updateStepInstruction
 } from '$lib/server/recipes';
 import { DURATION_KINDS } from '$lib/server/db/schema';
@@ -27,7 +30,14 @@ export const load: PageServerLoad = ({ params, url }) => {
 	const recipe = getRecipe(id, compositionId);
 	if (!recipe) error(404, 'Recipe not found');
 
-	return { recipe, ingredients: listIngredients(), durationKinds: DURATION_KINDS };
+	// Oldest first in storage; reverse so the page shows the most recent
+	// Version first, numbered by its position on the shared timeline (see
+	// CONTEXT.md's Version).
+	const versions = listRecipeVersions(id)
+		.map((version, index) => ({ ...version, number: index + 1 }))
+		.reverse();
+
+	return { recipe, ingredients: listIngredients(), durationKinds: DURATION_KINDS, versions };
 };
 
 function readDuration(data: FormData) {
@@ -163,6 +173,21 @@ export const actions: Actions = {
 			}
 			if (err instanceof CompositionNotFoundError) {
 				return fail(400, { variantError: 'Pick a composition to seed from.' });
+			}
+			throw err;
+		}
+	},
+
+	revertToVersion: async ({ request, params }) => {
+		const recipeId = Number(params.id);
+		const data = await request.formData();
+		const versionId = Number(data.get('versionId'));
+
+		try {
+			revertToVersion(recipeId, versionId);
+		} catch (err) {
+			if (err instanceof RecipeVersionNotFoundError) {
+				return fail(400, { versionError: 'That version no longer exists.' });
 			}
 			throw err;
 		}
