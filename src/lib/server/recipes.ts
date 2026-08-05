@@ -1,4 +1,5 @@
 import { asc, eq, inArray, and, ne } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import { db } from './db';
 import {
 	compositions,
@@ -27,6 +28,11 @@ import {
 	getDurationScalingFormulasByStepIds,
 	getQuantityScalingFormulasByUsageIds
 } from './scaling';
+
+// A second reference to `ingredients`, so a Usage's primary Ingredient and
+// its optional Alternative Ingredient (see CONTEXT.md) can both be
+// left-joined in the same query.
+const alternativeIngredients = alias(ingredients, 'alternative_ingredients');
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_INSTRUCTION_LENGTH = 2000;
@@ -211,6 +217,7 @@ export function createVariant(
 								quantityValue: usage.quantityValue,
 								quantityUnit: usage.quantityUnit,
 								prepAttribute: usage.prepAttribute,
+								alternativeIngredientId: usage.alternativeIngredientId,
 								note: usage.note
 							}))
 						)
@@ -376,6 +383,7 @@ export function overrideStep(
 						quantityValue: usage.quantityValue,
 						quantityUnit: usage.quantityUnit,
 						prepAttribute: usage.prepAttribute,
+						alternativeIngredientId: usage.alternativeIngredientId,
 						note: usage.note
 					}))
 				)
@@ -400,6 +408,16 @@ export function overrideStep(
 	});
 }
 
+// Looks up an Ingredient by id, throwing IngredientNotFoundError if it
+// doesn't exist. Shared by both the primary Ingredient and the optional
+// Alternative Ingredient on a Usage - either one referencing a bogus id
+// fails the same way.
+function requireIngredient(id: number): Ingredient {
+	const ingredient = db.select().from(ingredients).where(eq(ingredients.id, id)).get();
+	if (!ingredient) throw new IngredientNotFoundError(`No ingredient with id ${id}`);
+	return ingredient;
+}
+
 export function addIngredientUsage(
 	stepId: number,
 	input: {
@@ -407,6 +425,7 @@ export function addIngredientUsage(
 		quantityValue: number;
 		quantityUnit?: string;
 		prepAttribute?: string;
+		alternativeIngredientId?: number | null;
 		note?: string;
 	}
 ): IngredientUsage {
@@ -414,16 +433,15 @@ export function addIngredientUsage(
 		throw new InvalidQuantityError('Quantity must be a non-negative number');
 	}
 
-	const ingredient = db
-		.select()
-		.from(ingredients)
-		.where(eq(ingredients.id, input.ingredientId))
-		.get();
-	if (!ingredient) throw new IngredientNotFoundError(`No ingredient with id ${input.ingredientId}`);
+	requireIngredient(input.ingredientId);
+	if (input.alternativeIngredientId != null) {
+		requireIngredient(input.alternativeIngredientId);
+	}
 
 	const prepAttribute = input.prepAttribute?.trim() || null;
 	const note = input.note?.trim() || null;
 	const quantityUnit = input.quantityUnit?.trim() ?? '';
+	const alternativeIngredientId = input.alternativeIngredientId ?? null;
 
 	return db.transaction((tx) => {
 		const existing = tx
@@ -442,11 +460,37 @@ export function addIngredientUsage(
 				quantityValue: input.quantityValue,
 				quantityUnit,
 				prepAttribute,
+				alternativeIngredientId,
 				note
 			})
 			.returning()
 			.get();
 	});
+}
+
+export class IngredientUsageNotFoundError extends Error {}
+
+// Declares (or clears, when `alternativeIngredientId` is null) the
+// Alternative Ingredient on one specific Usage - scoped to that Usage only,
+// never implied on other Usages of the same Ingredient elsewhere (see
+// CONTEXT.md's Alternative entry).
+export function setUsageAlternative(
+	usageId: number,
+	alternativeIngredientId: number | null
+): IngredientUsage {
+	const usage = db.select().from(ingredientUsages).where(eq(ingredientUsages.id, usageId)).get();
+	if (!usage) throw new IngredientUsageNotFoundError(`No ingredient usage with id ${usageId}`);
+
+	if (alternativeIngredientId != null) {
+		requireIngredient(alternativeIngredientId);
+	}
+
+	return db
+		.update(ingredientUsages)
+		.set({ alternativeIngredientId })
+		.where(eq(ingredientUsages.id, usageId))
+		.returning()
+		.get();
 }
 
 // A pool Step's other referrers - the Compositions (besides the one
@@ -578,6 +622,7 @@ export type UsageWithIngredient = IngredientUsage & {
 	scaledQuantityValue: number;
 	displayQuantity: string;
 	scalingFormula: ScalingFormula | null;
+	alternativeIngredient: Ingredient | null;
 };
 
 // One Composition's slot, resolved to its effective content - the override
@@ -635,15 +680,27 @@ function loadRawUsagesByStepId(stepIds: number[]): Map<number, RawUsage[]> {
 	if (stepIds.length === 0) return usagesByStepId;
 
 	const usageRows = db
-		.select({ usage: ingredientUsages, ingredient: ingredients })
+		.select({
+			usage: ingredientUsages,
+			ingredient: ingredients,
+			alternative: alternativeIngredients
+		})
 		.from(ingredientUsages)
 		.innerJoin(ingredients, eq(ingredients.id, ingredientUsages.ingredientId))
+		.leftJoin(
+			alternativeIngredients,
+			eq(alternativeIngredients.id, ingredientUsages.alternativeIngredientId)
+		)
 		.where(inArray(ingredientUsages.stepId, stepIds))
 		.orderBy(asc(ingredientUsages.position))
 		.all();
 
 	for (const row of usageRows) {
-		const usage = { ...row.usage, ingredient: row.ingredient };
+		const usage = {
+			...row.usage,
+			ingredient: row.ingredient,
+			alternativeIngredient: row.alternative
+		};
 		const list = usagesByStepId.get(usage.stepId) ?? [];
 		list.push(usage);
 		usagesByStepId.set(usage.stepId, list);

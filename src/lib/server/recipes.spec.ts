@@ -18,6 +18,7 @@ import {
 	CompositionNotFoundError,
 	CompositionStepNotFoundError,
 	IngredientNotFoundError,
+	IngredientUsageNotFoundError,
 	InvalidDurationError,
 	InvalidQuantityError,
 	InvalidServingsError,
@@ -36,6 +37,7 @@ import {
 	overrideStep,
 	removeStepFromComposition,
 	renderInstruction,
+	setUsageAlternative,
 	updateServings,
 	updateStepInstruction
 } from './recipes';
@@ -277,6 +279,118 @@ describe('recipes', () => {
 
 			expect(second.position).toEqual(2);
 		});
+
+		it('declares an alternative ingredient on the usage', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, { instruction: 'Melt the butter.' });
+			const butter = createIngredient({ baseTerm: 'butter' });
+			const margarine = createIngredient({ baseTerm: 'margarine' });
+
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: butter.id,
+				quantityValue: 100,
+				quantityUnit: 'g',
+				alternativeIngredientId: margarine.id
+			});
+
+			expect(usage.alternativeIngredientId).toEqual(margarine.id);
+		});
+
+		it('rejects a usage whose alternative ingredient does not exist', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, { instruction: 'Melt the butter.' });
+			const butter = createIngredient({ baseTerm: 'butter' });
+
+			expect(() =>
+				addIngredientUsage(step.id, {
+					ingredientId: butter.id,
+					quantityValue: 100,
+					alternativeIngredientId: 999999
+				})
+			).toThrow(IngredientNotFoundError);
+		});
+
+		it('defaults to no alternative ingredient', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, { instruction: 'Melt the butter.' });
+			const butter = createIngredient({ baseTerm: 'butter' });
+
+			const usage = addIngredientUsage(step.id, { ingredientId: butter.id, quantityValue: 100 });
+
+			expect(usage.alternativeIngredientId).toBeNull();
+		});
+	});
+
+	describe('setUsageAlternative', () => {
+		it('sets an alternative on an existing usage', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, { instruction: 'Melt the butter.' });
+			const butter = createIngredient({ baseTerm: 'butter' });
+			const margarine = createIngredient({ baseTerm: 'margarine' });
+			const usage = addIngredientUsage(step.id, { ingredientId: butter.id, quantityValue: 100 });
+
+			const updated = setUsageAlternative(usage.id, margarine.id);
+
+			expect(updated.alternativeIngredientId).toEqual(margarine.id);
+		});
+
+		it('clears an alternative when passed null', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, { instruction: 'Melt the butter.' });
+			const butter = createIngredient({ baseTerm: 'butter' });
+			const margarine = createIngredient({ baseTerm: 'margarine' });
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: butter.id,
+				quantityValue: 100,
+				alternativeIngredientId: margarine.id
+			});
+
+			const updated = setUsageAlternative(usage.id, null);
+
+			expect(updated.alternativeIngredientId).toBeNull();
+		});
+
+		it('rejects an alternative ingredient that does not exist', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, { instruction: 'Melt the butter.' });
+			const butter = createIngredient({ baseTerm: 'butter' });
+			const usage = addIngredientUsage(step.id, { ingredientId: butter.id, quantityValue: 100 });
+
+			expect(() => setUsageAlternative(usage.id, 999999)).toThrow(IngredientNotFoundError);
+		});
+
+		it('throws when the usage does not exist', () => {
+			expect(() => setUsageAlternative(999999, null)).toThrow(IngredientUsageNotFoundError);
+		});
+
+		it('scopes the alternative to this usage only, not other usages of the same ingredient', () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step: step1 } = addStep(defaultComposition.id, { instruction: 'Melt the butter.' });
+			const { step: step2 } = addStep(defaultComposition.id, {
+				instruction: 'Spread the butter.'
+			});
+			const butter = createIngredient({ baseTerm: 'butter' });
+			const margarine = createIngredient({ baseTerm: 'margarine' });
+
+			addIngredientUsage(step1.id, {
+				ingredientId: butter.id,
+				quantityValue: 100,
+				alternativeIngredientId: margarine.id
+			});
+			const secondUsage = addIngredientUsage(step2.id, {
+				ingredientId: butter.id,
+				quantityValue: 20
+			});
+
+			expect(secondUsage.alternativeIngredientId).toBeNull();
+		});
 	});
 
 	describe('formatQuantity', () => {
@@ -389,6 +503,39 @@ describe('recipes', () => {
 				durationKind: 'active'
 			});
 			expect(detail?.composition.steps[1].usages[0]).toMatchObject({ prepAttribute: 'diced' });
+		});
+
+		it("resolves a usage's alternative ingredient to its full record", () => {
+			const recipe = createRecipe('Pancakes');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const butter = createIngredient({ baseTerm: 'butter' });
+			const margarine = createIngredient({ baseTerm: 'margarine' });
+			const { step } = addStep(defaultComposition.id, { instruction: 'Melt the butter.' });
+			addIngredientUsage(step.id, {
+				ingredientId: butter.id,
+				quantityValue: 50,
+				quantityUnit: 'g',
+				alternativeIngredientId: margarine.id
+			});
+
+			const detail = getRecipe(recipe.id);
+
+			expect(detail?.composition.steps[0].usages[0].alternativeIngredient).toMatchObject({
+				id: margarine.id,
+				baseTerm: 'margarine'
+			});
+		});
+
+		it('leaves alternativeIngredient null when no alternative was declared', () => {
+			const recipe = createRecipe('Pancakes');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const butter = createIngredient({ baseTerm: 'butter' });
+			const { step } = addStep(defaultComposition.id, { instruction: 'Melt the butter.' });
+			addIngredientUsage(step.id, { ingredientId: butter.id, quantityValue: 50 });
+
+			const detail = getRecipe(recipe.id);
+
+			expect(detail?.composition.steps[0].usages[0].alternativeIngredient).toBeNull();
 		});
 
 		it("applies the ingredient rounding toggle to each usage's display quantity, without touching the stored value", () => {
@@ -535,6 +682,32 @@ describe('recipes', () => {
 
 			// The original composition step id is stable across the override.
 			expect(compositionStep.id).not.toEqual(variantCompositionStepId);
+		});
+
+		it("carries a usage's alternative ingredient through a variant seed and a step override", () => {
+			const recipe = createRecipe('Chilli con carne');
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, { instruction: 'Melt the butter.' });
+			const butter = createIngredient({ baseTerm: 'butter' });
+			const margarine = createIngredient({ baseTerm: 'margarine' });
+			addIngredientUsage(step.id, {
+				ingredientId: butter.id,
+				quantityValue: 50,
+				quantityUnit: 'g',
+				alternativeIngredientId: margarine.id
+			});
+
+			const variant = createVariant(recipe.id, 'Vegan', defaultComposition.id);
+			const seededDetail = getCompositionDetail(variant.id);
+			expect(seededDetail?.steps[0].usages[0].alternativeIngredient?.baseTerm).toEqual('margarine');
+
+			const variantCompositionStepId = seededDetail!.steps[0].compositionStepId;
+			overrideStep(variantCompositionStepId, { instruction: 'Melt the butter carefully.' });
+
+			const overriddenDetail = getCompositionDetail(variant.id);
+			expect(overriddenDetail?.steps[0].usages[0].alternativeIngredient?.baseTerm).toEqual(
+				'margarine'
+			);
 		});
 
 		it('adds a step that exists only in one composition', () => {

@@ -151,8 +151,11 @@ export const compositionSteps = sqliteTable('composition_steps', {
 export type CompositionStep = typeof compositionSteps.$inferSelect;
 
 // The line linking an Ingredient to a Step - carries Quantity, Prep
-// Attribute, and a free-text Note (see CONTEXT.md). `position` is 1-indexed
-// per Step and is what a Step's `{{n}}` instruction tokens refer to.
+// Attribute, Alternative, and a free-text Note (see CONTEXT.md). `position`
+// is 1-indexed per Step and is what a Step's `{{n}}` instruction tokens
+// refer to. `alternativeIngredientId`, when set, is an author-declared
+// substitute scoped to this one Usage only - never implied on other Usages
+// of the same Ingredient elsewhere, even within the same Recipe.
 export const ingredientUsages = sqliteTable('ingredient_usages', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	stepId: integer('step_id')
@@ -165,6 +168,7 @@ export const ingredientUsages = sqliteTable('ingredient_usages', {
 	quantityValue: real('quantity_value').notNull(),
 	quantityUnit: text('quantity_unit').notNull().default(''),
 	prepAttribute: text('prep_attribute'),
+	alternativeIngredientId: integer('alternative_ingredient_id').references(() => ingredients.id),
 	note: text('note'),
 	createdAt: text('created_at')
 		.notNull()

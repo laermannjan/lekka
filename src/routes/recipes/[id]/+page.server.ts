@@ -7,6 +7,7 @@ import {
 	CompositionNotFoundError,
 	CompositionStepNotFoundError,
 	IngredientNotFoundError,
+	IngredientUsageNotFoundError,
 	InvalidDurationError,
 	InvalidQuantityError,
 	InvalidServingsError,
@@ -17,6 +18,7 @@ import {
 	getRecipe,
 	overrideStep,
 	removeStepFromComposition,
+	setUsageAlternative,
 	updateServings,
 	updateStepInstruction
 } from '$lib/server/recipes';
@@ -173,6 +175,10 @@ export const actions: Actions = {
 		const quantityValue = Number(data.get('quantityValue'));
 		const quantityUnit = String(data.get('quantityUnit') ?? '');
 		const prepAttribute = String(data.get('prepAttribute') ?? '');
+		const alternativeIngredientIdRaw = String(data.get('alternativeIngredientId') ?? '');
+		const alternativeIngredientId = alternativeIngredientIdRaw
+			? Number(alternativeIngredientIdRaw)
+			: null;
 		const note = String(data.get('note') ?? '');
 
 		try {
@@ -181,6 +187,7 @@ export const actions: Actions = {
 				quantityValue,
 				quantityUnit,
 				prepAttribute,
+				alternativeIngredientId,
 				note
 			});
 		} catch (err) {
@@ -189,6 +196,27 @@ export const actions: Actions = {
 			}
 			if (err instanceof IngredientNotFoundError) {
 				return fail(400, { usageError: 'Pick an ingredient.' });
+			}
+			throw err;
+		}
+	},
+
+	setUsageAlternative: async ({ request }) => {
+		const data = await request.formData();
+		const usageId = Number(data.get('usageId'));
+		const alternativeIngredientIdRaw = String(data.get('alternativeIngredientId') ?? '');
+		const alternativeIngredientId = alternativeIngredientIdRaw
+			? Number(alternativeIngredientIdRaw)
+			: null;
+
+		try {
+			setUsageAlternative(usageId, alternativeIngredientId);
+		} catch (err) {
+			if (err instanceof IngredientNotFoundError) {
+				return fail(400, { usageError: 'Pick an alternative ingredient.' });
+			}
+			if (err instanceof IngredientUsageNotFoundError) {
+				return fail(400, { usageError: 'That ingredient usage no longer exists.' });
 			}
 			throw err;
 		}

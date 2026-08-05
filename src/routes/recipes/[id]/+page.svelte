@@ -113,6 +113,13 @@
 									({usage.ingredient.descriptors}){/if} —
 								{usage.displayQuantity}
 								{#if usage.prepAttribute}, {usage.prepAttribute}{/if}
+								{#if usage.alternativeIngredient}
+									<span>
+										— alternative: {usage.alternativeIngredient
+											.baseTerm}{#if usage.alternativeIngredient.descriptors}
+											({usage.alternativeIngredient.descriptors}){/if}
+									</span>
+								{/if}
 								{#if usage.note}<span>— {usage.note}</span>{/if}
 								{#if usage.scalingFormula}<span> (scaling rule set)</span>{/if}
 								<ScalingFormulaEditor
@@ -126,6 +133,30 @@
 									unit={usage.quantityUnit}
 									noneLabel="scale exactly with servings (default)"
 								/>
+
+								<details>
+									<summary
+										>{usage.alternativeIngredient ? 'Change' : 'Add'} alternative ingredient</summary
+									>
+									<form method="POST" action="?/setUsageAlternative">
+										<input type="hidden" name="usageId" value={usage.id} />
+										<label>
+											Alternative ingredient
+											<select name="alternativeIngredientId">
+												<option value="">None</option>
+												{#each data.ingredients as ingredient (ingredient.id)}
+													<option
+														value={ingredient.id}
+														selected={ingredient.id === usage.alternativeIngredient?.id}
+														>{ingredient.baseTerm}{#if ingredient.descriptors}
+															({ingredient.descriptors}){/if}</option
+													>
+												{/each}
+											</select>
+										</label>
+										<button type="submit">Save alternative</button>
+									</form>
+								</details>
 							</li>
 						{/each}
 					</ul>
@@ -221,6 +252,18 @@
 						<label>
 							Prep attribute
 							<input type="text" name="prepAttribute" placeholder="e.g. diced, chilled" />
+						</label>
+						<label>
+							Alternative ingredient (optional)
+							<select name="alternativeIngredientId">
+								<option value="">None</option>
+								{#each data.ingredients as ingredient (ingredient.id)}
+									<option value={ingredient.id}
+										>{ingredient.baseTerm}{#if ingredient.descriptors}
+											({ingredient.descriptors}){/if}</option
+									>
+								{/each}
+							</select>
 						</label>
 						<label>
 							Note
