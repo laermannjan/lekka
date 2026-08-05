@@ -1,0 +1,11 @@
+services:
+  lekka:
+    build: .
+    ports:
+      - '3000:3000'
+    volumes:
+      - lekka-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  lekka-data:

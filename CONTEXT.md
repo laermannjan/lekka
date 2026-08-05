@@ -53,6 +53,7 @@ A Step's time cost: `{kind: active | wait | cook | estimate, min, max?, unit}`. 
 
 **Scaling Formula**:
 An optional, author-written override on an Ingredient Usage's Quantity or a Step's Duration, replacing the default strict-linear response to a serving-count change (e.g. salt scaling slower than the rest, or rise time lengthening as starter quantity shrinks). No formula present means linear scaling for a Quantity, constant (unaffected by servings) for a Duration. Authored through a small, growable set of guided sentence templates, never a free-form expression language — an author is never asked to write raw syntax. The v1 catalog:
+
 - **Rate vs. servings** (Quantity or Duration) — "should increase slower/exactly/faster than servings, at N% rate."
 - **Vs. another Usage** (Duration) — "should increase/decrease by N units per unit short of/over `<another Usage>`'s usual quantity."
 - **Fixed, doesn't scale** (Quantity or Duration) — stays constant regardless of servings; a distinct template, not a 0%-rate edge case of the first.
