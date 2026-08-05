@@ -5,7 +5,7 @@ FOSS, self-hosted recipe manager. One instance is shared by a household; recipes
 ## Language
 
 **Ingredient**:
-A reusable, named food item, canonical across every recipe that uses it. Identified along two independent axes: **specificity** (how precisely it's named) and **classification** (what it's like, for filtering/matching).
+A reusable, named food item, canonical across every recipe that uses it. Identified along two independent axes: **specificity** (how precisely it's named) and **classification** (what it's like, for filtering/matching). Optionally flagged to round its Quantity to the nearest whole number for display (egg: on, banana: off) — purely presentational; the stored/computed value stays exact, so aggregation across Usages is never affected by it. A rounded display value is marked as approximate, not shown as if the author wrote that exact number.
 _Avoid_: Item, food
 
 **Base term**:
@@ -22,7 +22,14 @@ _Avoid_: Category, class (both imply a single-parent hierarchy, which Tags delib
 A small, fixed classification of what kind of thing a Tag describes — allergen, diet, or sensory. Not itself household-extensible, unlike Tag. Exists purely so a Tag picker can filter to what's relevant: Diners' avoid-Tag picker defaults to allergen/diet Tags, keeping sensory ones (`creamy`, `acidic`) out of the way without hiding them from ingredient authoring.
 
 **Recipe**:
-A named dish: a shared pool of Steps plus one or more Compositions (a default line and any named Variants) that each select, order, and optionally override those Steps. Evolves over time via Version — one shared timeline covering the pool and every Composition together.
+A named dish: a shared pool of Steps plus one or more Compositions (a default line and any named Variants) that each select, order, and optionally override those Steps. Evolves over time via Version — one shared timeline covering the pool and every Composition together. Optionally carries Categories, shared across every Composition — Chilli con carne and its Chilli sin carne Variant are still both "dinner, Mexican-ish, main."
+
+**Category**:
+A browsing classification for a whole Recipe — meal type, cuisine, course (e.g. `dinner`, `mexican`, `main-course`) — drawn from a curated, growable, household-extensible vocabulary, same governance shape as Tag. Fully optional; a Recipe with none is normal. Distinct from Tag: Tag describes what an Ingredient is, Category describes what kind of dish a Recipe is — a Recipe being vegan already falls out of its Ingredients' Tags via Diners, but "Mexican" or "breakfast" has no Ingredient-level fact to derive from.
+_Avoid_: Tag (reserved for Ingredient classification — conflating the two would blur a dietary/allergen fact with a genre fact)
+
+**Category Group**:
+A small, fixed classification of what kind of thing a Category describes — Meal Type, Cuisine, or Course. Not itself household-extensible, unlike Category. Lets a browse filter isolate just cuisines, or just meal types, independently — same role Tag Group plays for Tag.
 
 **Step**:
 One instruction, optionally carrying a Duration and referencing zero or more Ingredient Usages. Belongs to a Recipe's shared Step pool — the same Step stays literally shared across every Composition that references it unmodified, so editing it once updates every Composition that hasn't overridden it.
@@ -60,14 +67,20 @@ A named Composition other than the default one (e.g. "Chilli sin carne" alongsid
 _Avoid_: Fork, branch (both imply the graph/merge machinery this deliberately doesn't have)
 
 **Cook**:
-One occasion of making a Recipe — records the date, the Version and Composition used, the acting Profile, the Diners present, an outcome, and a summary. Distinct from an edit: logging what happened during a Cook never silently changes the Recipe.
+One occasion of making a Recipe — records the date, the Version and Composition used, the acting Profile, the Diners present, an outcome, and a summary. Distinct from an edit: logging what happened during a Cook never silently changes the Recipe. Household-wide, not personal to the acting Profile — the basis for browsing a Recipe by last-cooked (its most recent Cook's date) or most-cooked (its Cook count), alongside plain alphabetical and recently-added (a Recipe's first Version's date). A Recipe with no Cooks yet sorts last under either.
 
 **Cook Log Annotation**:
 A note pinned to a specific Step or Ingredient Usage within a Cook, capturing what happened at that point rather than free text dumped at the end.
 
 **Profile**:
-A lightweight named identity for one household member, used to attribute Cooks and edits and to carry a standing dietary preference (a persistent set of avoid-Tags). Reached via a plain picker — no password, no roles, no per-user data separation. Instance-level access control (should the instance itself require a login) is a deployment concern, outside this domain.
+A lightweight named identity for one household member, used to attribute Cooks and edits, to carry a standing dietary preference (a persistent set of avoid-Tags), and to own Favorites and Collections. Reached via a plain picker — no password, no roles, no per-user data separation — which means no privacy walls, not no attribution: everything owned by a Profile is still visible to the whole household, same as Cook already is. Instance-level access control (should the instance itself require a login) is a deployment concern, outside this domain.
 _Avoid_: User, account (both imply auth/access concerns a Profile doesn't carry)
+
+**Favorite**:
+A per-Profile boolean mark on a Recipe — visible to the whole household, but personal to set. Separate from Collection: no naming, no membership list, just a fast "mark this one." Operates at the Recipe level, not per-Composition — a Variant doesn't need its own Favorite state.
+
+**Collection**:
+A per-Profile, named, freely-membered group of Recipes (e.g. "weeknight dinners") — visible to the whole household, owned by whichever Profile created it. A Recipe can belong to any number of Collections, same multi-membership as Tag. Operates at the Recipe level, not per-Composition. No access-control enforcement on editing someone else's Collection, consistent with Profile carrying no access control anywhere else in this domain.
 
 **Diners**:
 The set of Profiles currently selected as present/eating, driving the dietary Tag filter across the app. Distinct from the acting Profile (the one, singular identity attribution credits) — Diners defaults to just the acting Profile but is freely adjustable, and persists across sessions until changed. An Ingredient Usage carrying a Tag any selected Diner avoids is flagged, not hidden; if that Usage has an Alternative clearing the flag, it's surfaced as a suggested swap.
