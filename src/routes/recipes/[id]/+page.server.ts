@@ -12,12 +12,15 @@ import {
 	InvalidQuantityError,
 	InvalidServingsError,
 	RecipeNotFoundError,
+	RecipeVersionNotFoundError,
 	addIngredientUsage,
 	addStep,
 	createVariant,
 	getRecipe,
+	listRecipeVersions,
 	overrideStep,
 	removeStepFromComposition,
+	revertToVersion,
 	setUsageAlternative,
 	updateServings,
 	updateStepInstruction
@@ -72,6 +75,13 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 	const recipe = getRecipe(id, compositionId, targetServings);
 	if (!recipe) error(404, 'Recipe not found');
 
+	// Oldest first in storage; reverse so the page shows the most recent
+	// Version first, numbered by its position on the shared timeline (see
+	// CONTEXT.md's Version).
+	const versions = listRecipeVersions(id)
+		.map((version, index) => ({ ...version, number: index + 1 }))
+		.reverse();
+
 	return {
 		recipe,
 		ingredients: listIngredients(),
@@ -81,7 +91,8 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 		recipeCategories: listCategoriesForRecipe(id),
 		isFavorite: locals.profile ? isFavorite(id, locals.profile.id) : false,
 		collections: listCollections(),
-		recipeCollections: listCollectionsForRecipe(id)
+		recipeCollections: listCollectionsForRecipe(id),
+		versions
 	};
 };
 
@@ -442,6 +453,21 @@ export const actions: Actions = {
 		} catch (err) {
 			if (err instanceof BlankCollectionNameError) {
 				return fail(400, { collectionError: 'Enter a name for the collection.' });
+			}
+			throw err;
+		}
+	},
+
+	revertToVersion: async ({ request, params }) => {
+		const recipeId = Number(params.id);
+		const data = await request.formData();
+		const versionId = Number(data.get('versionId'));
+
+		try {
+			revertToVersion(recipeId, versionId);
+		} catch (err) {
+			if (err instanceof RecipeVersionNotFoundError) {
+				return fail(400, { versionError: 'That version no longer exists.' });
 			}
 			throw err;
 		}

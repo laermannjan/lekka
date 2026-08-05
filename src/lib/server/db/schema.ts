@@ -150,6 +150,28 @@ export const compositionSteps = sqliteTable('composition_steps', {
 
 export type CompositionStep = typeof compositionSteps.$inferSelect;
 
+// A point in a Recipe's edit history - one shared timeline covering the
+// Step pool and every Composition together, never per-Variant (see
+// CONTEXT.md). `snapshot` is a JSON-serialized capture of every steps,
+// compositions, compositionSteps, and ingredientUsages row for the Recipe at
+// this point, self-contained so a revert never depends on rows created
+// after it. `revertedFromVersionId` is informational lineage only, like
+// `compositions.seededFromCompositionId` - it records that this Version was
+// produced by reverting to an earlier one, never an ongoing structural link.
+export const recipeVersions = sqliteTable('recipe_versions', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	recipeId: integer('recipe_id')
+		.notNull()
+		.references(() => recipes.id, { onDelete: 'cascade' }),
+	snapshot: text('snapshot').notNull(),
+	revertedFromVersionId: integer('reverted_from_version_id'),
+	createdAt: text('created_at')
+		.notNull()
+		.default(sql`(current_timestamp)`)
+});
+
+export type RecipeVersion = typeof recipeVersions.$inferSelect;
+
 // The line linking an Ingredient to a Step - carries Quantity, Prep
 // Attribute, Alternative, and a free-text Note (see CONTEXT.md). `position`
 // is 1-indexed per Step and is what a Step's `{{n}}` instruction tokens
