@@ -34,13 +34,35 @@ import {
 } from '$lib/server/scaling';
 import {
 	DURATION_KINDS,
+	CATEGORY_GROUPS,
 	SCALING_DIRECTIONS,
 	SCALING_THRESHOLD_SIDES,
 	type ScalingDirection,
 	type ScalingThresholdSide
 } from '$lib/server/db/schema';
+import {
+	BlankNameError as BlankCategoryNameError,
+	CategoryNotFoundError,
+	DuplicateNameError as DuplicateCategoryNameError,
+	InvalidCategoryGroupError,
+	addCategoryToRecipe,
+	createCategory,
+	listCategories,
+	listCategoriesForRecipe,
+	removeCategoryFromRecipe
+} from '$lib/server/categories';
+import { isFavorite, setFavorite } from '$lib/server/favorites';
+import {
+	BlankNameError as BlankCollectionNameError,
+	CollectionNotFoundError,
+	addRecipeToCollection,
+	createCollection,
+	listCollections,
+	listCollectionsForRecipe,
+	removeRecipeFromCollection
+} from '$lib/server/collections';
 
-export const load: PageServerLoad = ({ params, url }) => {
+export const load: PageServerLoad = ({ params, url, locals }) => {
 	const id = Number(params.id);
 	const compositionIdParam = url.searchParams.get('composition');
 	const compositionId = compositionIdParam ? Number(compositionIdParam) : undefined;
@@ -50,7 +72,17 @@ export const load: PageServerLoad = ({ params, url }) => {
 	const recipe = getRecipe(id, compositionId, targetServings);
 	if (!recipe) error(404, 'Recipe not found');
 
-	return { recipe, ingredients: listIngredients(), durationKinds: DURATION_KINDS };
+	return {
+		recipe,
+		ingredients: listIngredients(),
+		durationKinds: DURATION_KINDS,
+		categoryGroups: CATEGORY_GROUPS,
+		categories: listCategories(),
+		recipeCategories: listCategoriesForRecipe(id),
+		isFavorite: locals.profile ? isFavorite(id, locals.profile.id) : false,
+		collections: listCollections(),
+		recipeCollections: listCollectionsForRecipe(id)
+	};
 };
 
 // Reads a guided-template Scaling Formula out of a submitted form, shared by
@@ -259,6 +291,21 @@ export const actions: Actions = {
 		}
 	},
 
+	addCategory: async ({ request, params }) => {
+		const recipeId = Number(params.id);
+		const data = await request.formData();
+		const categoryId = Number(data.get('categoryId'));
+
+		try {
+			addCategoryToRecipe(recipeId, categoryId);
+		} catch (err) {
+			if (err instanceof CategoryNotFoundError) {
+				return fail(400, { categoryError: 'Pick a category.' });
+			}
+			throw err;
+		}
+	},
+
 	setUsageScalingFormula: async ({ request }) => {
 		const data = await request.formData();
 		const ingredientUsageId = Number(data.get('ingredientUsageId'));
@@ -276,6 +323,37 @@ export const actions: Actions = {
 			}
 			if (err instanceof ScalingUsageNotFoundError) {
 				return fail(400, { scalingError: 'That ingredient usage no longer exists.' });
+			}
+			throw err;
+		}
+	},
+
+	removeCategory: async ({ request, params }) => {
+		const recipeId = Number(params.id);
+		const data = await request.formData();
+		const categoryId = Number(data.get('categoryId'));
+
+		removeCategoryFromRecipe(recipeId, categoryId);
+	},
+
+	createCategory: async ({ request, params }) => {
+		const recipeId = Number(params.id);
+		const data = await request.formData();
+		const name = String(data.get('name') ?? '');
+		const categoryGroup = String(data.get('categoryGroup') ?? '');
+
+		try {
+			const category = createCategory(name, categoryGroup);
+			addCategoryToRecipe(recipeId, category.id);
+		} catch (err) {
+			if (err instanceof BlankCategoryNameError) {
+				return fail(400, { categoryError: 'Enter a category name.' });
+			}
+			if (err instanceof DuplicateCategoryNameError) {
+				return fail(400, { categoryError: 'That category already exists.' });
+			}
+			if (err instanceof InvalidCategoryGroupError) {
+				return fail(400, { categoryError: 'Pick a category group.' });
 			}
 			throw err;
 		}
@@ -312,9 +390,60 @@ export const actions: Actions = {
 		}
 	},
 
+	toggleFavorite: async ({ request, params, locals }) => {
+		if (!locals.profile) return fail(401, { favoriteError: 'Pick a profile first.' });
+
+		const recipeId = Number(params.id);
+		const data = await request.formData();
+		const isFavoriteNow = data.get('isFavorite') === 'true';
+
+		setFavorite(recipeId, locals.profile.id, !isFavoriteNow);
+	},
+
+	addToCollection: async ({ request, params }) => {
+		const recipeId = Number(params.id);
+		const data = await request.formData();
+		const collectionId = Number(data.get('collectionId'));
+
+		try {
+			addRecipeToCollection(collectionId, recipeId);
+		} catch (err) {
+			if (err instanceof CollectionNotFoundError) {
+				return fail(400, { collectionError: 'Pick a collection.' });
+			}
+			throw err;
+		}
+	},
+
 	removeDurationScalingFormula: async ({ request }) => {
 		const data = await request.formData();
 		const stepId = Number(data.get('stepId'));
 		removeDurationScalingFormula(stepId);
+	},
+
+	removeFromCollection: async ({ request, params }) => {
+		const recipeId = Number(params.id);
+		const data = await request.formData();
+		const collectionId = Number(data.get('collectionId'));
+
+		removeRecipeFromCollection(collectionId, recipeId);
+	},
+
+	createCollection: async ({ request, params, locals }) => {
+		if (!locals.profile) return fail(401, { collectionError: 'Pick a profile first.' });
+
+		const recipeId = Number(params.id);
+		const data = await request.formData();
+		const name = String(data.get('name') ?? '');
+
+		try {
+			const collection = createCollection(locals.profile.id, name);
+			addRecipeToCollection(collection.id, recipeId);
+		} catch (err) {
+			if (err instanceof BlankCollectionNameError) {
+				return fail(400, { collectionError: 'Enter a name for the collection.' });
+			}
+			throw err;
+		}
 	}
 };

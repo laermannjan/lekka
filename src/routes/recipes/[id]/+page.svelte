@@ -20,9 +20,151 @@
 		return () => clearInterval(id);
 	});
 	let timerPanelOpen = $state(false);
+
+	const categoryGroupLabels: Record<string, string> = {
+		'meal-type': 'Meal type',
+		cuisine: 'Cuisine',
+		course: 'Course'
+	};
+	const attachedCategoryIds = $derived(new Set(data.recipeCategories.map((c) => c.id)));
+	const availableCategories = $derived(
+		data.categories.filter((c) => !attachedCategoryIds.has(c.id))
+	);
+	const availableCollections = $derived(
+		data.collections.filter((c) => !data.recipeCollections.some((rc) => rc.id === c.id))
+	);
 </script>
 
 <h1>{data.recipe.title}</h1>
+
+<section>
+	{#if form?.favoriteError}
+		<p role="alert">{form.favoriteError}</p>
+	{/if}
+	<form method="POST" action="?/toggleFavorite">
+		<input type="hidden" name="isFavorite" value={data.isFavorite} />
+		<button type="submit" aria-pressed={data.isFavorite}>
+			{data.isFavorite ? '★ Favorited' : '☆ Mark as favorite'}
+		</button>
+	</form>
+</section>
+
+<section>
+	<h2>Categories</h2>
+	{#if form?.categoryError}
+		<p role="alert">{form.categoryError}</p>
+	{/if}
+
+	{#if data.recipeCategories.length > 0}
+		<ul>
+			{#each data.recipeCategories as category (category.id)}
+				<li>
+					{category.name} <em>({categoryGroupLabels[category.categoryGroup]})</em>
+					<form method="POST" action="?/removeCategory" style="display: inline">
+						<input type="hidden" name="categoryId" value={category.id} />
+						<button type="submit">Remove</button>
+					</form>
+				</li>
+			{/each}
+		</ul>
+	{:else}
+		<p>No categories yet.</p>
+	{/if}
+
+	{#if availableCategories.length > 0}
+		<form method="POST" action="?/addCategory">
+			<label>
+				Attach an existing category
+				<select name="categoryId">
+					{#each Object.entries(categoryGroupLabels) as [group, label] (group)}
+						{#each availableCategories.filter((c) => c.categoryGroup === group) as category (category.id)}
+							<option value={category.id}>{label}: {category.name}</option>
+						{/each}
+					{/each}
+				</select>
+			</label>
+			<button type="submit">Attach</button>
+		</form>
+	{/if}
+
+	<details>
+		<summary>Create a new category</summary>
+		<form method="POST" action="?/createCategory">
+			<label>
+				Name
+				<input type="text" name="name" required maxlength="60" list="category-name-options" />
+			</label>
+			<datalist id="category-name-options">
+				{#each data.categories as category (category.id)}
+					<option value={category.name}></option>
+				{/each}
+			</datalist>
+			<label>
+				Group
+				<select name="categoryGroup" required>
+					{#each data.categoryGroups as group (group)}
+						<option value={group}>{categoryGroupLabels[group]}</option>
+					{/each}
+				</select>
+			</label>
+			<button type="submit">Create and attach</button>
+		</form>
+	</details>
+</section>
+
+<section>
+	<h2>Collections</h2>
+	{#if form?.collectionError}
+		<p role="alert">{form.collectionError}</p>
+	{/if}
+
+	{#if data.recipeCollections.length > 0}
+		<ul>
+			{#each data.recipeCollections as collection (collection.id)}
+				<li>
+					{collection.name}
+					<form method="POST" action="?/removeFromCollection" style="display: inline">
+						<input type="hidden" name="collectionId" value={collection.id} />
+						<button type="submit">Remove</button>
+					</form>
+				</li>
+			{/each}
+		</ul>
+	{:else}
+		<p>Not in any collections yet.</p>
+	{/if}
+
+	{#if availableCollections.length > 0}
+		<form method="POST" action="?/addToCollection">
+			<label>
+				Add to an existing collection
+				<select name="collectionId">
+					{#each availableCollections as collection (collection.id)}
+						<option value={collection.id}>{collection.name}</option>
+					{/each}
+				</select>
+			</label>
+			<button type="submit">Add</button>
+		</form>
+	{/if}
+
+	<details>
+		<summary>Create a new collection</summary>
+		<form method="POST" action="?/createCollection">
+			<label>
+				Name
+				<input
+					type="text"
+					name="name"
+					required
+					maxlength="80"
+					placeholder="e.g. weeknight dinners"
+				/>
+			</label>
+			<button type="submit">Create and add</button>
+		</form>
+	</details>
+</section>
 
 <nav>
 	<ul>

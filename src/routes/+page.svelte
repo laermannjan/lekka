@@ -10,7 +10,13 @@
 {#if data.recipes.length > 0}
 	<ul>
 		{#each data.recipes as recipe (recipe.id)}
-			<li><a href={resolve('/recipes/[id]', { id: String(recipe.id) })}>{recipe.title}</a></li>
+			<li>
+				{#if recipe.isFavorite}★{/if}
+				<a href={resolve('/recipes/[id]', { id: String(recipe.id) })}>{recipe.title}</a>
+				{#if recipe.categories.length > 0}
+					<em>({recipe.categories.map((c) => c.name).join(', ')})</em>
+				{/if}
+			</li>
 		{/each}
 	</ul>
 {:else}

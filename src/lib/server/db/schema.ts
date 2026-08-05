@@ -232,3 +232,87 @@ export const scalingFormulas = sqliteTable(
 );
 
 export type ScalingFormula = typeof scalingFormulas.$inferSelect;
+
+// A small, fixed classification of what kind of thing a Category describes.
+// Unlike Category itself, not household-extensible.
+export const CATEGORY_GROUPS = ['meal-type', 'cuisine', 'course'] as const;
+export type CategoryGroup = (typeof CATEGORY_GROUPS)[number];
+
+// A browsing classification for a whole Recipe - meal type, cuisine, course
+// (see CONTEXT.md). Distinct from Tag, which classifies Ingredients, not
+// Recipes.
+export const categories = sqliteTable('categories', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	name: text('name').notNull().unique(),
+	categoryGroup: text('category_group', { enum: CATEGORY_GROUPS }).notNull(),
+	createdAt: text('created_at')
+		.notNull()
+		.default(sql`(current_timestamp)`)
+});
+
+export type Category = typeof categories.$inferSelect;
+
+// Join table attaching any number of Categories to a Recipe. Shared across
+// every Composition of that Recipe (see CONTEXT.md).
+export const recipeCategories = sqliteTable(
+	'recipe_categories',
+	{
+		recipeId: integer('recipe_id')
+			.notNull()
+			.references(() => recipes.id, { onDelete: 'cascade' }),
+		categoryId: integer('category_id')
+			.notNull()
+			.references(() => categories.id, { onDelete: 'cascade' })
+	},
+	(table) => [primaryKey({ columns: [table.recipeId, table.categoryId] })]
+);
+
+// A per-Profile boolean mark on a Recipe (see CONTEXT.md). A row's presence
+// is the mark - there's no separate boolean column that could drift out of
+// sync with it.
+export const favorites = sqliteTable(
+	'favorites',
+	{
+		recipeId: integer('recipe_id')
+			.notNull()
+			.references(() => recipes.id, { onDelete: 'cascade' }),
+		profileId: integer('profile_id')
+			.notNull()
+			.references(() => profiles.id, { onDelete: 'cascade' }),
+		createdAt: text('created_at')
+			.notNull()
+			.default(sql`(current_timestamp)`)
+	},
+	(table) => [primaryKey({ columns: [table.recipeId, table.profileId] })]
+);
+
+// A per-Profile, named, freely-membered group of Recipes (see CONTEXT.md).
+// `profileId` records the creating Profile only - visible and editable
+// household-wide regardless, same as every other Profile-owned concept here.
+export const collections = sqliteTable('collections', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	profileId: integer('profile_id')
+		.notNull()
+		.references(() => profiles.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	createdAt: text('created_at')
+		.notNull()
+		.default(sql`(current_timestamp)`)
+});
+
+export type Collection = typeof collections.$inferSelect;
+
+// Join table for a Collection's Recipe membership - a Recipe can belong to
+// any number of Collections, same multi-membership as Tag (see CONTEXT.md).
+export const collectionRecipes = sqliteTable(
+	'collection_recipes',
+	{
+		collectionId: integer('collection_id')
+			.notNull()
+			.references(() => collections.id, { onDelete: 'cascade' }),
+		recipeId: integer('recipe_id')
+			.notNull()
+			.references(() => recipes.id, { onDelete: 'cascade' })
+	},
+	(table) => [primaryKey({ columns: [table.collectionId, table.recipeId] })]
+);
