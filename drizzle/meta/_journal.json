@@ -57,6 +57,13 @@
       "when": 1785953035208,
       "tag": "0007_add_categories_favorites_collections",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1785953393154,
+      "tag": "0008_add_recipe_versions",
+      "breakpoints": true
     }
   ]
 }
