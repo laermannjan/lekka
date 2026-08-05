@@ -38,6 +38,7 @@ import {
 import {
 	DURATION_KINDS,
 	CATEGORY_GROUPS,
+	COOK_OUTCOMES,
 	SCALING_DIRECTIONS,
 	SCALING_THRESHOLD_SIDES,
 	type ScalingDirection,
@@ -55,6 +56,7 @@ import {
 	removeCategoryFromRecipe
 } from '$lib/server/categories';
 import { isFavorite, setFavorite } from '$lib/server/favorites';
+import { listProfiles } from '$lib/server/profiles';
 import { getAvoidTagIdsForProfiles, getFlaggedTagsByIngredientIds } from '$lib/server/dietary';
 import {
 	BlankNameError as BlankCollectionNameError,
@@ -65,6 +67,20 @@ import {
 	listCollectionsForRecipe,
 	removeRecipeFromCollection
 } from '$lib/server/collections';
+import {
+	AnnotationTargetError,
+	BlankCookedAtError,
+	CompositionNotFoundError as CookCompositionNotFoundError,
+	CookNotFoundError,
+	IngredientUsageNotFoundError as CookIngredientUsageNotFoundError,
+	InvalidOutcomeError,
+	NoVersionHistoryError,
+	StepNotFoundError as CookStepNotFoundError,
+	addCookLogAnnotation,
+	listAnnotationsForCooks,
+	listCooksForRecipe,
+	logCook
+} from '$lib/server/cooks';
 
 export const load: PageServerLoad = ({ params, url, locals }) => {
 	const id = Number(params.id);
@@ -96,6 +112,11 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 		getFlaggedTagsByIngredientIds(usageIngredientIds, avoidTagIds)
 	);
 
+	const cooks = listCooksForRecipe(id);
+	const annotationsByCookId = Object.fromEntries(
+		listAnnotationsForCooks(cooks.map((cook) => cook.id))
+	);
+
 	return {
 		recipe,
 		ingredients: listIngredients(),
@@ -108,7 +129,12 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 		recipeCollections: listCollectionsForRecipe(id),
 		versions,
 		diners: locals.dinerProfiles,
-		flaggedTagsByIngredientId
+		flaggedTagsByIngredientId,
+		cooks,
+		annotationsByCookId,
+		cookOutcomes: COOK_OUTCOMES,
+		profiles: listProfiles(),
+		actingProfile: locals.profile
 	};
 };
 
@@ -469,6 +495,73 @@ export const actions: Actions = {
 		} catch (err) {
 			if (err instanceof BlankCollectionNameError) {
 				return fail(400, { collectionError: 'Enter a name for the collection.' });
+			}
+			throw err;
+		}
+	},
+
+	logCook: async ({ request, params, locals }) => {
+		if (!locals.profile) return fail(401, { cookError: 'Pick a profile first.' });
+
+		const recipeId = Number(params.id);
+		const data = await request.formData();
+		const compositionId = Number(data.get('compositionId'));
+		const cookedAt = String(data.get('cookedAt') ?? '');
+		const outcome = String(data.get('outcome') ?? '');
+		const summary = String(data.get('summary') ?? '');
+		const dinerProfileIds = data.getAll('dinerProfileIds').map((value) => Number(value));
+
+		try {
+			logCook(recipeId, {
+				compositionId,
+				actingProfileId: locals.profile.id,
+				dinerProfileIds,
+				cookedAt,
+				outcome,
+				summary
+			});
+		} catch (err) {
+			if (err instanceof BlankCookedAtError) {
+				return fail(400, { cookError: 'Pick a date.' });
+			}
+			if (err instanceof InvalidOutcomeError) {
+				return fail(400, { cookError: 'Pick an outcome.' });
+			}
+			if (err instanceof CookCompositionNotFoundError) {
+				return fail(400, { cookError: 'Pick a composition.' });
+			}
+			if (err instanceof NoVersionHistoryError) {
+				return fail(400, { cookError: 'This recipe has no version history yet.' });
+			}
+			throw err;
+		}
+	},
+
+	addCookAnnotation: async ({ request }) => {
+		const data = await request.formData();
+		const cookId = Number(data.get('cookId'));
+		const stepIdRaw = String(data.get('stepId') ?? '');
+		const ingredientUsageIdRaw = String(data.get('ingredientUsageId') ?? '');
+		const note = String(data.get('note') ?? '');
+
+		try {
+			addCookLogAnnotation(cookId, {
+				stepId: stepIdRaw ? Number(stepIdRaw) : undefined,
+				ingredientUsageId: ingredientUsageIdRaw ? Number(ingredientUsageIdRaw) : undefined,
+				note
+			});
+		} catch (err) {
+			if (err instanceof AnnotationTargetError) {
+				return fail(400, { annotationError: err.message });
+			}
+			if (err instanceof CookNotFoundError) {
+				return fail(400, { annotationError: 'That cook no longer exists.' });
+			}
+			if (err instanceof CookStepNotFoundError) {
+				return fail(400, { annotationError: 'That step no longer exists.' });
+			}
+			if (err instanceof CookIngredientUsageNotFoundError) {
+				return fail(400, { annotationError: 'That ingredient usage no longer exists.' });
 			}
 			throw err;
 		}

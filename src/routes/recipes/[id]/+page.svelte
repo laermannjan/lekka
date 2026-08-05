@@ -644,6 +644,140 @@
 	<p>No ingredients yet.</p>
 {/if}
 
+<h2>Cook log</h2>
+
+<p>Logging a cook records what happened, when, and by whom - it never edits this recipe itself.</p>
+
+{#if form?.cookError}
+	<p role="alert">{form.cookError}</p>
+{/if}
+
+{#if data.actingProfile}
+	<details>
+		<summary>Log a cook</summary>
+		<form method="POST" action="?/logCook">
+			<input type="hidden" name="compositionId" value={data.recipe.composition.id} />
+			<label>
+				Date
+				<input type="date" name="cookedAt" required value={new Date().toISOString().slice(0, 10)} />
+			</label>
+			<label>
+				Outcome
+				<select name="outcome" required>
+					{#each data.cookOutcomes as outcome (outcome)}
+						<option value={outcome}>{outcome}</option>
+					{/each}
+				</select>
+			</label>
+			<label>
+				Summary (optional)
+				<textarea name="summary" maxlength="2000"></textarea>
+			</label>
+			<fieldset>
+				<legend>Diners present</legend>
+				{#each data.profiles as profile (profile.id)}
+					<label>
+						<input
+							type="checkbox"
+							name="dinerProfileIds"
+							value={profile.id}
+							checked={data.diners.some((d) => d.id === profile.id)}
+						/>
+						{profile.name}
+					</label>
+				{/each}
+			</fieldset>
+			<button type="submit">Log cook</button>
+		</form>
+	</details>
+{:else}
+	<p><em>Pick a profile to log a cook.</em></p>
+{/if}
+
+{#if form?.annotationError}
+	<p role="alert">{form.annotationError}</p>
+{/if}
+
+{#if data.cooks.length > 0}
+	<ol>
+		{#each data.cooks as cook (cook.id)}
+			{@const annotations = data.annotationsByCookId[cook.id] ?? []}
+			<li>
+				<p>
+					<time datetime={cook.cookedAt}>{cook.cookedAt}</time> —
+					{cook.outcome}
+					{#if cook.actingProfile}by {cook.actingProfile.name}{/if}
+					{#if cook.diners.length > 0}
+						— diners: {cook.diners.map((d) => d.name).join(', ')}
+					{/if}
+				</p>
+				{#if cook.summary}
+					<p>{cook.summary}</p>
+				{/if}
+
+				{#if annotations.length > 0}
+					<ul>
+						{#each annotations as annotation (annotation.id)}
+							<li>
+								{#if annotation.stepId !== null}
+									{@const step = data.recipe.composition.steps.find(
+										(s) => s.id === annotation.stepId
+									)}
+									<em>Step: {step?.renderedInstruction ?? `#${annotation.stepId}`}</em> —
+								{:else}
+									{@const usage = allUsages.find((u) => u.id === annotation.ingredientUsageId)}
+									<em
+										>Usage: {usage
+											? `${usage.ingredient.baseTerm}${usage.ingredient.descriptors ? ` (${usage.ingredient.descriptors})` : ''}`
+											: `#${annotation.ingredientUsageId}`}</em
+									> —
+								{/if}
+								{annotation.note}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+
+				<details>
+					<summary>Add an annotation</summary>
+					<form method="POST" action="?/addCookAnnotation">
+						<input type="hidden" name="cookId" value={cook.id} />
+						<p>Pin to exactly one of a step or an ingredient usage:</p>
+						<label>
+							Step
+							<select name="stepId">
+								<option value="">None</option>
+								{#each data.recipe.composition.steps as step (step.id)}
+									<option value={step.id}>{step.renderedInstruction}</option>
+								{/each}
+							</select>
+						</label>
+						<label>
+							Or ingredient usage
+							<select name="ingredientUsageId">
+								<option value="">None</option>
+								{#each allUsages as usage (usage.id)}
+									<option value={usage.id}
+										>{usage.ingredient.baseTerm}{#if usage.ingredient.descriptors}
+											({usage.ingredient.descriptors}){/if}</option
+									>
+								{/each}
+							</select>
+						</label>
+						<label>
+							Note
+							<textarea name="note" required maxlength="1000"></textarea>
+						</label>
+						<button type="submit">Add annotation</button>
+					</form>
+				</details>
+			</li>
+		{/each}
+	</ol>
+{:else}
+	<p>No cooks logged yet.</p>
+{/if}
+
 <h2>Version history</h2>
 
 {#if form?.versionError}

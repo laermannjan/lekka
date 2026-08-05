@@ -1,5 +1,15 @@
 # Decisions
 
+## Cook logging: record the current Version id, don't remap Cook Log Annotations across reverts (2026-08-06)
+
+**Context**: #29 asked for logging a Cook (date, Version/Composition used, acting Profile, Diners present, outcome, summary) and Cook Log Annotations pinned to a specific Step or Ingredient Usage within a Cook, with the hard constraint that logging never mutates the Recipe.
+
+**Decision**: `logCook` looks up the Recipe's already-most-recent `recipe_versions` row and stores its id - it never calls `recordVersion`, so a Cook is guaranteed to never create a Version as a side effect. `cook_log_annotations.step_id`/`ingredient_usage_id` are plain foreign keys onto the live `steps`/`ingredient_usages` tables (`onDelete: 'cascade'`), the same shape `scaling_formulas` already uses for its exactly-one-target Step/Usage reference.
+
+**Consequence, accepted**: unlike `scaling_formulas` (which `revertToVersion` explicitly remaps to the newly-inserted rows via its id-map), a Cook Log Annotation is _not_ remapped on revert - `revertToVersion` deletes and re-inserts every Step/Composition with new ids, so an Annotation pinned before a revert cascades away with the Step/Usage row it pointed at. A Cook's own summary/outcome/diners survive any Recipe edit (they don't reference Step/Usage rows), but per-Step/Usage Annotations are scoped to "as the Recipe currently stands," not preserved independent of later edits.
+
+**Rejected**: teaching `cook_log_annotations` to survive a revert the way `scaling_formulas` does. `revertToVersion`'s remap only exists because a Recipe's own Version snapshot is self-contained by definition; wiring Cooks (a separate, append-only history that's explicitly never touched by Recipe edits) into that remap would mean tracking a second cross-cutting id-map anywhere Steps/Usages get recreated, for a case the acceptance criteria didn't ask for.
+
 ## Stack: SvelteKit + SQLite + Docker (2026-08-05)
 
 **Context**: lekka is a self-hostable, single-household recipe manager (see `CONTEXT.md`). The one binding architecture constraint (from #16): a persistent, wakeable server process able to hold Web Push subscriptions and fire exact-time push (VAPID/RFC 8292) for Step timers — this rules out pure static/serverless-only hosting.

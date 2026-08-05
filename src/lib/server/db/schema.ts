@@ -374,6 +374,85 @@ export const vapidKeys = sqliteTable('vapid_keys', {
 
 export type VapidKeys = typeof vapidKeys.$inferSelect;
 
+// The v1 fixed set a Cook's outcome is picked from (see CONTEXT.md's Cook) -
+// how the occasion went, distinct from the free-text `summary` on the same
+// row. Not household-extensible, same governance shape as a Tag Group.
+export const COOK_OUTCOMES = ['worked-well', 'needs-tweaks', 'did-not-work'] as const;
+export type CookOutcome = (typeof COOK_OUTCOMES)[number];
+
+// One occasion of making a Recipe (see CONTEXT.md's Cook). Household-wide,
+// not personal to `actingProfileId` - same no-privacy-walls visibility as
+// every other Profile-attributed row here. `compositionId` and
+// `recipeVersionId` record which line and which point in the edit history
+// were cooked; logging a Cook never itself calls recordVersion, so this
+// never mutates the Recipe. `cookedAt` is the author-entered date of the
+// occasion, distinct from `createdAt` (when the log entry itself was
+// written).
+export const cooks = sqliteTable('cooks', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	recipeId: integer('recipe_id')
+		.notNull()
+		.references(() => recipes.id, { onDelete: 'cascade' }),
+	compositionId: integer('composition_id')
+		.notNull()
+		.references(() => compositions.id, { onDelete: 'cascade' }),
+	recipeVersionId: integer('recipe_version_id')
+		.notNull()
+		.references(() => recipeVersions.id, { onDelete: 'cascade' }),
+	actingProfileId: integer('acting_profile_id')
+		.notNull()
+		.references(() => profiles.id, { onDelete: 'cascade' }),
+	cookedAt: text('cooked_at').notNull(),
+	outcome: text('outcome', { enum: COOK_OUTCOMES }).notNull(),
+	summary: text('summary'),
+	createdAt: text('created_at')
+		.notNull()
+		.default(sql`(current_timestamp)`)
+});
+
+export type Cook = typeof cooks.$inferSelect;
+
+// The Diners present at a Cook (see CONTEXT.md's Diners and Cook) - a
+// snapshot of who was eating at that occasion, independent of the live
+// Diners cookie selection which may have changed since.
+export const cookDiners = sqliteTable(
+	'cook_diners',
+	{
+		cookId: integer('cook_id')
+			.notNull()
+			.references(() => cooks.id, { onDelete: 'cascade' }),
+		profileId: integer('profile_id')
+			.notNull()
+			.references(() => profiles.id, { onDelete: 'cascade' })
+	},
+	(table) => [primaryKey({ columns: [table.cookId, table.profileId] })]
+);
+
+// A note pinned to a specific Step or Ingredient Usage within a Cook (see
+// CONTEXT.md's Cook Log Annotation), rather than free text dumped at the
+// end. Exactly one of `stepId`/`ingredientUsageId` is set - enforced in
+// src/lib/server/cooks.ts, same convention as ScalingFormula's exactly-one
+// target. Both cascade off the live Step/Usage row, so an annotation is
+// dropped if a later Recipe edit removes what it was pinned to - it's a
+// pointer into current Recipe structure, not a fact preserved independent
+// of it.
+export const cookLogAnnotations = sqliteTable('cook_log_annotations', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	cookId: integer('cook_id')
+		.notNull()
+		.references(() => cooks.id, { onDelete: 'cascade' }),
+	stepId: integer('step_id').references(() => steps.id, { onDelete: 'cascade' }),
+	ingredientUsageId: integer('ingredient_usage_id').references(() => ingredientUsages.id, {
+		onDelete: 'cascade'
+	}),
+	note: text('note').notNull(),
+	createdAt: text('created_at')
+		.notNull()
+		.default(sql`(current_timestamp)`)
+});
+
+export type CookLogAnnotation = typeof cookLogAnnotations.$inferSelect;
+
 // A device's Web Push subscription (see
 // docs/research/pwa-timer-notifications.md). Not tied to a Profile -
 // notification permission and the resulting endpoint/keys are a
