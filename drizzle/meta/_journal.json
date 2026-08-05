@@ -8,6 +8,20 @@
       "when": 1785942941651,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785944642257,
+      "tag": "0001_add_ingredients_and_tags",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785944649388,
+      "tag": "0002_seed_tag_vocabulary",
+      "breakpoints": true
     }
   ]
 }

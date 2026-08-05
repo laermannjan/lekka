@@ -28,7 +28,11 @@ export default defineConfig({
 					environment: 'node',
 					include: ['src/**/*.{test,spec}.{js,ts}'],
 					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}'],
-					setupFiles: ['src/lib/server/db/test-setup.ts']
+					setupFiles: ['src/lib/server/db/test-setup.ts'],
+					// All server specs share one SQLite file (see test-setup.ts) with no
+					// per-file isolation; running files in parallel races their
+					// beforeEach table clears against each other.
+					fileParallelism: false
 				}
 			}
 		]

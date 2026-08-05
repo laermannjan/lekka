@@ -15,6 +15,7 @@
 	{#if data.profile}
 		<nav>
 			<a href={resolve('/')}>Recipes</a>
+			<a href={resolve('/ingredients')}>Ingredients</a>
 			<span>{data.profile.name} · <a href={resolve('/profile')}>Switch</a></span>
 		</nav>
 	{/if}
