@@ -1,12 +1,29 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 
-	const allUsages = $derived(data.recipe.steps.flatMap((step) => step.usages));
+	const allUsages = $derived(data.recipe.composition.steps.flatMap((step) => step.usages));
+	const basePath = $derived(resolve('/recipes/[id]', { id: String(data.recipe.id) }));
 </script>
 
 <h1>{data.recipe.title}</h1>
+
+<nav>
+	<ul>
+		{#each data.recipe.compositions as composition (composition.id)}
+			<li>
+				<a
+					href="{basePath}?composition={composition.id}"
+					aria-current={composition.id === data.recipe.composition.id ? 'page' : undefined}
+				>
+					{composition.name ?? 'Default'}
+				</a>
+			</li>
+		{/each}
+	</ul>
+</nav>
 
 <h2>Steps</h2>
 
@@ -17,11 +34,15 @@
 	<p role="alert">{form.usageError}</p>
 {/if}
 
-{#if data.recipe.steps.length > 0}
+{#if data.recipe.composition.steps.length > 0}
 	<ol>
-		{#each data.recipe.steps as step (step.id)}
+		{#each data.recipe.composition.steps as step (step.compositionStepId)}
 			<li>
-				<p>{step.renderedInstruction}</p>
+				<p>
+					{step.renderedInstruction}{#if step.isOverride}<em>
+							(overridden in this composition)</em
+						>{/if}
+				</p>
 				{#if step.durationKind}
 					<p>
 						<em
@@ -47,7 +68,11 @@
 				{/if}
 
 				<details>
-					<summary>Edit instruction</summary>
+					<summary>
+						{step.isOverride
+							? 'Edit instruction (this composition only)'
+							: 'Edit instruction (shared - updates every composition)'}
+					</summary>
 					<form method="POST" action="?/updateStepInstruction">
 						<input type="hidden" name="stepId" value={step.id} />
 						<label>
@@ -55,6 +80,54 @@
 							<textarea name="instruction" required maxlength="2000">{step.instruction}</textarea>
 						</label>
 						<button type="submit">Save instruction</button>
+					</form>
+				</details>
+
+				<details>
+					<summary>Override in this composition only</summary>
+					<form method="POST" action="?/overrideStep">
+						<input type="hidden" name="compositionStepId" value={step.compositionStepId} />
+						<label>
+							Instruction
+							<textarea name="instruction" required maxlength="2000">{step.instruction}</textarea>
+						</label>
+						<fieldset>
+							<legend>Duration (optional)</legend>
+							<label>
+								Kind
+								<select name="durationKind">
+									<option value="">None</option>
+									{#each data.durationKinds as kind (kind)}
+										<option value={kind} selected={kind === step.durationKind}>{kind}</option>
+									{/each}
+								</select>
+							</label>
+							<label>
+								Min
+								<input
+									type="number"
+									name="durationMin"
+									step="any"
+									min="0"
+									value={step.durationMin}
+								/>
+							</label>
+							<label>
+								Max
+								<input
+									type="number"
+									name="durationMax"
+									step="any"
+									min="0"
+									value={step.durationMax}
+								/>
+							</label>
+							<label>
+								Unit
+								<input type="text" name="durationUnit" value={step.durationUnit ?? ''} />
+							</label>
+						</fieldset>
+						<button type="submit">Override step</button>
 					</form>
 				</details>
 
@@ -92,6 +165,27 @@
 						<button type="submit">Add usage</button>
 					</form>
 				</details>
+
+				<form method="POST" action="?/removeStep">
+					<input type="hidden" name="compositionStepId" value={step.compositionStepId} />
+					{#if step.otherCompositionsReferencing.length > 0}
+						<p role="alert">
+							Warning: this step is also used by
+							{step.otherCompositionsReferencing.map((c) => c.name ?? 'Default').join(', ')}. It
+							will stay there unless you also check it off below.
+						</p>
+						<p>
+							Also drop it from:
+							{#each step.otherCompositionsReferencing as other (other.id)}
+								<label>
+									<input type="checkbox" name="alsoFromCompositionIds" value={other.id} />
+									{other.name ?? 'Default'}
+								</label>
+							{/each}
+						</p>
+					{/if}
+					<button type="submit">Remove step from this composition</button>
+				</form>
 			</li>
 		{/each}
 	</ol>
@@ -102,6 +196,7 @@
 <h2>Add a step</h2>
 
 <form method="POST" action="?/addStep">
+	<input type="hidden" name="compositionId" value={data.recipe.composition.id} />
 	<label>
 		Instruction
 		<textarea name="instruction" required maxlength="2000"></textarea>
@@ -135,7 +230,31 @@
 	<button type="submit">Add step</button>
 </form>
 
-<h2>Whole-recipe ingredient list</h2>
+<h2>Variants</h2>
+
+{#if form?.variantError}
+	<p role="alert">{form.variantError}</p>
+{/if}
+
+<form method="POST" action="?/createVariant">
+	<label>
+		Name
+		<input type="text" name="name" required maxlength="80" placeholder="e.g. Chilli sin carne" />
+	</label>
+	<label>
+		Seed from
+		<select name="seedFromCompositionId">
+			{#each data.recipe.compositions as composition (composition.id)}
+				<option value={composition.id} selected={composition.id === data.recipe.composition.id}>
+					{composition.name ?? 'Default'}
+				</option>
+			{/each}
+		</select>
+	</label>
+	<button type="submit">Create variant</button>
+</form>
+
+<h2>Whole-composition ingredient list</h2>
 
 {#if allUsages.length > 0}
 	<ul>

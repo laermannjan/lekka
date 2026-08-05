@@ -62,10 +62,8 @@ export const ingredientTags = sqliteTable(
 	(table) => [primaryKey({ columns: [table.ingredientId, table.tagId] })]
 );
 
-// A named dish. v1 only ever exposes its default Composition (see
-// CONTEXT.md) - the Step pool below is ordered directly by `position`
-// rather than through a separate Composition/override table, since
-// Variants don't exist yet.
+// A named dish: a shared pool of Steps plus one or more Compositions (see
+// CONTEXT.md) that each select, order, and optionally override those Steps.
 export const recipes = sqliteTable('recipes', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	title: text('title').notNull(),
@@ -76,6 +74,25 @@ export const recipes = sqliteTable('recipes', {
 
 export type Recipe = typeof recipes.$inferSelect;
 
+// One named or default line through a Recipe (see CONTEXT.md). `name` is
+// null for the default Composition. `seededFromCompositionId` is informational
+// lineage only - it records where a Variant was seeded from, never an
+// ongoing structural link.
+export const compositions = sqliteTable('compositions', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	recipeId: integer('recipe_id')
+		.notNull()
+		.references(() => recipes.id, { onDelete: 'cascade' }),
+	name: text('name'),
+	isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+	seededFromCompositionId: integer('seeded_from_composition_id'),
+	createdAt: text('created_at')
+		.notNull()
+		.default(sql`(current_timestamp)`)
+});
+
+export type Composition = typeof compositions.$inferSelect;
+
 // A Step's time cost. At most one per Step; a step with two time phases is
 // split into two Steps (see CONTEXT.md).
 export const DURATION_KINDS = ['active', 'wait', 'cook', 'estimate'] as const;
@@ -84,13 +101,15 @@ export type DurationKind = (typeof DURATION_KINDS)[number];
 // One instruction, optionally carrying a Duration and referencing zero or
 // more Ingredient Usages. `instruction` may contain `{{n}}` tokens that
 // weave a Usage's Quantity into the text at point of use - see
-// src/lib/server/recipes.ts's renderInstruction.
+// src/lib/server/recipes.ts's renderInstruction. Belongs to a Recipe's
+// shared Step pool; a Step used only as a Composition-local override (see
+// `compositionSteps.overrideStepId`) is owned by exactly that one row and
+// otherwise shaped the same way.
 export const steps = sqliteTable('steps', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	recipeId: integer('recipe_id')
 		.notNull()
 		.references(() => recipes.id, { onDelete: 'cascade' }),
-	position: integer('position').notNull(),
 	instruction: text('instruction').notNull(),
 	durationKind: text('duration_kind', { enum: DURATION_KINDS }),
 	durationMin: real('duration_min'),
@@ -102,6 +121,29 @@ export const steps = sqliteTable('steps', {
 });
 
 export type Step = typeof steps.$inferSelect;
+
+// A Composition's ordered reference to a pool Step (see CONTEXT.md).
+// `poolStepId` is the shared pool Step this slot represents - editing it
+// propagates to every Composition whose row for it has a null
+// `overrideStepId`. `overrideStepId`, when set, points to a
+// Composition-local Step holding this slot's full override content
+// (instruction, Duration, and Usages) instead.
+export const compositionSteps = sqliteTable('composition_steps', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	compositionId: integer('composition_id')
+		.notNull()
+		.references(() => compositions.id, { onDelete: 'cascade' }),
+	position: integer('position').notNull(),
+	poolStepId: integer('pool_step_id')
+		.notNull()
+		.references(() => steps.id, { onDelete: 'cascade' }),
+	overrideStepId: integer('override_step_id').references(() => steps.id, { onDelete: 'cascade' }),
+	createdAt: text('created_at')
+		.notNull()
+		.default(sql`(current_timestamp)`)
+});
+
+export type CompositionStep = typeof compositionSteps.$inferSelect;
 
 // The line linking an Ingredient to a Step - carries Quantity, Prep
 // Attribute, and a free-text Note (see CONTEXT.md). `position` is 1-indexed

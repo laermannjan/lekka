@@ -1,11 +1,15 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray, and, ne } from 'drizzle-orm';
 import { db } from './db';
 import {
+	compositions,
+	compositionSteps,
 	ingredients,
 	ingredientUsages,
 	recipes,
 	steps,
 	DURATION_KINDS,
+	type Composition,
+	type CompositionStep,
 	type DurationKind,
 	type Ingredient,
 	type IngredientUsage,
@@ -15,18 +19,46 @@ import {
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_INSTRUCTION_LENGTH = 2000;
+const MAX_VARIANT_NAME_LENGTH = 80;
 
 export class BlankTitleError extends Error {}
 export class BlankInstructionError extends Error {}
 export class InvalidDurationError extends Error {}
 export class InvalidQuantityError extends Error {}
 export class IngredientNotFoundError extends Error {}
+export class BlankVariantNameError extends Error {}
+export class CompositionNotFoundError extends Error {}
+export class CompositionStepNotFoundError extends Error {}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+function insertStep(
+	tx: Tx,
+	recipeId: number,
+	content: {
+		instruction: string;
+		durationKind: DurationKind | null;
+		durationMin: number | null;
+		durationMax: number | null;
+		durationUnit: string | null;
+	}
+): Step {
+	return tx
+		.insert(steps)
+		.values({ recipeId, ...content })
+		.returning()
+		.get();
+}
 
 export function createRecipe(title: string): Recipe {
 	const trimmed = title.trim().slice(0, MAX_TITLE_LENGTH);
 	if (!trimmed) throw new BlankTitleError('Title must not be blank');
 
-	return db.insert(recipes).values({ title: trimmed }).returning().get();
+	return db.transaction((tx) => {
+		const recipe = tx.insert(recipes).values({ title: trimmed }).returning().get();
+		tx.insert(compositions).values({ recipeId: recipe.id, name: null, isDefault: true }).run();
+		return recipe;
+	});
 }
 
 export function listRecipes(): Recipe[] {
@@ -35,6 +67,127 @@ export function listRecipes(): Recipe[] {
 
 export function getRecipeById(id: number): Recipe | undefined {
 	return db.select().from(recipes).where(eq(recipes.id, id)).get();
+}
+
+// A Recipe's Compositions - the default line first, then Variants in
+// creation order (see CONTEXT.md). No Composition is structurally
+// privileged; `isDefault` only decides this ordering and which line loads
+// first.
+export function listCompositions(recipeId: number): Composition[] {
+	const rows = db.select().from(compositions).where(eq(compositions.recipeId, recipeId)).all();
+	return rows.sort((a, b) => {
+		if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+		return a.createdAt.localeCompare(b.createdAt);
+	});
+}
+
+export function getDefaultComposition(recipeId: number): Composition {
+	const composition = db
+		.select()
+		.from(compositions)
+		.where(and(eq(compositions.recipeId, recipeId), eq(compositions.isDefault, true)))
+		.get();
+	if (!composition)
+		throw new CompositionNotFoundError(`No default composition for recipe ${recipeId}`);
+	return composition;
+}
+
+export function getCompositionById(id: number): Composition | undefined {
+	return db.select().from(compositions).where(eq(compositions.id, id)).get();
+}
+
+// Creates a named Variant by seeding it from an existing Composition's
+// current Step list (see CONTEXT.md). The seed is recorded only as
+// informational lineage - each seeded reference is an independent copy, so
+// later edits to one Composition never reach the other. An overridden slot
+// is duplicated into its own new override Step (and its own copy of that
+// Step's Usages) so the two Compositions can diverge from here on.
+export function createVariant(
+	recipeId: number,
+	name: string,
+	seedFromCompositionId: number
+): Composition {
+	const trimmedName = name.trim().slice(0, MAX_VARIANT_NAME_LENGTH);
+	if (!trimmedName) throw new BlankVariantNameError('Variant name must not be blank');
+
+	const seedFrom = getCompositionById(seedFromCompositionId);
+	if (!seedFrom || seedFrom.recipeId !== recipeId) {
+		throw new CompositionNotFoundError(
+			`No composition ${seedFromCompositionId} on recipe ${recipeId}`
+		);
+	}
+
+	return db.transaction((tx) => {
+		const variant = tx
+			.insert(compositions)
+			.values({
+				recipeId,
+				name: trimmedName,
+				isDefault: false,
+				seededFromCompositionId: seedFromCompositionId
+			})
+			.returning()
+			.get();
+
+		const seedRows = tx
+			.select()
+			.from(compositionSteps)
+			.where(eq(compositionSteps.compositionId, seedFromCompositionId))
+			.orderBy(asc(compositionSteps.position))
+			.all();
+
+		for (const row of seedRows) {
+			let overrideStepId: number | null = null;
+			if (row.overrideStepId !== null) {
+				const sourceOverride = tx
+					.select()
+					.from(steps)
+					.where(eq(steps.id, row.overrideStepId))
+					.get();
+				if (!sourceOverride) continue;
+				const copiedOverride = insertStep(tx, recipeId, {
+					instruction: sourceOverride.instruction,
+					durationKind: sourceOverride.durationKind,
+					durationMin: sourceOverride.durationMin,
+					durationMax: sourceOverride.durationMax,
+					durationUnit: sourceOverride.durationUnit
+				});
+				const sourceUsages = tx
+					.select()
+					.from(ingredientUsages)
+					.where(eq(ingredientUsages.stepId, row.overrideStepId))
+					.orderBy(asc(ingredientUsages.position))
+					.all();
+				if (sourceUsages.length > 0) {
+					tx.insert(ingredientUsages)
+						.values(
+							sourceUsages.map((usage) => ({
+								stepId: copiedOverride.id,
+								ingredientId: usage.ingredientId,
+								position: usage.position,
+								quantityValue: usage.quantityValue,
+								quantityUnit: usage.quantityUnit,
+								prepAttribute: usage.prepAttribute,
+								note: usage.note
+							}))
+						)
+						.run();
+				}
+				overrideStepId = copiedOverride.id;
+			}
+
+			tx.insert(compositionSteps)
+				.values({
+					compositionId: variant.id,
+					position: row.position,
+					poolStepId: row.poolStepId,
+					overrideStepId
+				})
+				.run();
+		}
+
+		return variant;
+	});
 }
 
 export type DurationInput = {
@@ -69,41 +222,57 @@ function validateDuration(duration: DurationInput | undefined) {
 	};
 }
 
+function validateInstruction(instruction: string): string {
+	const trimmed = instruction.trim().slice(0, MAX_INSTRUCTION_LENGTH);
+	if (!trimmed) throw new BlankInstructionError('Instruction must not be blank');
+	return trimmed;
+}
+
+export type AddedStep = { step: Step; compositionStep: CompositionStep };
+
+// Adds a new Step to the Recipe's shared pool and appends an unmodified
+// reference to it at the end of one Composition's list (see CONTEXT.md). A
+// Step added this way exists, for now, only in this one Composition -
+// nothing stops another Composition from referencing the same pool Step
+// later.
 export function addStep(
-	recipeId: number,
+	compositionId: number,
 	input: { instruction: string; duration?: DurationInput }
-): Step {
-	const instruction = input.instruction.trim().slice(0, MAX_INSTRUCTION_LENGTH);
-	if (!instruction) throw new BlankInstructionError('Instruction must not be blank');
+): AddedStep {
+	const instruction = validateInstruction(input.instruction);
 	const durationColumns = validateDuration(input.duration);
 
+	const composition = getCompositionById(compositionId);
+	if (!composition) throw new CompositionNotFoundError(`No composition ${compositionId}`);
+
 	return db.transaction((tx) => {
+		const step = insertStep(tx, composition.recipeId, {
+			instruction,
+			durationKind: durationColumns?.durationKind ?? null,
+			durationMin: durationColumns?.durationMin ?? null,
+			durationMax: durationColumns?.durationMax ?? null,
+			durationUnit: durationColumns?.durationUnit ?? null
+		});
+
 		const existing = tx
-			.select({ position: steps.position })
-			.from(steps)
-			.where(eq(steps.recipeId, recipeId))
+			.select({ position: compositionSteps.position })
+			.from(compositionSteps)
+			.where(eq(compositionSteps.compositionId, compositionId))
 			.all();
 		const position = existing.length + 1;
 
-		return tx
-			.insert(steps)
-			.values({
-				recipeId,
-				position,
-				instruction,
-				durationKind: durationColumns?.durationKind ?? null,
-				durationMin: durationColumns?.durationMin ?? null,
-				durationMax: durationColumns?.durationMax ?? null,
-				durationUnit: durationColumns?.durationUnit ?? null
-			})
+		const compositionStep = tx
+			.insert(compositionSteps)
+			.values({ compositionId, position, poolStepId: step.id, overrideStepId: null })
 			.returning()
 			.get();
+
+		return { step, compositionStep };
 	});
 }
 
 export function updateStepInstruction(stepId: number, instruction: string): Step {
-	const trimmed = instruction.trim().slice(0, MAX_INSTRUCTION_LENGTH);
-	if (!trimmed) throw new BlankInstructionError('Instruction must not be blank');
+	const trimmed = validateInstruction(instruction);
 
 	return db
 		.update(steps)
@@ -111,6 +280,81 @@ export function updateStepInstruction(stepId: number, instruction: string): Step
 		.where(eq(steps.id, stepId))
 		.returning()
 		.get();
+}
+
+// Overrides one Composition's slot with a full, Composition-local copy of
+// the Step's content - instruction, Duration, and Usages together. The new
+// override Step starts out carrying a copy of the slot's previous Usages
+// (from the pool Step, or from an earlier override if this slot was already
+// overridden), which the author can then add to or replace via
+// `addIngredientUsage`, same as any other Step. Every other Composition
+// referencing the original pool Step is unaffected.
+export function overrideStep(
+	compositionStepId: number,
+	input: { instruction: string; duration?: DurationInput }
+): Step {
+	const instruction = validateInstruction(input.instruction);
+	const durationColumns = validateDuration(input.duration);
+
+	const row = db
+		.select()
+		.from(compositionSteps)
+		.where(eq(compositionSteps.id, compositionStepId))
+		.get();
+	if (!row) throw new CompositionStepNotFoundError(`No composition step ${compositionStepId}`);
+
+	const composition = getCompositionById(row.compositionId);
+	if (!composition) throw new CompositionNotFoundError(`No composition ${row.compositionId}`);
+
+	const previousContentStepId = row.overrideStepId ?? row.poolStepId;
+
+	return db.transaction((tx) => {
+		const overrideStepRow = insertStep(tx, composition.recipeId, {
+			instruction,
+			durationKind: durationColumns?.durationKind ?? null,
+			durationMin: durationColumns?.durationMin ?? null,
+			durationMax: durationColumns?.durationMax ?? null,
+			durationUnit: durationColumns?.durationUnit ?? null
+		});
+
+		const previousUsages = tx
+			.select()
+			.from(ingredientUsages)
+			.where(eq(ingredientUsages.stepId, previousContentStepId))
+			.orderBy(asc(ingredientUsages.position))
+			.all();
+		if (previousUsages.length > 0) {
+			tx.insert(ingredientUsages)
+				.values(
+					previousUsages.map((usage) => ({
+						stepId: overrideStepRow.id,
+						ingredientId: usage.ingredientId,
+						position: usage.position,
+						quantityValue: usage.quantityValue,
+						quantityUnit: usage.quantityUnit,
+						prepAttribute: usage.prepAttribute,
+						note: usage.note
+					}))
+				)
+				.run();
+		}
+
+		const previousOverrideStepId = row.overrideStepId;
+
+		tx.update(compositionSteps)
+			.set({ overrideStepId: overrideStepRow.id })
+			.where(eq(compositionSteps.id, compositionStepId))
+			.run();
+
+		// Re-overriding an already-overridden slot: the previous override Step
+		// is owned solely by this row, so it's now orphaned - remove it (its
+		// Usages cascade with it).
+		if (previousOverrideStepId !== null) {
+			tx.delete(steps).where(eq(steps.id, previousOverrideStepId)).run();
+		}
+
+		return overrideStepRow;
+	});
 }
 
 export function addIngredientUsage(
@@ -162,6 +406,98 @@ export function addIngredientUsage(
 	});
 }
 
+// A pool Step's other referrers - the Compositions (besides the one
+// initiating a removal) whose list still references `poolStepId`, used to
+// warn before a Step is dropped from the pool entirely. Included regardless
+// of whether that other Composition has overridden the slot, since the
+// underlying pool Step - and this lineage - is still shared.
+export function getOtherCompositionsReferencingStep(
+	poolStepId: number,
+	excludingCompositionId: number
+): Composition[] {
+	const rows = db
+		.select({ composition: compositions })
+		.from(compositionSteps)
+		.innerJoin(compositions, eq(compositions.id, compositionSteps.compositionId))
+		.where(
+			and(
+				eq(compositionSteps.poolStepId, poolStepId),
+				ne(compositionSteps.compositionId, excludingCompositionId)
+			)
+		)
+		.all();
+	return rows.map((row) => row.composition);
+}
+
+function renumberComposition(tx: Tx, compositionId: number) {
+	const rows = tx
+		.select()
+		.from(compositionSteps)
+		.where(eq(compositionSteps.compositionId, compositionId))
+		.orderBy(asc(compositionSteps.position))
+		.all();
+	rows.forEach((row, index) => {
+		const position = index + 1;
+		if (row.position !== position) {
+			tx.update(compositionSteps).set({ position }).where(eq(compositionSteps.id, row.id)).run();
+		}
+	});
+}
+
+// Removes a Step reference from one Composition's list, and optionally from
+// other Compositions that also reference it - `alsoFromCompositionIds`
+// should be exactly the subset of `getOtherCompositionsReferencingStep`'s
+// result the author chose to also drop it from; Compositions left off keep
+// their own reference untouched.
+// Once no Composition references the pool Step at all, it's removed from
+// the pool entirely.
+export function removeStepFromComposition(
+	compositionStepId: number,
+	alsoFromCompositionIds: number[] = []
+): void {
+	const row = db
+		.select()
+		.from(compositionSteps)
+		.where(eq(compositionSteps.id, compositionStepId))
+		.get();
+	if (!row) throw new CompositionStepNotFoundError(`No composition step ${compositionStepId}`);
+
+	db.transaction((tx) => {
+		const alsoIds = new Set(alsoFromCompositionIds);
+		const rowsToRemove =
+			alsoIds.size === 0
+				? [row]
+				: tx
+						.select()
+						.from(compositionSteps)
+						.where(eq(compositionSteps.poolStepId, row.poolStepId))
+						.all()
+						.filter((r) => r.id === row.id || alsoIds.has(r.compositionId));
+
+		const affectedCompositionIds = new Set<number>();
+		for (const r of rowsToRemove) {
+			affectedCompositionIds.add(r.compositionId);
+			tx.delete(compositionSteps).where(eq(compositionSteps.id, r.id)).run();
+			if (r.overrideStepId !== null) {
+				tx.delete(steps).where(eq(steps.id, r.overrideStepId)).run();
+			}
+		}
+
+		for (const compositionId of affectedCompositionIds) {
+			renumberComposition(tx, compositionId);
+		}
+
+		const stillReferenced = tx
+			.select()
+			.from(compositionSteps)
+			.where(eq(compositionSteps.poolStepId, row.poolStepId))
+			.all();
+		if (stillReferenced.length === 0) {
+			tx.delete(steps).where(eq(steps.id, row.poolStepId)).run();
+		}
+	});
+}
+
 // Formats a Quantity for display, applying the Ingredient's rounding
 // toggle (see CONTEXT.md). Rounding never changes the stored value - it
 // only affects the string returned here, and is marked with "~" whenever
@@ -198,40 +534,34 @@ export type UsageWithIngredient = IngredientUsage & {
 	ingredient: Ingredient;
 	displayQuantity: string;
 };
-export type StepWithUsages = Step & {
+
+// One Composition's slot, resolved to its effective content - the override
+// Step's content if the slot is overridden, the shared pool Step's
+// otherwise (see CONTEXT.md).
+export type EffectiveStep = Step & {
+	compositionStepId: number;
+	poolStepId: number;
+	isOverride: boolean;
 	usages: UsageWithIngredient[];
 	renderedInstruction: string;
+	otherCompositionsReferencing: Composition[];
 };
-export type RecipeDetail = Recipe & { steps: StepWithUsages[] };
 
-// The full Recipe detail: its default Composition's Steps in order, each
-// with its Ingredient Usages in order. The whole-recipe ingredient list
-// and the inline per-step display both read from `steps[].usages` here,
-// so they can never disagree (see CONTEXT.md).
-export function getRecipe(id: number): RecipeDetail | undefined {
-	const recipe = getRecipeById(id);
-	if (!recipe) return undefined;
+export type CompositionDetail = Composition & { steps: EffectiveStep[] };
+export type RecipeDetail = Recipe & { compositions: Composition[]; composition: CompositionDetail };
 
-	const recipeSteps = db
-		.select()
-		.from(steps)
-		.where(eq(steps.recipeId, id))
-		.orderBy(asc(steps.position))
+function loadUsagesByStepId(stepIds: number[]): Map<number, UsageWithIngredient[]> {
+	const usagesByStepId = new Map<number, UsageWithIngredient[]>();
+	if (stepIds.length === 0) return usagesByStepId;
+
+	const usageRows = db
+		.select({ usage: ingredientUsages, ingredient: ingredients })
+		.from(ingredientUsages)
+		.innerJoin(ingredients, eq(ingredients.id, ingredientUsages.ingredientId))
+		.where(inArray(ingredientUsages.stepId, stepIds))
+		.orderBy(asc(ingredientUsages.position))
 		.all();
 
-	const stepIds = recipeSteps.map((step) => step.id);
-	const usageRows =
-		stepIds.length === 0
-			? []
-			: db
-					.select({ usage: ingredientUsages, ingredient: ingredients })
-					.from(ingredientUsages)
-					.innerJoin(ingredients, eq(ingredients.id, ingredientUsages.ingredientId))
-					.where(inArray(ingredientUsages.stepId, stepIds))
-					.orderBy(asc(ingredientUsages.position))
-					.all();
-
-	const usagesByStepId = new Map<number, UsageWithIngredient[]>();
 	for (const row of usageRows) {
 		const usage = {
 			...row.usage,
@@ -246,12 +576,78 @@ export function getRecipe(id: number): RecipeDetail | undefined {
 		list.push(usage);
 		usagesByStepId.set(usage.stepId, list);
 	}
+	return usagesByStepId;
+}
 
-	return {
-		...recipe,
-		steps: recipeSteps.map((step) => {
-			const usages = usagesByStepId.get(step.id) ?? [];
-			return { ...step, usages, renderedInstruction: renderInstruction(step.instruction, usages) };
-		})
-	};
+// One Composition's Steps in order, each resolved to its effective content
+// and Usages. The whole-recipe ingredient list and the inline per-step
+// display both read from `steps[].usages` here, so they can never disagree
+// (see CONTEXT.md).
+export function getCompositionDetail(compositionId: number): CompositionDetail | undefined {
+	const composition = getCompositionById(compositionId);
+	if (!composition) return undefined;
+
+	const rows = db
+		.select()
+		.from(compositionSteps)
+		.where(eq(compositionSteps.compositionId, compositionId))
+		.orderBy(asc(compositionSteps.position))
+		.all();
+
+	const contentStepIds = rows.map((row) => row.overrideStepId ?? row.poolStepId);
+	const contentSteps =
+		contentStepIds.length === 0
+			? []
+			: db.select().from(steps).where(inArray(steps.id, contentStepIds)).all();
+	const stepsById = new Map(contentSteps.map((step) => [step.id, step]));
+
+	const usagesByStepId = loadUsagesByStepId(contentStepIds);
+
+	const effectiveSteps: EffectiveStep[] = rows.flatMap((row) => {
+		const contentStepId = row.overrideStepId ?? row.poolStepId;
+		const contentStep = stepsById.get(contentStepId);
+		if (!contentStep) return [];
+
+		const usages = usagesByStepId.get(contentStepId) ?? [];
+		const otherCompositionsReferencing = getOtherCompositionsReferencingStep(
+			row.poolStepId,
+			compositionId
+		);
+
+		return [
+			{
+				...contentStep,
+				compositionStepId: row.id,
+				poolStepId: row.poolStepId,
+				isOverride: row.overrideStepId !== null,
+				usages,
+				renderedInstruction: renderInstruction(contentStep.instruction, usages),
+				otherCompositionsReferencing
+			}
+		];
+	});
+
+	return { ...composition, steps: effectiveSteps };
+}
+
+// The full Recipe detail: every Composition (for tab switching), and one
+// selected Composition's resolved Steps - the default Composition's if none
+// is specified (see CONTEXT.md).
+export function getRecipe(id: number, compositionId?: number): RecipeDetail | undefined {
+	const recipe = getRecipeById(id);
+	if (!recipe) return undefined;
+
+	const allCompositions = listCompositions(id);
+	const selected =
+		(compositionId !== undefined
+			? allCompositions.find((c) => c.id === compositionId)
+			: undefined) ??
+		allCompositions.find((c) => c.isDefault) ??
+		allCompositions[0];
+	if (!selected) return undefined;
+
+	const composition = getCompositionDetail(selected.id);
+	if (!composition) return undefined;
+
+	return { ...recipe, compositions: allCompositions, composition };
 }

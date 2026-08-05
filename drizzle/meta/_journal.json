@@ -29,6 +29,13 @@
       "when": 1785947051383,
       "tag": "0003_add_recipes_steps_usages",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1785949844413,
+      "tag": "0004_add_compositions",
+      "breakpoints": true
     }
   ]
 }
