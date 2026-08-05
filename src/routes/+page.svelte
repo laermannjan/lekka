@@ -7,6 +7,23 @@
 
 <h1>Recipes</h1>
 
+<form method="GET">
+	<label>
+		Search
+		<input type="search" name="q" value={data.search} placeholder="Search titles…" />
+	</label>
+	<label>
+		Sort by
+		<select name="sort" value={data.sort}>
+			<option value="recently-added">Recently added</option>
+			<option value="alphabetical">Alphabetical</option>
+			<option value="last-cooked">Last cooked</option>
+			<option value="most-cooked">Most cooked</option>
+		</select>
+	</label>
+	<button type="submit">Apply</button>
+</form>
+
 {#if data.recipes.length > 0}
 	<ul>
 		{#each data.recipes as recipe (recipe.id)}
@@ -19,6 +36,8 @@
 			</li>
 		{/each}
 	</ul>
+{:else if data.search}
+	<p>No recipes match "{data.search}".</p>
 {:else}
 	<p>No recipes yet.</p>
 {/if}

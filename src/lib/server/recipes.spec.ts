@@ -4,14 +4,19 @@ import { db } from './db';
 import {
 	compositions,
 	compositionSteps,
+	cookDiners,
+	cooks,
 	ingredients,
 	ingredientUsages,
+	profiles,
 	recipes,
 	recipeVersions,
 	scalingFormulas,
 	steps
 } from './db/schema';
 import { createIngredient } from './ingredients';
+import { logCook } from './cooks';
+import { createProfile } from './profiles';
 import {
 	BlankInstructionError,
 	BlankTitleError,
@@ -57,6 +62,8 @@ import {
 
 describe('recipes', () => {
 	beforeEach(() => {
+		db.delete(cookDiners).run();
+		db.delete(cooks).run();
 		db.delete(scalingFormulas).run();
 		db.delete(recipeVersions).run();
 		db.delete(ingredientUsages).run();
@@ -65,6 +72,7 @@ describe('recipes', () => {
 		db.delete(compositions).run();
 		db.delete(recipes).run();
 		db.delete(ingredients).run();
+		db.delete(profiles).run();
 	});
 
 	it('creates a recipe with a title', () => {
@@ -94,11 +102,112 @@ describe('recipes', () => {
 		expect(listRecipes()).toEqual([]);
 	});
 
-	it('lists created recipes', () => {
+	it('lists created recipes, most recently added first by default', () => {
 		createRecipe('Chilli con carne');
 		createRecipe('Banana bread');
 
-		expect(listRecipes().map((r) => r.title)).toEqual(['Chilli con carne', 'Banana bread']);
+		expect(listRecipes().map((r) => r.title)).toEqual(['Banana bread', 'Chilli con carne']);
+	});
+
+	describe('sorting and searching', () => {
+		it('sorts alphabetically', () => {
+			createRecipe('Chilli con carne');
+			createRecipe('Banana bread');
+			createRecipe('Apple pie');
+
+			expect(listRecipes({ sort: 'alphabetical' }).map((r) => r.title)).toEqual([
+				'Apple pie',
+				'Banana bread',
+				'Chilli con carne'
+			]);
+		});
+
+		it('sorts by recently-added, newest first', () => {
+			createRecipe('Chilli con carne');
+			createRecipe('Banana bread');
+
+			expect(listRecipes({ sort: 'recently-added' }).map((r) => r.title)).toEqual([
+				'Banana bread',
+				'Chilli con carne'
+			]);
+		});
+
+		it('sorts by last-cooked, most recent first, recipes with no Cooks last', () => {
+			const chilli = createRecipe('Chilli con carne');
+			const banana = createRecipe('Banana bread');
+			createRecipe('Apple pie');
+			const profile = createProfile('Alex');
+			const chilliComposition = getDefaultComposition(chilli.id);
+			const bananaComposition = getDefaultComposition(banana.id);
+
+			logCook(chilli.id, {
+				compositionId: chilliComposition.id,
+				actingProfileId: profile.id,
+				dinerProfileIds: [],
+				cookedAt: '2024-01-01',
+				outcome: 'worked-well'
+			});
+			logCook(banana.id, {
+				compositionId: bananaComposition.id,
+				actingProfileId: profile.id,
+				dinerProfileIds: [],
+				cookedAt: '2024-06-01',
+				outcome: 'worked-well'
+			});
+
+			expect(listRecipes({ sort: 'last-cooked' }).map((r) => r.title)).toEqual([
+				'Banana bread',
+				'Chilli con carne',
+				'Apple pie'
+			]);
+		});
+
+		it('sorts by most-cooked, recipes with no Cooks last', () => {
+			const chilli = createRecipe('Chilli con carne');
+			const banana = createRecipe('Banana bread');
+			createRecipe('Apple pie');
+			const profile = createProfile('Alex');
+			const chilliComposition = getDefaultComposition(chilli.id);
+			const bananaComposition = getDefaultComposition(banana.id);
+
+			logCook(chilli.id, {
+				compositionId: chilliComposition.id,
+				actingProfileId: profile.id,
+				dinerProfileIds: [],
+				cookedAt: '2024-01-01',
+				outcome: 'worked-well'
+			});
+			logCook(chilli.id, {
+				compositionId: chilliComposition.id,
+				actingProfileId: profile.id,
+				dinerProfileIds: [],
+				cookedAt: '2024-02-01',
+				outcome: 'worked-well'
+			});
+			logCook(banana.id, {
+				compositionId: bananaComposition.id,
+				actingProfileId: profile.id,
+				dinerProfileIds: [],
+				cookedAt: '2024-06-01',
+				outcome: 'worked-well'
+			});
+
+			expect(listRecipes({ sort: 'most-cooked' }).map((r) => r.title)).toEqual([
+				'Chilli con carne',
+				'Banana bread',
+				'Apple pie'
+			]);
+		});
+
+		it('searches by substring on title, case-insensitively', () => {
+			createRecipe('Chilli con carne');
+			createRecipe('Banana bread');
+			createRecipe('Apple pie');
+
+			expect(listRecipes({ search: 'an' }).map((r) => r.title)).toEqual(['Banana bread']);
+			expect(listRecipes({ search: 'BREAD' }).map((r) => r.title)).toEqual(['Banana bread']);
+			expect(listRecipes({ search: 'zzz' })).toEqual([]);
+		});
 	});
 
 	describe('steps', () => {

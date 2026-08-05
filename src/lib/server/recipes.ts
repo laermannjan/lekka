@@ -1,9 +1,10 @@
-import { asc, eq, inArray, and, ne } from 'drizzle-orm';
+import { asc, count, eq, inArray, and, max, min, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db } from './db';
 import {
 	compositions,
 	compositionSteps,
+	cooks,
 	ingredients,
 	ingredientUsages,
 	recipes,
@@ -117,8 +118,91 @@ export function updateServings(recipeId: number, servings: number): Recipe {
 	return recipe;
 }
 
-export function listRecipes(): Recipe[] {
-	return db.select().from(recipes).orderBy(asc(recipes.createdAt)).all();
+export const RECIPE_SORTS = [
+	'alphabetical',
+	'recently-added',
+	'last-cooked',
+	'most-cooked'
+] as const;
+export type RecipeSort = (typeof RECIPE_SORTS)[number];
+
+export type ListRecipesOptions = {
+	sort?: RecipeSort;
+	search?: string;
+};
+
+// The Recipe browse view's household-wide sort/search (see CONTEXT.md's
+// Cook: "the basis for browsing a Recipe by last-cooked ... or
+// most-cooked ... alongside plain alphabetical and recently-added"). Every
+// sort is computed from existing rows, no new fields. `recently-added` uses
+// `min(recipeVersions.id)` rather than its text `createdAt` timestamp, since
+// id order tracks creation order exactly even when two Versions land in the
+// same second.
+export function listRecipes(options: ListRecipesOptions = {}): Recipe[] {
+	const sort = options.sort ?? 'recently-added';
+	const search = options.search?.trim().toLowerCase();
+
+	let rows = db.select().from(recipes).orderBy(asc(recipes.id)).all();
+	if (search) {
+		rows = rows.filter((recipe) => recipe.title.toLowerCase().includes(search));
+	}
+
+	switch (sort) {
+		case 'alphabetical':
+			return rows.sort((a, b) => a.title.localeCompare(b.title));
+		case 'last-cooked': {
+			const lastCookedByRecipeId = getLastCookedDatesByRecipeId();
+			return rows.sort((a, b) => {
+				const aDate = lastCookedByRecipeId.get(a.id);
+				const bDate = lastCookedByRecipeId.get(b.id);
+				if (aDate === undefined && bDate === undefined) return 0;
+				if (aDate === undefined) return 1;
+				if (bDate === undefined) return -1;
+				return bDate.localeCompare(aDate);
+			});
+		}
+		case 'most-cooked': {
+			const cookCountByRecipeId = getCookCountsByRecipeId();
+			return rows.sort(
+				(a, b) => (cookCountByRecipeId.get(b.id) ?? 0) - (cookCountByRecipeId.get(a.id) ?? 0)
+			);
+		}
+		case 'recently-added':
+		default: {
+			const firstVersionIdByRecipeId = getFirstVersionIdsByRecipeId();
+			return rows.sort(
+				(a, b) =>
+					(firstVersionIdByRecipeId.get(b.id) ?? 0) - (firstVersionIdByRecipeId.get(a.id) ?? 0)
+			);
+		}
+	}
+}
+
+function getFirstVersionIdsByRecipeId(): Map<number, number> {
+	const rows = db
+		.select({ recipeId: recipeVersions.recipeId, firstVersionId: min(recipeVersions.id) })
+		.from(recipeVersions)
+		.groupBy(recipeVersions.recipeId)
+		.all();
+	return new Map(rows.map((row) => [row.recipeId, row.firstVersionId!]));
+}
+
+function getLastCookedDatesByRecipeId(): Map<number, string> {
+	const rows = db
+		.select({ recipeId: cooks.recipeId, lastCookedAt: max(cooks.cookedAt) })
+		.from(cooks)
+		.groupBy(cooks.recipeId)
+		.all();
+	return new Map(rows.map((row) => [row.recipeId, row.lastCookedAt!]));
+}
+
+function getCookCountsByRecipeId(): Map<number, number> {
+	const rows = db
+		.select({ recipeId: cooks.recipeId, cookCount: count() })
+		.from(cooks)
+		.groupBy(cooks.recipeId)
+		.all();
+	return new Map(rows.map((row) => [row.recipeId, row.cookCount]));
 }
 
 export function getRecipeById(id: number): Recipe | undefined {

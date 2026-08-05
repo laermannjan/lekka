@@ -3,14 +3,23 @@ import type { Actions, PageServerLoad } from './$types';
 import {
 	BlankTitleError,
 	InvalidServingsError,
+	RECIPE_SORTS,
 	createRecipe,
-	listRecipes
+	listRecipes,
+	type RecipeSort
 } from '$lib/server/recipes';
 import { listCategoriesForRecipes } from '$lib/server/categories';
 import { listFavoriteRecipeIds } from '$lib/server/favorites';
 
-export const load: PageServerLoad = ({ locals }) => {
-	const recipes = listRecipes();
+function parseSort(raw: string | null): RecipeSort {
+	return RECIPE_SORTS.includes(raw as RecipeSort) ? (raw as RecipeSort) : 'recently-added';
+}
+
+export const load: PageServerLoad = ({ locals, url }) => {
+	const sort = parseSort(url.searchParams.get('sort'));
+	const search = url.searchParams.get('q') ?? '';
+
+	const recipes = listRecipes({ sort, search });
 	const categoriesByRecipeId = listCategoriesForRecipes(recipes.map((r) => r.id));
 	const favoriteRecipeIds = locals.profile
 		? new Set(listFavoriteRecipeIds(locals.profile.id))
@@ -21,7 +30,9 @@ export const load: PageServerLoad = ({ locals }) => {
 			...recipe,
 			categories: categoriesByRecipeId.get(recipe.id) ?? [],
 			isFavorite: favoriteRecipeIds.has(recipe.id)
-		}))
+		})),
+		sort,
+		search
 	};
 };
 
