@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { db } from './db';
 import { profiles, type Profile } from './db/schema';
 
@@ -15,6 +15,15 @@ export function getProfile(id: number): Profile | undefined {
 export function resolveProfile(rawId: unknown): Profile | undefined {
 	const id = Number(rawId);
 	return Number.isInteger(id) ? getProfile(id) : undefined;
+}
+
+// Resolves the Diners cookie's raw ids to real Profiles (see CONTEXT.md's
+// Diners), silently dropping any id that no longer exists (e.g. a deleted
+// Profile) rather than failing the whole selection on it.
+export function resolveDinerProfiles(rawIds: number[]): Profile[] {
+	if (rawIds.length === 0) return [];
+	const rows = db.select().from(profiles).where(inArray(profiles.id, rawIds)).all();
+	return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 const MAX_NAME_LENGTH = 60;

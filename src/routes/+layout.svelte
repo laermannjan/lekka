@@ -8,6 +8,13 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
+	<!-- Required for Web Push at all on iOS - Notification/Push stay
+	     undefined until the app is added to the Home Screen with a manifest
+	     (see docs/research/pwa-timer-notifications.md). -->
+	<link rel="manifest" href="/manifest.json" />
+	<link rel="apple-touch-icon" href="/icon.svg" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="theme-color" content="#ff3e00" />
 </svelte:head>
 
 <header>

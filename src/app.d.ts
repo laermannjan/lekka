@@ -7,6 +7,10 @@ declare global {
 		// interface Error {}
 		interface Locals {
 			profile: Profile | undefined;
+			// The set of Profiles currently selected as present/eating (see
+			// CONTEXT.md's Diners) - defaults to just the acting Profile until
+			// explicitly changed, resolved once per request in hooks.server.ts.
+			dinerProfiles: Profile[];
 		}
 		// interface PageData {}
 		// interface PageState {}

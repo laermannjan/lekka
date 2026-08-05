@@ -55,6 +55,7 @@ import {
 	removeCategoryFromRecipe
 } from '$lib/server/categories';
 import { isFavorite, setFavorite } from '$lib/server/favorites';
+import { getAvoidTagIdsForProfiles, getFlaggedTagsByIngredientIds } from '$lib/server/dietary';
 import {
 	BlankNameError as BlankCollectionNameError,
 	CollectionNotFoundError,
@@ -82,6 +83,19 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 		.map((version, index) => ({ ...version, number: index + 1 }))
 		.reverse();
 
+	// The dietary flag (see CONTEXT.md's Diners): every Tag any selected
+	// Diner avoids, and which of those land on each Ingredient actually used
+	// in this Composition - keyed by Ingredient id since the Tag lives on the
+	// Ingredient, not the Usage. A Recipe carrying a flagged Usage stays
+	// fully visible; only the offending Usage itself is marked.
+	const avoidTagIds = getAvoidTagIdsForProfiles(locals.dinerProfiles.map((profile) => profile.id));
+	const usageIngredientIds = recipe.composition.steps.flatMap((step) =>
+		step.usages.map((usage) => usage.ingredientId)
+	);
+	const flaggedTagsByIngredientId = Object.fromEntries(
+		getFlaggedTagsByIngredientIds(usageIngredientIds, avoidTagIds)
+	);
+
 	return {
 		recipe,
 		ingredients: listIngredients(),
@@ -92,7 +106,9 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 		isFavorite: locals.profile ? isFavorite(id, locals.profile.id) : false,
 		collections: listCollections(),
 		recipeCollections: listCollectionsForRecipe(id),
-		versions
+		versions,
+		diners: locals.dinerProfiles,
+		flaggedTagsByIngredientId
 	};
 };
 

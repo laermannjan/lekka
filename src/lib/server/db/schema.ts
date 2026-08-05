@@ -338,3 +338,81 @@ export const collectionRecipes = sqliteTable(
 	},
 	(table) => [primaryKey({ columns: [table.collectionId, table.recipeId] })]
 );
+
+// A Profile's standing dietary preference - the persistent set of Tags it
+// avoids (see CONTEXT.md's Profile and Diners). Editable only by that
+// Profile in the UI, though - like every other Profile-owned concept here -
+// nothing in this schema enforces that. Drives the Diners dietary filter:
+// when that Profile is a selected Diner, any Usage carrying one of these
+// Tags is flagged.
+export const profileAvoidTags = sqliteTable(
+	'profile_avoid_tags',
+	{
+		profileId: integer('profile_id')
+			.notNull()
+			.references(() => profiles.id, { onDelete: 'cascade' }),
+		tagId: integer('tag_id')
+			.notNull()
+			.references(() => tags.id, { onDelete: 'cascade' })
+	},
+	(table) => [primaryKey({ columns: [table.profileId, table.tagId] })]
+);
+
+// The server's single VAPID (RFC 8292) keypair, generated once on first
+// boot (see src/lib/server/push/vapid.ts) and persisted so it stays stable
+// across restarts/redeploys - a Web Push subscription is bound to the
+// public key that created it, so rotating this silently breaks every
+// existing subscription.
+export const vapidKeys = sqliteTable('vapid_keys', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	publicKey: text('public_key').notNull(),
+	privateKey: text('private_key').notNull(),
+	createdAt: text('created_at')
+		.notNull()
+		.default(sql`(current_timestamp)`)
+});
+
+export type VapidKeys = typeof vapidKeys.$inferSelect;
+
+// A device's Web Push subscription (see
+// docs/research/pwa-timer-notifications.md). Not tied to a Profile -
+// notification permission and the resulting endpoint/keys are a
+// per-browser/device fact, not a per-household-member one, matching
+// Profile's no-privacy-walls model (see CONTEXT.md's Profile).
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	endpoint: text('endpoint').notNull().unique(),
+	p256dh: text('p256dh').notNull(),
+	auth: text('auth').notNull(),
+	createdAt: text('created_at')
+		.notNull()
+		.default(sql`(current_timestamp)`)
+});
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+
+// One Step timer's scheduled Web Push, fired by the server's in-process
+// scheduler (src/lib/server/push/scheduler.ts) at `firesAt` regardless of
+// what the client is doing - the actual "notify me while my phone is
+// locked" mechanism the client-side timer (see docs/decisions.md) cannot
+// provide on its own. `timerId` matches the client's TimerStore id
+// (compositionStepId as a string) purely for cancel-on-manual-finish
+// lookups; it carries no server-side meaning beyond that. `firedAt` null
+// means still pending - the scheduler re-arms every pending row from the
+// DB on server boot so a restart never silently drops a scheduled fire.
+export const scheduledPushes = sqliteTable('scheduled_pushes', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	subscriptionId: integer('subscription_id')
+		.notNull()
+		.references(() => pushSubscriptions.id, { onDelete: 'cascade' }),
+	timerId: text('timer_id').notNull(),
+	title: text('title').notNull(),
+	body: text('body').notNull(),
+	firesAt: integer('fires_at').notNull(),
+	firedAt: integer('fired_at'),
+	createdAt: text('created_at')
+		.notNull()
+		.default(sql`(current_timestamp)`)
+});
+
+export type ScheduledPush = typeof scheduledPushes.$inferSelect;

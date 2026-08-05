@@ -4,22 +4,53 @@
 	import ScalingFormulaEditor from '$lib/components/ScalingFormulaEditor.svelte';
 	import { formatRemaining, parseDurationSeconds } from '$lib/duration';
 	import { TimerStore } from '$lib/timers.svelte';
+	import {
+		cancelTimerPush,
+		isPushSupported,
+		isSubscribed,
+		scheduleTimerPush,
+		subscribeToPush
+	} from '$lib/push';
 
 	let { data, form }: PageProps = $props();
 
 	const allUsages = $derived(data.recipe.composition.steps.flatMap((step) => step.usages));
 	const basePath = $derived(resolve('/recipes/[id]', { id: String(data.recipe.id) }));
 
-	// Step timers: purely client-side (see docs/decisions.md) and scoped to
-	// this page - one TimerStore is the single source of truth the badge,
-	// panel, and each Step card all read from, keyed by compositionStepId
-	// (unique per Step-as-rendered-in-this-Composition).
+	// Step timers: purely client-side countdown (see docs/decisions.md),
+	// scoped to this page - one TimerStore is the single source of truth
+	// the badge, panel, and each Step card all read from, keyed by
+	// compositionStepId (unique per Step-as-rendered-in-this-Composition).
+	// The server-side Web Push fallback (see issue #27) is scheduled
+	// alongside each start/finish below so a timer still notifies while the
+	// phone is locked or the tab is backgrounded, but never replaces this
+	// countdown as the source of truth.
 	const timers = new TimerStore();
 	$effect(() => {
 		const id = setInterval(() => timers.tick(), 250);
 		return () => clearInterval(id);
 	});
 	let timerPanelOpen = $state(false);
+	let pushSupported = $state(false);
+	let notificationsEnabled = $state(false);
+	$effect(() => {
+		pushSupported = isPushSupported();
+		notificationsEnabled = isSubscribed();
+	});
+
+	async function enableNotifications() {
+		notificationsEnabled = await subscribeToPush();
+	}
+
+	function startTimer(timerId: string, label: string, durationSec: number) {
+		timers.start(timerId, label, durationSec);
+		void scheduleTimerPush(timerId, 'Timer done', label, Date.now() + durationSec * 1000);
+	}
+
+	function finishTimer(timerId: string) {
+		timers.finish(timerId);
+		void cancelTimerPush(timerId);
+	}
 
 	const categoryGroupLabels: Record<string, string> = {
 		'meal-type': 'Meal type',
@@ -36,6 +67,15 @@
 </script>
 
 <h1>{data.recipe.title}</h1>
+
+{#if data.diners.length > 0}
+	<p>
+		<em
+			>Diners: {data.diners.map((d) => d.name).join(', ')} —
+			<a href={resolve('/profile')}>change</a></em
+		>
+	</p>
+{/if}
 
 <section>
 	{#if form?.favoriteError}
@@ -216,6 +256,11 @@
 	<button type="button" onclick={() => (timerPanelOpen = !timerPanelOpen)}>
 		⏱ Timers ({timers.activeCount})
 	</button>
+	{#if pushSupported && !notificationsEnabled}
+		<button type="button" onclick={enableNotifications}>Enable timer notifications</button>
+	{:else if pushSupported}
+		<em>Timer notifications enabled</em>
+	{/if}
 </p>
 
 {#if timerPanelOpen}
@@ -230,7 +275,7 @@
 							<strong>Done ✓</strong>
 						{:else}
 							<span>{formatRemaining(timers.remaining(timer))} remaining</span>
-							<button type="button" onclick={() => timers.finish(timer.id)}>Finish</button>
+							<button type="button" onclick={() => finishTimer(timer.id)}>Finish</button>
 						{/if}
 					</li>
 				{/each}
@@ -296,14 +341,14 @@
 						<p>
 							{#if timer && !timers.isDone(timer)}
 								<span>{formatRemaining(timers.remaining(timer))} remaining</span>
-								<button type="button" onclick={() => timers.finish(timerId)}>Finish timer</button>
+								<button type="button" onclick={() => finishTimer(timerId)}>Finish timer</button>
 							{:else}
 								{#if timer}
 									<strong>Timer done ✓</strong>
 								{/if}
 								<button
 									type="button"
-									onclick={() => timers.start(timerId, step.renderedInstruction, timerSeconds)}
+									onclick={() => startTimer(timerId, step.renderedInstruction, timerSeconds)}
 								>
 									{timer ? 'Restart timer' : 'Start timer'}
 								</button>
@@ -315,6 +360,7 @@
 				{#if step.usages.length > 0}
 					<ul>
 						{#each step.usages as usage, i (usage.id)}
+							{@const flaggedTags = data.flaggedTagsByIngredientId[usage.ingredientId] ?? []}
 							<li>
 								<code>{`{{${i + 1}}}`}</code>
 								{usage.ingredient.baseTerm}{#if usage.ingredient.descriptors}
@@ -330,6 +376,18 @@
 								{/if}
 								{#if usage.note}<span>— {usage.note}</span>{/if}
 								{#if usage.scalingFormula}<span> (scaling rule set)</span>{/if}
+								{#if flaggedTags.length > 0}
+									<p role="alert">
+										⚠ contains {flaggedTags.map((t) => t.name).join(', ')} — avoided by a selected diner.
+										{#if usage.alternativeIngredient}
+											Suggested swap: {usage.alternativeIngredient
+												.baseTerm}{#if usage.alternativeIngredient.descriptors}
+												({usage.alternativeIngredient.descriptors}){/if}.
+										{:else}
+											No alternative declared for this usage.
+										{/if}
+									</p>
+								{/if}
 								<ScalingFormulaEditor
 									action="?/setUsageScalingFormula"
 									idFieldName="ingredientUsageId"

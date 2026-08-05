@@ -7,6 +7,7 @@ import {
 	createProfile,
 	getProfile,
 	listProfiles,
+	resolveDinerProfiles,
 	resolveProfile
 } from './profiles';
 
@@ -75,5 +76,22 @@ describe('profiles', () => {
 		expect(resolveProfile('not-a-number')).toBeUndefined();
 		expect(resolveProfile('9999')).toBeUndefined();
 		expect(resolveProfile(undefined)).toBeUndefined();
+	});
+
+	it('resolves diner profiles from a list of ids', () => {
+		const jan = createProfile('Jan');
+		const alex = createProfile('Alex');
+
+		expect(resolveDinerProfiles([jan.id, alex.id]).map((p) => p.name)).toEqual(['Alex', 'Jan']);
+	});
+
+	it('resolves an empty list of diner ids to no profiles', () => {
+		expect(resolveDinerProfiles([])).toEqual([]);
+	});
+
+	it('silently drops diner ids that no longer resolve to a profile', () => {
+		const jan = createProfile('Jan');
+
+		expect(resolveDinerProfiles([jan.id, 9999]).map((p) => p.name)).toEqual(['Jan']);
 	});
 });
