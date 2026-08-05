@@ -28,6 +28,10 @@
 		Title
 		<input type="text" name="title" required maxlength="120" />
 	</label>
+	<label>
+		Servings
+		<input type="number" name="servings" min="1" step="1" value="4" />
+	</label>
 
 	<button type="submit">Add recipe</button>
 </form>

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, integer, real, text, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, real, text, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // A lightweight named identity for one household member (see CONTEXT.md).
 // No auth, no roles, no per-Profile data separation.
@@ -64,9 +64,14 @@ export const ingredientTags = sqliteTable(
 
 // A named dish: a shared pool of Steps plus one or more Compositions (see
 // CONTEXT.md) that each select, order, and optionally override those Steps.
+// `servings` is the Recipe's base/usual serving count - every stored
+// Quantity and Duration is "as written" at this count. Changing servings on
+// the recipe view recomputes every Quantity from this baseline, strict
+// linear by default (see CONTEXT.md's Scaling Formula).
 export const recipes = sqliteTable('recipes', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	title: text('title').notNull(),
+	servings: integer('servings').notNull().default(4),
 	createdAt: text('created_at')
 		.notNull()
 		.default(sql`(current_timestamp)`)
@@ -167,3 +172,59 @@ export const ingredientUsages = sqliteTable('ingredient_usages', {
 });
 
 export type IngredientUsage = typeof ingredientUsages.$inferSelect;
+
+// The v1 guided-template catalog a Scaling Formula is authored from (see
+// CONTEXT.md). Never a free-form expression language - every template's
+// blanks are constrained fields, not raw syntax.
+export const SCALING_FORMULA_KINDS = ['rate_vs_servings', 'vs_other_usage', 'fixed'] as const;
+export type ScalingFormulaKind = (typeof SCALING_FORMULA_KINDS)[number];
+
+// For the "vs. another Usage" template: which way the referenced Usage's
+// Quantity has to move off its usual amount to trigger the response, and
+// which way the response itself moves.
+export const SCALING_DIRECTIONS = ['increase', 'decrease'] as const;
+export type ScalingDirection = (typeof SCALING_DIRECTIONS)[number];
+
+export const SCALING_THRESHOLD_SIDES = ['short', 'over'] as const;
+export type ScalingThresholdSide = (typeof SCALING_THRESHOLD_SIDES)[number];
+
+// An optional, author-written override on an Ingredient Usage's Quantity or
+// a Step's Duration, replacing the default strict-linear/constant response
+// to a serving-count change (see CONTEXT.md). Exactly one of
+// `ingredientUsageId` (the Quantity it overrides) or `stepId` (the Step
+// whose Duration it overrides) is set - enforced in src/lib/server/scaling.ts,
+// not by the schema. `otherUsageId` is only meaningful for `vs_other_usage`
+// and, since that template is Duration-only, is always a Usage belonging to
+// the same Step as `stepId`.
+export const scalingFormulas = sqliteTable(
+	'scaling_formulas',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		ingredientUsageId: integer('ingredient_usage_id').references(() => ingredientUsages.id, {
+			onDelete: 'cascade'
+		}),
+		stepId: integer('step_id').references(() => steps.id, { onDelete: 'cascade' }),
+		kind: text('kind', { enum: SCALING_FORMULA_KINDS }).notNull(),
+		// rate_vs_servings: percentage rate the value should track servings at
+		// (100 = exactly linear, <100 = slower, >100 = faster).
+		ratePercent: real('rate_percent'),
+		// vs_other_usage: the referenced Usage, the per-unit amount to move by,
+		// which direction the response moves, and which side of the reference's
+		// usual Quantity triggers it.
+		otherUsageId: integer('other_usage_id').references(() => ingredientUsages.id, {
+			onDelete: 'cascade'
+		}),
+		perUnitAmount: real('per_unit_amount'),
+		direction: text('direction', { enum: SCALING_DIRECTIONS }),
+		thresholdSide: text('threshold_side', { enum: SCALING_THRESHOLD_SIDES }),
+		createdAt: text('created_at')
+			.notNull()
+			.default(sql`(current_timestamp)`)
+	},
+	(table) => [
+		uniqueIndex('scaling_formulas_usage_unique').on(table.ingredientUsageId),
+		uniqueIndex('scaling_formulas_step_unique').on(table.stepId)
+	]
+);
+
+export type ScalingFormula = typeof scalingFormulas.$inferSelect;

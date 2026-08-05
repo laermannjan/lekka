@@ -14,8 +14,19 @@ import {
 	type Ingredient,
 	type IngredientUsage,
 	type Recipe,
+	type ScalingFormula,
 	type Step
 } from './db/schema';
+import {
+	computeScaledDuration,
+	computeScaledQuantity,
+	type DurationScalingFormula,
+	type QuantityScalingFormula
+} from '$lib/scaling';
+import {
+	getDurationScalingFormulasByStepIds,
+	getQuantityScalingFormulasByUsageIds
+} from './scaling';
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_INSTRUCTION_LENGTH = 2000;
@@ -29,6 +40,17 @@ export class IngredientNotFoundError extends Error {}
 export class BlankVariantNameError extends Error {}
 export class CompositionNotFoundError extends Error {}
 export class CompositionStepNotFoundError extends Error {}
+export class InvalidServingsError extends Error {}
+export class RecipeNotFoundError extends Error {}
+
+const DEFAULT_SERVINGS = 4;
+
+function validateServings(servings: number): number {
+	if (!Number.isFinite(servings) || !Number.isInteger(servings) || servings < 1) {
+		throw new InvalidServingsError('Servings must be a whole number of at least 1');
+	}
+	return servings;
+}
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -50,15 +72,36 @@ function insertStep(
 		.get();
 }
 
-export function createRecipe(title: string): Recipe {
+export function createRecipe(title: string, servings: number = DEFAULT_SERVINGS): Recipe {
 	const trimmed = title.trim().slice(0, MAX_TITLE_LENGTH);
 	if (!trimmed) throw new BlankTitleError('Title must not be blank');
+	const validServings = validateServings(servings);
 
 	return db.transaction((tx) => {
-		const recipe = tx.insert(recipes).values({ title: trimmed }).returning().get();
+		const recipe = tx
+			.insert(recipes)
+			.values({ title: trimmed, servings: validServings })
+			.returning()
+			.get();
 		tx.insert(compositions).values({ recipeId: recipe.id, name: null, isDefault: true }).run();
 		return recipe;
 	});
+}
+
+// Updates a Recipe's base/usual servings count - the baseline every stored
+// Quantity and Duration is "as written" at (see CONTEXT.md). This changes
+// what count default linear scaling treats as 1x; it does not touch any
+// stored Quantity or Duration value.
+export function updateServings(recipeId: number, servings: number): Recipe {
+	const validServings = validateServings(servings);
+	const recipe = db
+		.update(recipes)
+		.set({ servings: validServings })
+		.where(eq(recipes.id, recipeId))
+		.returning()
+		.get();
+	if (!recipe) throw new RecipeNotFoundError(`No recipe ${recipeId}`);
+	return recipe;
 }
 
 export function listRecipes(): Recipe[] {
@@ -532,7 +575,9 @@ export function renderInstruction(
 
 export type UsageWithIngredient = IngredientUsage & {
 	ingredient: Ingredient;
+	scaledQuantityValue: number;
 	displayQuantity: string;
+	scalingFormula: ScalingFormula | null;
 };
 
 // One Composition's slot, resolved to its effective content - the override
@@ -545,13 +590,48 @@ export type EffectiveStep = Step & {
 	usages: UsageWithIngredient[];
 	renderedInstruction: string;
 	otherCompositionsReferencing: Composition[];
+	scaledDurationMin: number | null;
+	scaledDurationMax: number | null;
+	durationScalingFormula: ScalingFormula | null;
 };
 
 export type CompositionDetail = Composition & { steps: EffectiveStep[] };
-export type RecipeDetail = Recipe & { compositions: Composition[]; composition: CompositionDetail };
+export type RecipeDetail = Recipe & {
+	compositions: Composition[];
+	composition: CompositionDetail;
+	targetServings: number;
+};
 
-function loadUsagesByStepId(stepIds: number[]): Map<number, UsageWithIngredient[]> {
-	const usagesByStepId = new Map<number, UsageWithIngredient[]>();
+function toQuantityFormulaInput(row: ScalingFormula | undefined): QuantityScalingFormula | null {
+	if (!row) return null;
+	if (row.kind === 'fixed') return { kind: 'fixed' };
+	if (row.kind === 'rate_vs_servings') {
+		return { kind: 'rate_vs_servings', ratePercent: row.ratePercent ?? 100 };
+	}
+	// vs_other_usage never applies to a Quantity (see CONTEXT.md) - treated as
+	// no formula if it somehow ends up attached to one.
+	return null;
+}
+
+function toDurationFormulaInput(row: ScalingFormula | undefined): DurationScalingFormula | null {
+	if (!row) return null;
+	if (row.kind === 'fixed') return { kind: 'fixed' };
+	if (row.kind === 'rate_vs_servings') {
+		return { kind: 'rate_vs_servings', ratePercent: row.ratePercent ?? 100 };
+	}
+	return {
+		kind: 'vs_other_usage',
+		otherUsageId: row.otherUsageId ?? 0,
+		perUnitAmount: row.perUnitAmount ?? 0,
+		direction: row.direction ?? 'increase',
+		thresholdSide: row.thresholdSide ?? 'short'
+	};
+}
+
+type RawUsage = IngredientUsage & { ingredient: Ingredient };
+
+function loadRawUsagesByStepId(stepIds: number[]): Map<number, RawUsage[]> {
+	const usagesByStepId = new Map<number, RawUsage[]>();
 	if (stepIds.length === 0) return usagesByStepId;
 
 	const usageRows = db
@@ -563,15 +643,7 @@ function loadUsagesByStepId(stepIds: number[]): Map<number, UsageWithIngredient[
 		.all();
 
 	for (const row of usageRows) {
-		const usage = {
-			...row.usage,
-			ingredient: row.ingredient,
-			displayQuantity: formatQuantity(
-				row.usage.quantityValue,
-				row.usage.quantityUnit,
-				row.ingredient
-			)
-		};
+		const usage = { ...row.usage, ingredient: row.ingredient };
 		const list = usagesByStepId.get(usage.stepId) ?? [];
 		list.push(usage);
 		usagesByStepId.set(usage.stepId, list);
@@ -579,13 +651,113 @@ function loadUsagesByStepId(stepIds: number[]): Map<number, UsageWithIngredient[
 	return usagesByStepId;
 }
 
+// Resolves every Usage's Quantity at `targetServings`, applying its Scaling
+// Formula if it has one (default strict-linear otherwise - see CONTEXT.md).
+function scaleUsages(
+	rawUsagesByStepId: Map<number, RawUsage[]>,
+	baseServings: number,
+	targetServings: number
+): Map<number, UsageWithIngredient[]> {
+	const allUsageIds = [...rawUsagesByStepId.values()].flatMap((list) => list.map((u) => u.id));
+	const formulas = getQuantityScalingFormulasByUsageIds(allUsageIds);
+
+	const usagesByStepId = new Map<number, UsageWithIngredient[]>();
+	for (const [stepId, rawUsages] of rawUsagesByStepId) {
+		const scaled = rawUsages.map((raw) => {
+			const formulaRow = formulas.get(raw.id);
+			const scaledQuantityValue = computeScaledQuantity(
+				raw.quantityValue,
+				baseServings,
+				targetServings,
+				toQuantityFormulaInput(formulaRow)
+			);
+			return {
+				...raw,
+				scaledQuantityValue,
+				displayQuantity: formatQuantity(scaledQuantityValue, raw.quantityUnit, raw.ingredient),
+				scalingFormula: formulaRow ?? null
+			};
+		});
+		usagesByStepId.set(stepId, scaled);
+	}
+	return usagesByStepId;
+}
+
+// Resolves every content Step's Duration at `targetServings`, applying its
+// Scaling Formula if it has one (default constant otherwise - see
+// CONTEXT.md). The "vs. another Usage" template reads that Usage's already-
+// scaled Quantity from `usagesByStepId`, so it always sees the same number
+// shown for that Usage.
+function scaleDurations(
+	contentSteps: Step[],
+	usagesByStepId: Map<number, UsageWithIngredient[]>,
+	baseServings: number,
+	targetServings: number
+): Map<number, { min: number | null; max: number | null; formula: ScalingFormula | null }> {
+	const durationFormulas = getDurationScalingFormulasByStepIds(contentSteps.map((s) => s.id));
+
+	const result = new Map<
+		number,
+		{ min: number | null; max: number | null; formula: ScalingFormula | null }
+	>();
+	for (const step of contentSteps) {
+		const formulaRow = durationFormulas.get(step.id);
+		if (step.durationMin === null) {
+			result.set(step.id, { min: null, max: null, formula: formulaRow ?? null });
+			continue;
+		}
+
+		let otherUsage: { baseQuantity: number; scaledQuantity: number } | undefined;
+		if (formulaRow?.kind === 'vs_other_usage' && formulaRow.otherUsageId !== null) {
+			const stepUsages = usagesByStepId.get(step.id) ?? [];
+			const otherUsageEntry = stepUsages.find((u) => u.id === formulaRow.otherUsageId);
+			if (otherUsageEntry) {
+				otherUsage = {
+					baseQuantity: otherUsageEntry.quantityValue,
+					scaledQuantity: otherUsageEntry.scaledQuantityValue
+				};
+			}
+		}
+
+		const formulaInput = toDurationFormulaInput(formulaRow);
+		const min = computeScaledDuration(
+			step.durationMin,
+			baseServings,
+			targetServings,
+			formulaInput,
+			otherUsage
+		);
+		const max =
+			step.durationMax !== null
+				? computeScaledDuration(
+						step.durationMax,
+						baseServings,
+						targetServings,
+						formulaInput,
+						otherUsage
+					)
+				: null;
+		result.set(step.id, { min, max, formula: formulaRow ?? null });
+	}
+	return result;
+}
+
 // One Composition's Steps in order, each resolved to its effective content
-// and Usages. The whole-recipe ingredient list and the inline per-step
-// display both read from `steps[].usages` here, so they can never disagree
-// (see CONTEXT.md).
-export function getCompositionDetail(compositionId: number): CompositionDetail | undefined {
+// and Usages, with every Quantity and Duration scaled to `targetServings`
+// (default the Recipe's own base `servings` - see CONTEXT.md). The
+// whole-recipe ingredient list and the inline per-step display both read
+// from `steps[].usages` here, so they can never disagree.
+export function getCompositionDetail(
+	compositionId: number,
+	targetServings?: number
+): CompositionDetail | undefined {
 	const composition = getCompositionById(compositionId);
 	if (!composition) return undefined;
+
+	const recipe = getRecipeById(composition.recipeId);
+	if (!recipe) return undefined;
+	const baseServings = recipe.servings;
+	const resolvedTargetServings = targetServings ?? baseServings;
 
 	const rows = db
 		.select()
@@ -601,7 +773,14 @@ export function getCompositionDetail(compositionId: number): CompositionDetail |
 			: db.select().from(steps).where(inArray(steps.id, contentStepIds)).all();
 	const stepsById = new Map(contentSteps.map((step) => [step.id, step]));
 
-	const usagesByStepId = loadUsagesByStepId(contentStepIds);
+	const rawUsagesByStepId = loadRawUsagesByStepId(contentStepIds);
+	const usagesByStepId = scaleUsages(rawUsagesByStepId, baseServings, resolvedTargetServings);
+	const durationsByStepId = scaleDurations(
+		contentSteps,
+		usagesByStepId,
+		baseServings,
+		resolvedTargetServings
+	);
 
 	const effectiveSteps: EffectiveStep[] = rows.flatMap((row) => {
 		const contentStepId = row.overrideStepId ?? row.poolStepId;
@@ -613,6 +792,15 @@ export function getCompositionDetail(compositionId: number): CompositionDetail |
 			row.poolStepId,
 			compositionId
 		);
+		const scaledDuration = durationsByStepId.get(contentStepId) ?? {
+			min: null,
+			max: null,
+			formula: null
+		};
+		const renderUsages = usages.map((usage) => ({
+			...usage,
+			quantityValue: usage.scaledQuantityValue
+		}));
 
 		return [
 			{
@@ -621,8 +809,11 @@ export function getCompositionDetail(compositionId: number): CompositionDetail |
 				poolStepId: row.poolStepId,
 				isOverride: row.overrideStepId !== null,
 				usages,
-				renderedInstruction: renderInstruction(contentStep.instruction, usages),
-				otherCompositionsReferencing
+				renderedInstruction: renderInstruction(contentStep.instruction, renderUsages),
+				otherCompositionsReferencing,
+				scaledDurationMin: scaledDuration.min,
+				scaledDurationMax: scaledDuration.max,
+				durationScalingFormula: scaledDuration.formula
 			}
 		];
 	});
@@ -631,11 +822,17 @@ export function getCompositionDetail(compositionId: number): CompositionDetail |
 }
 
 // The full Recipe detail: every Composition (for tab switching), and one
-// selected Composition's resolved Steps - the default Composition's if none
-// is specified (see CONTEXT.md).
-export function getRecipe(id: number, compositionId?: number): RecipeDetail | undefined {
+// selected Composition's resolved Steps, scaled to `targetServings`
+// (default the Recipe's own base `servings`) - the default Composition's if
+// none is specified (see CONTEXT.md).
+export function getRecipe(
+	id: number,
+	compositionId?: number,
+	targetServings?: number
+): RecipeDetail | undefined {
 	const recipe = getRecipeById(id);
 	if (!recipe) return undefined;
+	const resolvedTargetServings = targetServings ?? recipe.servings;
 
 	const allCompositions = listCompositions(id);
 	const selected =
@@ -646,8 +843,13 @@ export function getRecipe(id: number, compositionId?: number): RecipeDetail | un
 		allCompositions[0];
 	if (!selected) return undefined;
 
-	const composition = getCompositionDetail(selected.id);
+	const composition = getCompositionDetail(selected.id, resolvedTargetServings);
 	if (!composition) return undefined;
 
-	return { ...recipe, compositions: allCompositions, composition };
+	return {
+		...recipe,
+		compositions: allCompositions,
+		composition,
+		targetServings: resolvedTargetServings
+	};
 }

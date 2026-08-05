@@ -7,6 +7,7 @@ import {
 	ingredients,
 	ingredientUsages,
 	recipes,
+	scalingFormulas,
 	steps
 } from './db/schema';
 import { createIngredient } from './ingredients';
@@ -19,6 +20,8 @@ import {
 	IngredientNotFoundError,
 	InvalidDurationError,
 	InvalidQuantityError,
+	InvalidServingsError,
+	RecipeNotFoundError,
 	addIngredientUsage,
 	addStep,
 	createRecipe,
@@ -33,11 +36,22 @@ import {
 	overrideStep,
 	removeStepFromComposition,
 	renderInstruction,
+	updateServings,
 	updateStepInstruction
 } from './recipes';
+import {
+	InvalidScalingFormulaError,
+	ScalingStepNotFoundError,
+	ScalingUsageNotFoundError,
+	removeDurationScalingFormula,
+	removeQuantityScalingFormula,
+	setDurationScalingFormula,
+	setQuantityScalingFormula
+} from './scaling';
 
 describe('recipes', () => {
 	beforeEach(() => {
+		db.delete(scalingFormulas).run();
 		db.delete(ingredientUsages).run();
 		db.delete(compositionSteps).run();
 		db.delete(steps).run();
@@ -634,6 +648,269 @@ describe('recipes', () => {
 
 			const detail = getCompositionDetail(defaultComposition.id);
 			expect(detail?.steps.map((s) => s.instruction)).toEqual(['Two.', 'Three.']);
+		});
+	});
+
+	describe('servings', () => {
+		it('defaults a new recipe to 4 servings', () => {
+			const recipe = createRecipe('Chilli con carne');
+			expect(recipe.servings).toEqual(4);
+		});
+
+		it('accepts an explicit servings count on creation', () => {
+			const recipe = createRecipe('Chilli con carne', 6);
+			expect(recipe.servings).toEqual(6);
+		});
+
+		it('rejects a non-positive or non-integer servings count', () => {
+			expect(() => createRecipe('Chilli con carne', 0)).toThrow(InvalidServingsError);
+			expect(() => createRecipe('Chilli con carne', -1)).toThrow(InvalidServingsError);
+			expect(() => createRecipe('Chilli con carne', 2.5)).toThrow(InvalidServingsError);
+		});
+
+		it('updates a recipe’s usual servings', () => {
+			const recipe = createRecipe('Chilli con carne', 4);
+			const updated = updateServings(recipe.id, 8);
+			expect(updated.servings).toEqual(8);
+		});
+
+		it('rejects updating servings on a non-existent recipe', () => {
+			expect(() => updateServings(999999, 4)).toThrow(RecipeNotFoundError);
+		});
+
+		it('recomputes every usage quantity linearly by default when servings change', () => {
+			const recipe = createRecipe('Chilli con carne', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const beef = createIngredient({ baseTerm: 'beef mince' });
+			const { step } = addStep(defaultComposition.id, { instruction: 'Brown {{1}} of mince.' });
+			addIngredientUsage(step.id, { ingredientId: beef.id, quantityValue: 500, quantityUnit: 'g' });
+
+			const at8 = getRecipe(recipe.id, undefined, 8);
+			expect(at8?.composition.steps[0].usages[0].scaledQuantityValue).toEqual(1000);
+			expect(at8?.composition.steps[0].renderedInstruction).toEqual('Brown 1000 g of mince.');
+
+			const at2 = getRecipe(recipe.id, undefined, 2);
+			expect(at2?.composition.steps[0].usages[0].scaledQuantityValue).toEqual(250);
+		});
+
+		it('leaves a duration constant by default when servings change', () => {
+			const recipe = createRecipe('Bread', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, {
+				instruction: 'Let rise.',
+				duration: { kind: 'wait', min: 60, unit: 'minutes' }
+			});
+
+			const at8 = getRecipe(recipe.id, undefined, 8);
+			expect(at8?.composition.steps.find((s) => s.id === step.id)?.scaledDurationMin).toEqual(60);
+		});
+	});
+
+	describe('quantity scaling formulas', () => {
+		it('rejects an unknown kind', () => {
+			const recipe = createRecipe('Chilli con carne', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const beef = createIngredient({ baseTerm: 'beef mince' });
+			const { step } = addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+			const usage = addIngredientUsage(step.id, { ingredientId: beef.id, quantityValue: 500 });
+
+			expect(() =>
+				// @ts-expect-error deliberately invalid kind
+				setQuantityScalingFormula(usage.id, { kind: 'bogus' })
+			).toThrow(InvalidScalingFormulaError);
+		});
+
+		it('rejects the vs_other_usage template on a Quantity', () => {
+			const recipe = createRecipe('Chilli con carne', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const beef = createIngredient({ baseTerm: 'beef mince' });
+			const { step } = addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+			const usage = addIngredientUsage(step.id, { ingredientId: beef.id, quantityValue: 500 });
+
+			expect(() =>
+				setQuantityScalingFormula(usage.id, {
+					kind: 'vs_other_usage',
+					otherUsageId: usage.id,
+					perUnitAmount: 1,
+					direction: 'increase',
+					thresholdSide: 'short'
+				})
+			).toThrow(InvalidScalingFormulaError);
+		});
+
+		it('rejects a non-existent usage', () => {
+			expect(() => setQuantityScalingFormula(999999, { kind: 'fixed' })).toThrow(
+				ScalingUsageNotFoundError
+			);
+		});
+
+		it('applies a rate_vs_servings formula slower than linear', () => {
+			const recipe = createRecipe('Chilli con carne', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const salt = createIngredient({ baseTerm: 'salt' });
+			const { step } = addStep(defaultComposition.id, { instruction: 'Add {{1}} salt.' });
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: salt.id,
+				quantityValue: 1,
+				quantityUnit: 'tsp'
+			});
+
+			setQuantityScalingFormula(usage.id, { kind: 'rate_vs_servings', ratePercent: 50 });
+
+			const at8 = getRecipe(recipe.id, undefined, 8);
+			// linear would be 2 tsp; at 50% rate it's 1.5 tsp
+			expect(at8?.composition.steps[0].usages[0].scaledQuantityValue).toEqual(1.5);
+		});
+
+		it('keeps a fixed quantity unchanged regardless of servings', () => {
+			const recipe = createRecipe('Chilli con carne', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const chili = createIngredient({ baseTerm: 'chili flakes' });
+			const { step } = addStep(defaultComposition.id, { instruction: 'Add {{1}}.' });
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: chili.id,
+				quantityValue: 1,
+				quantityUnit: 'pinch'
+			});
+
+			setQuantityScalingFormula(usage.id, { kind: 'fixed' });
+
+			const at8 = getRecipe(recipe.id, undefined, 8);
+			expect(at8?.composition.steps[0].usages[0].scaledQuantityValue).toEqual(1);
+		});
+
+		it('replaces a previous formula rather than stacking', () => {
+			const recipe = createRecipe('Chilli con carne', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const salt = createIngredient({ baseTerm: 'salt' });
+			const { step } = addStep(defaultComposition.id, { instruction: 'Add salt.' });
+			const usage = addIngredientUsage(step.id, { ingredientId: salt.id, quantityValue: 1 });
+
+			setQuantityScalingFormula(usage.id, { kind: 'rate_vs_servings', ratePercent: 50 });
+			setQuantityScalingFormula(usage.id, { kind: 'fixed' });
+
+			const at8 = getRecipe(recipe.id, undefined, 8);
+			expect(at8?.composition.steps[0].usages[0].scaledQuantityValue).toEqual(1);
+		});
+
+		it('removes a formula, reverting to default linear scaling', () => {
+			const recipe = createRecipe('Chilli con carne', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const salt = createIngredient({ baseTerm: 'salt' });
+			const { step } = addStep(defaultComposition.id, { instruction: 'Add salt.' });
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: salt.id,
+				quantityValue: 1
+			});
+
+			setQuantityScalingFormula(usage.id, { kind: 'fixed' });
+			removeQuantityScalingFormula(usage.id);
+
+			const at8 = getRecipe(recipe.id, undefined, 8);
+			expect(at8?.composition.steps[0].usages[0].scaledQuantityValue).toEqual(2);
+		});
+	});
+
+	describe('duration scaling formulas', () => {
+		it('rejects attaching a formula to a step with no duration', () => {
+			const recipe = createRecipe('Chilli con carne', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, { instruction: 'Preheat.' });
+
+			expect(() => setDurationScalingFormula(step.id, { kind: 'fixed' })).toThrow(
+				InvalidScalingFormulaError
+			);
+		});
+
+		it('rejects a non-existent step', () => {
+			expect(() => setDurationScalingFormula(999999, { kind: 'fixed' })).toThrow(
+				ScalingStepNotFoundError
+			);
+		});
+
+		it('applies a rate_vs_servings formula to a duration', () => {
+			const recipe = createRecipe('Bread', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, {
+				instruction: 'Let rise.',
+				duration: { kind: 'wait', min: 60, unit: 'minutes' }
+			});
+
+			setDurationScalingFormula(step.id, { kind: 'rate_vs_servings', ratePercent: 100 });
+
+			const at8 = getRecipe(recipe.id, undefined, 8);
+			expect(at8?.composition.steps.find((s) => s.id === step.id)?.scaledDurationMin).toEqual(120);
+		});
+
+		it('rejects vs_other_usage referencing a usage from a different step', () => {
+			const recipe = createRecipe('Bread', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const flour = createIngredient({ baseTerm: 'flour' });
+			const { step: otherStep } = addStep(defaultComposition.id, { instruction: 'Mix flour.' });
+			const otherUsage = addIngredientUsage(otherStep.id, {
+				ingredientId: flour.id,
+				quantityValue: 200
+			});
+			const { step } = addStep(defaultComposition.id, {
+				instruction: 'Let rise.',
+				duration: { kind: 'wait', min: 240, unit: 'minutes' }
+			});
+
+			expect(() =>
+				setDurationScalingFormula(step.id, {
+					kind: 'vs_other_usage',
+					otherUsageId: otherUsage.id,
+					perUnitAmount: 3,
+					direction: 'increase',
+					thresholdSide: 'short'
+				})
+			).toThrow(InvalidScalingFormulaError);
+		});
+
+		it('applies a vs_other_usage formula, increasing as the reference falls short', () => {
+			const recipe = createRecipe('Bread', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const starter = createIngredient({ baseTerm: 'sourdough starter' });
+			const { step } = addStep(defaultComposition.id, {
+				instruction: 'Let {{1}} rise.',
+				duration: { kind: 'wait', min: 240, unit: 'minutes' }
+			});
+			const starterUsage = addIngredientUsage(step.id, {
+				ingredientId: starter.id,
+				quantityValue: 100,
+				quantityUnit: 'g'
+			});
+
+			setDurationScalingFormula(step.id, {
+				kind: 'vs_other_usage',
+				otherUsageId: starterUsage.id,
+				perUnitAmount: 3,
+				direction: 'increase',
+				thresholdSide: 'short'
+			});
+
+			// halving servings halves the starter usage too (100g -> 50g, 50g short)
+			const at2 = getRecipe(recipe.id, undefined, 2);
+			expect(at2?.composition.steps[0].scaledDurationMin).toEqual(240 + 3 * 50);
+
+			// at usual servings, the reference usage is at its usual quantity
+			const at4 = getRecipe(recipe.id, undefined, 4);
+			expect(at4?.composition.steps[0].scaledDurationMin).toEqual(240);
+		});
+
+		it('removes a duration formula, reverting to default constant', () => {
+			const recipe = createRecipe('Bread', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, {
+				instruction: 'Let rise.',
+				duration: { kind: 'wait', min: 60, unit: 'minutes' }
+			});
+
+			setDurationScalingFormula(step.id, { kind: 'rate_vs_servings', ratePercent: 100 });
+			removeDurationScalingFormula(step.id);
+
+			const at8 = getRecipe(recipe.id, undefined, 8);
+			expect(at8?.composition.steps.find((s) => s.id === step.id)?.scaledDurationMin).toEqual(60);
 		});
 	});
 });

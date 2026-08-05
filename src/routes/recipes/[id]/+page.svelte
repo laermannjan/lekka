@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import type { PageProps } from './$types';
+	import ScalingFormulaEditor from '$lib/components/ScalingFormulaEditor.svelte';
 
 	let { data, form }: PageProps = $props();
 
@@ -15,7 +16,7 @@
 		{#each data.recipe.compositions as composition (composition.id)}
 			<li>
 				<a
-					href="{basePath}?composition={composition.id}"
+					href="{basePath}?composition={composition.id}&servings={data.recipe.targetServings}"
 					aria-current={composition.id === data.recipe.composition.id ? 'page' : undefined}
 				>
 					{composition.name ?? 'Default'}
@@ -25,6 +26,37 @@
 	</ul>
 </nav>
 
+<h2>Servings</h2>
+
+{#if form?.servingsError}
+	<p role="alert">{form.servingsError}</p>
+{/if}
+
+<form method="GET">
+	<input type="hidden" name="composition" value={data.recipe.composition.id} />
+	<label>
+		Viewing at
+		<input type="number" name="servings" min="1" step="1" value={data.recipe.targetServings} />
+		servings
+	</label>
+	<button type="submit">Update</button>
+</form>
+
+<details>
+	<summary>This recipe's usual servings ({data.recipe.servings})</summary>
+	<p>
+		Every stored quantity and duration is written "as usual" at this count - viewing at a different
+		count above recomputes from this baseline.
+	</p>
+	<form method="POST" action="?/updateServings">
+		<label>
+			Usual servings
+			<input type="number" name="servings" min="1" step="1" value={data.recipe.servings} required />
+		</label>
+		<button type="submit">Update usual servings</button>
+	</form>
+</details>
+
 <h2>Steps</h2>
 
 {#if form?.stepError}
@@ -32,6 +64,9 @@
 {/if}
 {#if form?.usageError}
 	<p role="alert">{form.usageError}</p>
+{/if}
+{#if form?.scalingError}
+	<p role="alert">{form.scalingError}</p>
 {/if}
 
 {#if data.recipe.composition.steps.length > 0}
@@ -46,10 +81,27 @@
 				{#if step.durationKind}
 					<p>
 						<em
-							>{step.durationKind}: {step.durationMin}{#if step.durationMax}–{step.durationMax}{/if}
-							{step.durationUnit}</em
+							>{step.durationKind}: {step.scaledDurationMin}{#if step.scaledDurationMax}–{step.scaledDurationMax}{/if}
+							{step.durationUnit}
+							{#if step.durationScalingFormula}(scaling rule set){/if}</em
 						>
 					</p>
+					<ScalingFormulaEditor
+						action="?/setDurationScalingFormula"
+						idFieldName="stepId"
+						idFieldValue={step.id}
+						allowVsOtherUsage={true}
+						otherUsageOptions={step.usages.map((usage) => ({
+							id: usage.id,
+							label: `${usage.ingredient.baseTerm}${usage.ingredient.descriptors ? ` (${usage.ingredient.descriptors})` : ''}`,
+							baseQuantity: usage.quantityValue
+						}))}
+						currentFormula={step.durationScalingFormula}
+						baseValue={step.durationMin ?? 0}
+						baseServings={data.recipe.servings}
+						unit={step.durationUnit ?? ''}
+						noneLabel="stay constant, unaffected by servings (default)"
+					/>
 				{/if}
 
 				{#if step.usages.length > 0}
@@ -62,6 +114,18 @@
 								{usage.displayQuantity}
 								{#if usage.prepAttribute}, {usage.prepAttribute}{/if}
 								{#if usage.note}<span>— {usage.note}</span>{/if}
+								{#if usage.scalingFormula}<span> (scaling rule set)</span>{/if}
+								<ScalingFormulaEditor
+									action="?/setUsageScalingFormula"
+									idFieldName="ingredientUsageId"
+									idFieldValue={usage.id}
+									allowVsOtherUsage={false}
+									currentFormula={usage.scalingFormula}
+									baseValue={usage.quantityValue}
+									baseServings={data.recipe.servings}
+									unit={usage.quantityUnit}
+									noneLabel="scale exactly with servings (default)"
+								/>
 							</li>
 						{/each}
 					</ul>
