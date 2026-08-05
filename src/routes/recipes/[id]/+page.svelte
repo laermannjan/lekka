@@ -1,11 +1,24 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import type { PageProps } from './$types';
+	import { formatRemaining, parseDurationSeconds } from '$lib/duration';
+	import { TimerStore } from '$lib/timers.svelte';
 
 	let { data, form }: PageProps = $props();
 
 	const allUsages = $derived(data.recipe.composition.steps.flatMap((step) => step.usages));
 	const basePath = $derived(resolve('/recipes/[id]', { id: String(data.recipe.id) }));
+
+	// Step timers: purely client-side (see docs/decisions.md) and scoped to
+	// this page - one TimerStore is the single source of truth the badge,
+	// panel, and each Step card all read from, keyed by compositionStepId
+	// (unique per Step-as-rendered-in-this-Composition).
+	const timers = new TimerStore();
+	$effect(() => {
+		const id = setInterval(() => timers.tick(), 250);
+		return () => clearInterval(id);
+	});
+	let timerPanelOpen = $state(false);
 </script>
 
 <h1>{data.recipe.title}</h1>
@@ -24,6 +37,35 @@
 		{/each}
 	</ul>
 </nav>
+
+<p>
+	<button type="button" onclick={() => (timerPanelOpen = !timerPanelOpen)}>
+		⏱ Timers ({timers.activeCount})
+	</button>
+</p>
+
+{#if timerPanelOpen}
+	<section aria-label="Active timers">
+		<h2>Timers</h2>
+		{#if timers.sorted.length > 0}
+			<ul>
+				{#each timers.sorted as timer (timer.id)}
+					<li>
+						<span>{timer.label}</span>
+						{#if timers.isDone(timer)}
+							<strong>Done ✓</strong>
+						{:else}
+							<span>{formatRemaining(timers.remaining(timer))} remaining</span>
+							<button type="button" onclick={() => timers.finish(timer.id)}>Finish</button>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<p>No timers running.</p>
+		{/if}
+	</section>
+{/if}
 
 <h2>Steps</h2>
 
@@ -50,6 +92,30 @@
 							{step.durationUnit}</em
 						>
 					</p>
+					{@const timerSeconds = parseDurationSeconds(
+						step.durationMin ?? 0,
+						step.durationUnit ?? ''
+					)}
+					{#if timerSeconds}
+						{@const timerId = String(step.compositionStepId)}
+						{@const timer = timers.get(timerId)}
+						<p>
+							{#if timer && !timers.isDone(timer)}
+								<span>{formatRemaining(timers.remaining(timer))} remaining</span>
+								<button type="button" onclick={() => timers.finish(timerId)}>Finish timer</button>
+							{:else}
+								{#if timer}
+									<strong>Timer done ✓</strong>
+								{/if}
+								<button
+									type="button"
+									onclick={() => timers.start(timerId, step.renderedInstruction, timerSeconds)}
+								>
+									{timer ? 'Restart timer' : 'Start timer'}
+								</button>
+							{/if}
+						</p>
+					{/if}
 				{/if}
 
 				{#if step.usages.length > 0}
