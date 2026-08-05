@@ -1,5 +1,20 @@
 # Decisions
 
+## Data export & restore: raw domain-model dump, ids preserved, full replace (2026-08-06)
+
+**Context**: #31 asked for a manually-triggered export of the whole household's data as a single, versioned, raw JSON dump matching lekka's own domain model directly (not a portable interchange schema), and a manually-triggered restore that fully replaces whatever is currently in the instance - no merge, no dedup, no built-in scheduler.
+
+**Decision**:
+
+- **"Household" = the whole instance**: there's no household/tenant table (see `CONTEXT.md`'s Profile - "one instance is shared by a household"), so export means every row of every domain table, unfiltered.
+- **Dump shape**: `{ schemaVersion, exportedAt, data: { <tableName>: Row[], ... } }` (`src/lib/server/data-export.ts`), one key per domain table, rows as Drizzle returns them - same "serialize a chunk of the domain model to JSON" convention `recipe_versions.snapshot` already established, just scaled to the whole DB instead of one Recipe.
+- **Excluded tables**: `vapid_keys`, `push_subscriptions`, `scheduled_pushes` are server-instance/device infrastructure, not household data a self-hoster would think of as "my recipes" - a VAPID keypair is bound to this specific server process, a push subscription is bound to one browser/device, and scheduled pushes are in-flight derived state. Restoring these into a different instance would be actively wrong (stale device endpoints, mismatched keys).
+- **Row ids are preserved as-is**, not remapped: restore wipes every included table (child-before-parent, matching each table's own FK direction) and reinserts the dump's rows with their original ids (parent-before-child). SQLite's `AUTOINCREMENT` bookkeeping advances to cover any explicit id it sees on insert, so a Recipe created after a restore still gets a fresh id. This is simpler than `revertToVersion`'s id-remapping (`src/lib/server/recipes.ts`) and correct here specifically because restore is whole-DB replace, not a merge into a database that already has its own, different rows with colliding ids.
+- **Validation is shallow**: `restoreData` checks `schemaVersion` matches and that every expected table key is present as an array, but trusts row shapes match the schema rather than deep-validating every column - this is a dump of the app's own domain model round-tripping through itself, not a hardened public interchange format.
+- **Routes**: `GET /settings/export` (`+server.ts`) streams the dump as a downloadable file; restore is a form action (`POST /settings?/restore`) reading an uploaded file, following the existing form-action convention (`src/routes/profile/+page.server.ts`) rather than a fetch-driven endpoint, since it's a single file input with no client-side interactivity needed.
+
+**Rejected**: id remapping on restore (unnecessary complexity for a full-replace operation with no existing rows to collide with); a generic/portable export schema (explicitly out of scope per the ticket - this is a backup/restore mechanism for one lekka instance, not an interchange format for other tools); scheduling export automatically (explicitly out of scope - self-hosters wire their own cron externally against the export endpoint).
+
 ## Cook logging: record the current Version id, don't remap Cook Log Annotations across reverts (2026-08-06)
 
 **Context**: #29 asked for logging a Cook (date, Version/Composition used, acting Profile, Diners present, outcome, summary) and Cook Log Annotations pinned to a specific Step or Ingredient Usage within a Cook, with the hard constraint that logging never mutates the Recipe.
