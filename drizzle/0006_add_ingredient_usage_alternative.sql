@@ -1,0 +1,1 @@
+ALTER TABLE `ingredient_usages` ADD `alternative_ingredient_id` integer REFERENCES ingredients(id);

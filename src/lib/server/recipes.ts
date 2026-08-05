@@ -673,7 +673,10 @@ function toDurationFormulaInput(row: ScalingFormula | undefined): DurationScalin
 	};
 }
 
-type RawUsage = IngredientUsage & { ingredient: Ingredient };
+type RawUsage = IngredientUsage & {
+	ingredient: Ingredient;
+	alternativeIngredient: Ingredient | null;
+};
 
 function loadRawUsagesByStepId(stepIds: number[]): Map<number, RawUsage[]> {
 	const usagesByStepId = new Map<number, RawUsage[]>();
