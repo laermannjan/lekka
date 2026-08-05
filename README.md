@@ -14,8 +14,8 @@ Requires Node 24+ and [pnpm](https://pnpm.io) (via `corepack enable`).
 corepack enable
 pnpm install
 cp .env.example .env
-pnpm run db:push   # create the local SQLite database from the schema
 pnpm run dev        # starts the dev server at http://localhost:5173
+                     # (migrations run automatically against the local SQLite file)
 ```
 
 Other useful scripts:
@@ -25,6 +25,7 @@ pnpm run check       # typecheck (svelte-check)
 pnpm run lint         # prettier --check + eslint
 pnpm run format       # prettier --write
 pnpm run test:unit -- --run   # unit tests (vitest)
+pnpm run db:generate  # generate a new migration after changing the schema
 pnpm run db:studio    # Drizzle Studio, browse the local database
 ```
 

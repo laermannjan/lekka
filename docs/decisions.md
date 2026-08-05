@@ -18,3 +18,11 @@
 - **Any serverless/static-only hosting** (Vercel Functions, Cloudflare Workers/Pages, etc.): explicitly ruled out by the Web Push architecture constraint — these platforms cannot hold a long-lived process to fire exact-time notifications.
 
 **Open tension, deliberately not resolved here**: the Web Push requirement is real friction against "easily self-hostable" — a plain static file server is no longer an option. Flagged on the domain spec's Further Notes; whoever builds the actual push-scheduler ticket should re-check this holds.
+
+## Schema migrations: drizzle-kit generate + migrate-on-boot, not db:push (2026-08-05)
+
+**Context**: #18 (Profile picker) is the first ticket to add a real table, surfacing how the schema actually reaches a running SQLite file. The scaffold (#17) had only documented `drizzle-kit push` as a manual dev step.
+
+**Decision**: schema changes are captured as versioned SQL migration files (`pnpm run db:generate`, checked into `drizzle/`), applied automatically via `drizzle-orm`'s `migrate()` at server startup (`src/lib/server/db/index.ts`). `db:push` is dropped from the documented workflow.
+
+**Why**: `drizzle-kit push` is a prototyping tool that diffs schema against a live DB and isn't meant for production use, and self-hosters have no CLI access to a running container to apply it anyway. Migrate-on-boot means a self-hoster who pulls a new image and restarts the container gets their schema updated with no manual step — matching the "self-hosting shouldn't be fragile" goal from #16.

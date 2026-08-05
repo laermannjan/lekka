@@ -6,6 +6,9 @@ RUN corepack enable && \
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
+# SvelteKit's build-time route analysis imports server modules, which need a
+# DATABASE_URL to open a (throwaway, build-only) SQLite handle.
+ENV DATABASE_URL=/tmp/build.db
 RUN pnpm run build
 RUN pnpm prune --prod
 
@@ -14,6 +17,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
+COPY --from=build /app/drizzle ./drizzle
 COPY package.json ./
 
 VOLUME /app/data

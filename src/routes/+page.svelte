@@ -1,2 +1,2 @@
-<h1>lekka</h1>
-<p>Self-hosted, household-shared recipe manager.</p>
+<h1>Recipes</h1>
+<p>No recipes yet.</p>
