@@ -1508,6 +1508,34 @@ describe('recipes', () => {
 				expect(annotations[1].ingredientUsageId).toEqual(restoredStep.usages[0].id);
 			});
 
+			// The boundary docs/adr/0005 draws: an Annotation is a pointer into the
+			// Recipe as it currently stands, so one pinned to a Step the revert
+			// genuinely removes goes with it. The Cook itself does not.
+			it('drops an Annotation pinned to a Step the revert removes, keeping the Cook', () => {
+				const jan = createProfile('Jan');
+				const recipe = createRecipe('Chilli con carne');
+				const defaultComposition = getDefaultComposition(recipe.id);
+				addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+
+				const [target] = listRecipeVersions(recipe.id).slice(-1);
+				const { step: laterStep } = addStep(defaultComposition.id, { instruction: 'Simmer.' });
+
+				const cook = logCook(recipe.id, {
+					compositionId: defaultComposition.id,
+					actingProfileId: jan.id,
+					dinerProfileIds: [jan.id],
+					cookedAt: '2026-08-01',
+					outcome: 'needs-tweaks',
+					summary: 'Simmered it dry.'
+				});
+				addCookLogAnnotation(cook.id, { stepId: laterStep.id, note: 'Boiled over.' });
+
+				revertToVersion(recipe.id, target.id);
+
+				expect(listAnnotationsForCooks([cook.id]).get(cook.id)).toBeUndefined();
+				expect(listCooksForRecipe(recipe.id).map((c) => c.summary)).toEqual(['Simmered it dry.']);
+			});
+
 			it('keeps Annotations pinned when the same Version is reverted to twice', () => {
 				const jan = createProfile('Jan');
 				const { recipe, defaultComposition, step, target } = recipeWithVersionBeforeSecondStep();
