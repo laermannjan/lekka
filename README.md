@@ -25,6 +25,8 @@ pnpm run check       # typecheck (svelte-check)
 pnpm run lint         # prettier --check + eslint
 pnpm run format       # prettier --write
 pnpm run test:unit -- --run   # unit tests (vitest)
+pnpm run test:e2e     # e2e tests (playwright, builds and previews the app)
+pnpm run test         # both, the same thing CI runs
 pnpm run db:generate  # generate a new migration after changing the schema
 pnpm run db:studio    # Drizzle Studio, browse the local database
 ```
