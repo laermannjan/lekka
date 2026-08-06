@@ -27,6 +27,14 @@ export default defineConfig({
 	// run while making a red one debuggable: the trace viewer replays the DOM,
 	// network and console at every step. `.github/workflows/ci.yml` uploads
 	// both directories when the step fails.
+	//
+	// Retries alone would trade one problem for a worse one: a flaky test
+	// would fail, retry, pass, and report green, so the trace explaining it
+	// gets written and then discarded. `test:e2e` passes
+	// `--fail-on-flaky-tests` so a flake still reds the build - the pre-retry
+	// behaviour - but now arrives with a trace attached. With a suite this
+	// small a flake is a signal, not noise. Retries stay off locally, where
+	// nothing can be marked flaky and re-running is a keystroke.
 	retries: process.env.CI ? 2 : 0,
 	use: { trace: 'on-first-retry' },
 	reporter: [['list'], ['html', { open: 'never' }]],
