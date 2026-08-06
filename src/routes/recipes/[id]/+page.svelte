@@ -87,6 +87,11 @@
 			{data.isFavorite ? '★ Favorited' : '☆ Mark as favorite'}
 		</button>
 	</form>
+	<!-- A Favorite is yours to set but visible household-wide (see CONTEXT.md's
+	     Favorite), so show everyone who marked it, not just the acting Profile. -->
+	{#if data.favoritedBy.length > 0}
+		<p><em>Favorited by {data.favoritedBy.map((p) => p.name).join(', ')}.</em></p>
+	{/if}
 </section>
 
 <section>

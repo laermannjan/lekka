@@ -1,5 +1,23 @@
 # Decisions
 
+## Favorites are read household-wide, not just for the acting Profile (2026-08-06)
+
+**Context**: a two-axis review of the v1 build against #16 (tracked as #34) found story 50 - "I want my Favorites and Collections visible to the rest of the household even though they're mine to set" - only half implemented. Collections already satisfied it (`listCollections` is unfiltered), but every Favorite read was scoped to the acting Profile, so no view ever showed that someone else had favorited a Recipe.
+
+**Decision**: `listFavoriteProfiles(recipeId)` and `listFavoriteProfilesForRecipes(recipeIds)` (`src/lib/server/favorites.ts`) deliberately take no acting Profile - they answer "who in the household favorited this," which is the household-wide half of the concept. `isFavorite`/`listFavoriteRecipeIds` keep their per-Profile signature for the toggle's own state. Both the browse list and the Recipe page now name the favoriting Profiles.
+
+This keeps `profileId` meaning _who marked it_, never _who may see it_, matching `CONTEXT.md`'s Profile ("no privacy walls, not no attribution"). The data model already allowed this; only the read path was missing.
+
+**Rejected**: a favorite _count_ instead of names (loses the attribution that makes it useful - "Ada likes this" is the point, "3 people" is not); hiding other Profiles' Favorites behind a toggle (would reintroduce exactly the privacy-wall shape Profile rules out).
+
+## E2E database reset belongs in the webServer command, not the Playwright config body (2026-08-06)
+
+**Context**: `playwright.config.ts` shipped with `testMatch: '**/*.e2e.{ts,js}'` and zero matching files, so `pnpm test` always failed at the e2e step. Adding the first smoke test (`e2e/household.e2e.ts`) surfaced how it gets a clean database.
+
+**Decision**: the reset is part of `webServer.command` (`rm -f e2e.db ... && npm run build && npm run preview`) with `DATABASE_URL` passed via `webServer.env`. Migrate-on-boot then builds the schema, so no separate fixture step is needed.
+
+**Rejected**: deleting the file from the config module body. Playwright re-evaluates the config in every worker process, so the delete fires _after_ the server has already booted and migrated, wiping the database out from under it - the failure looks like a 500 on the first write, not like a setup bug. Also rejected: `globalSetup`, whose ordering relative to `webServer` startup is not guaranteed to be what this needs.
+
 ## Data export & restore: raw domain-model dump, ids preserved, full replace (2026-08-06)
 
 **Context**: #31 asked for a manually-triggered export of the whole household's data as a single, versioned, raw JSON dump matching lekka's own domain model directly (not a portable interchange schema), and a manually-triggered restore that fully replaces whatever is currently in the instance - no merge, no dedup, no built-in scheduler.

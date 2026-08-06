@@ -1,7 +1,13 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { db } from './db';
 import { favorites, profiles, recipes } from './db/schema';
-import { isFavorite, listFavoriteRecipeIds, setFavorite } from './favorites';
+import {
+	isFavorite,
+	listFavoriteProfiles,
+	listFavoriteProfilesForRecipes,
+	listFavoriteRecipeIds,
+	setFavorite
+} from './favorites';
 
 describe('favorites', () => {
 	beforeEach(() => {
@@ -73,5 +79,57 @@ describe('favorites', () => {
 
 		expect(listFavoriteRecipeIds(profile.id)).toEqual([a.id]);
 		expect(listFavoriteRecipeIds(profile.id)).not.toContain(b.id);
+	});
+
+	// A Favorite is set per-Profile but visible household-wide (CONTEXT.md's
+	// Favorite), so these read across every Profile, not just the acting one.
+	it('lists every profile that favorited a recipe, whoever is asking', () => {
+		const recipe = makeRecipe();
+		const jan = makeProfile('Jan');
+		const alex = makeProfile('Alex');
+		setFavorite(recipe.id, jan.id, true);
+		setFavorite(recipe.id, alex.id, true);
+
+		expect(listFavoriteProfiles(recipe.id).map((p) => p.name)).toEqual(['Alex', 'Jan']);
+	});
+
+	it('lists no profiles for a recipe nobody favorited', () => {
+		const recipe = makeRecipe();
+		makeProfile();
+
+		expect(listFavoriteProfiles(recipe.id)).toEqual([]);
+	});
+
+	it('drops a profile once it unfavorites', () => {
+		const recipe = makeRecipe();
+		const jan = makeProfile('Jan');
+		const alex = makeProfile('Alex');
+		setFavorite(recipe.id, jan.id, true);
+		setFavorite(recipe.id, alex.id, true);
+
+		setFavorite(recipe.id, jan.id, false);
+
+		expect(listFavoriteProfiles(recipe.id).map((p) => p.name)).toEqual(['Alex']);
+	});
+
+	it('batches the household-wide view by recipe id', () => {
+		const a = makeRecipe('A');
+		const b = makeRecipe('B');
+		const c = makeRecipe('C');
+		const jan = makeProfile('Jan');
+		const alex = makeProfile('Alex');
+		setFavorite(a.id, jan.id, true);
+		setFavorite(a.id, alex.id, true);
+		setFavorite(b.id, alex.id, true);
+
+		const byRecipeId = listFavoriteProfilesForRecipes([a.id, b.id, c.id]);
+
+		expect(byRecipeId.get(a.id)?.map((p) => p.name)).toEqual(['Alex', 'Jan']);
+		expect(byRecipeId.get(b.id)?.map((p) => p.name)).toEqual(['Alex']);
+		expect(byRecipeId.get(c.id)).toBeUndefined();
+	});
+
+	it('returns an empty map for no recipe ids', () => {
+		expect(listFavoriteProfilesForRecipes([]).size).toBe(0);
 	});
 });

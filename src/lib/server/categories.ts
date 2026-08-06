@@ -7,6 +7,7 @@ import {
 	type Category,
 	type CategoryGroup
 } from './db/schema';
+import { isUniqueConstraintError, normalizeVocabularyName, parseVocabularyIds } from './vocabulary';
 
 export function listCategories(): Category[] {
 	return db
@@ -26,7 +27,7 @@ export class InvalidCategoryGroupError extends Error {}
 // doesn't fracture the vocabulary into case variants of the same Category
 // (see CONTEXT.md, same governance shape as Tag).
 export function createCategory(name: string, categoryGroup: string): Category {
-	const trimmed = name.trim().slice(0, MAX_NAME_LENGTH).toLowerCase();
+	const trimmed = normalizeVocabularyName(name, MAX_NAME_LENGTH);
 	if (!trimmed) throw new BlankNameError('Category name must not be blank');
 	if (!CATEGORY_GROUPS.includes(categoryGroup as CategoryGroup)) {
 		throw new InvalidCategoryGroupError(`Unknown category group "${categoryGroup}"`);
@@ -39,7 +40,7 @@ export function createCategory(name: string, categoryGroup: string): Category {
 			.returning()
 			.get();
 	} catch (error) {
-		if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+		if (isUniqueConstraintError(error)) {
 			throw new DuplicateNameError(`Category "${trimmed}" already exists`);
 		}
 		throw error;
@@ -47,8 +48,7 @@ export function createCategory(name: string, categoryGroup: string): Category {
 }
 
 export function parseCategoryIds(rawIds: unknown[]): number[] {
-	const ids = rawIds.map(Number).filter((id) => Number.isInteger(id));
-	return [...new Set(ids)];
+	return parseVocabularyIds(rawIds);
 }
 
 export function getCategoriesByIds(ids: number[]): Category[] {

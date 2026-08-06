@@ -9,7 +9,7 @@ import {
 	type RecipeSort
 } from '$lib/server/recipes';
 import { listCategoriesForRecipes } from '$lib/server/categories';
-import { listFavoriteRecipeIds } from '$lib/server/favorites';
+import { listFavoriteProfilesForRecipes, listFavoriteRecipeIds } from '$lib/server/favorites';
 
 function parseSort(raw: string | null): RecipeSort {
 	return RECIPE_SORTS.includes(raw as RecipeSort) ? (raw as RecipeSort) : 'recently-added';
@@ -24,12 +24,14 @@ export const load: PageServerLoad = ({ locals, url }) => {
 	const favoriteRecipeIds = locals.profile
 		? new Set(listFavoriteRecipeIds(locals.profile.id))
 		: new Set<number>();
+	const favoritedByRecipeId = listFavoriteProfilesForRecipes(recipes.map((r) => r.id));
 
 	return {
 		recipes: recipes.map((recipe) => ({
 			...recipe,
 			categories: categoriesByRecipeId.get(recipe.id) ?? [],
-			isFavorite: favoriteRecipeIds.has(recipe.id)
+			isFavorite: favoriteRecipeIds.has(recipe.id),
+			favoritedBy: favoritedByRecipeId.get(recipe.id) ?? []
 		})),
 		sort,
 		search
