@@ -55,7 +55,7 @@ import {
 	listCategoriesForRecipe,
 	removeCategoryFromRecipe
 } from '$lib/server/categories';
-import { isFavorite, setFavorite } from '$lib/server/favorites';
+import { isFavorite, listFavoriteProfiles, setFavorite } from '$lib/server/favorites';
 import { listProfiles } from '$lib/server/profiles';
 import { getAvoidTagIdsForProfiles, getFlaggedTagsByIngredientIds } from '$lib/server/dietary';
 import {
@@ -125,6 +125,7 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 		categories: listCategories(),
 		recipeCategories: listCategoriesForRecipe(id),
 		isFavorite: locals.profile ? isFavorite(id, locals.profile.id) : false,
+		favoritedBy: listFavoriteProfiles(id),
 		collections: listCollections(),
 		recipeCollections: listCollectionsForRecipe(id),
 		versions,

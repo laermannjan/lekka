@@ -33,6 +33,9 @@
 				{#if recipe.categories.length > 0}
 					<em>({recipe.categories.map((c) => c.name).join(', ')})</em>
 				{/if}
+				{#if recipe.favoritedBy.length > 0}
+					<em>★ {recipe.favoritedBy.map((p) => p.name).join(', ')}</em>
+				{/if}
 			</li>
 		{/each}
 	</ul>

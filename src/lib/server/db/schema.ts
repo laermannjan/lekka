@@ -473,7 +473,8 @@ export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 // One Step timer's scheduled Web Push, fired by the server's in-process
 // scheduler (src/lib/server/push/scheduler.ts) at `firesAt` regardless of
 // what the client is doing - the actual "notify me while my phone is
-// locked" mechanism the client-side timer (see docs/decisions.md) cannot
+// locked" mechanism the client-side timer (see
+// docs/adr/0003-client-only-step-timers.md) cannot
 // provide on its own. `timerId` matches the client's TimerStore id
 // (compositionStepId as a string) purely for cancel-on-manual-finish
 // lookups; it carries no server-side meaning beyond that. `firedAt` null

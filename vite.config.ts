@@ -26,8 +26,12 @@ export default defineConfig({
 				test: {
 					name: 'server',
 					environment: 'node',
+					// Every spec in the repo runs here, in node. There is no
+					// component-test project yet, so nothing excludes
+					// `*.svelte.spec.ts`: an exclusion with no second project behind
+					// it silently drops such a test instead of failing the moment
+					// someone writes one.
 					include: ['src/**/*.{test,spec}.{js,ts}'],
-					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}'],
 					setupFiles: ['src/lib/server/db/test-setup.ts'],
 					// All server specs share one SQLite file (see test-setup.ts) with no
 					// per-file isolation; running files in parallel races their

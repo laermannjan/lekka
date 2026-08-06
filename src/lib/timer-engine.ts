@@ -1,6 +1,6 @@
 // Pure state-transition logic for client-side Step timers (see
 // src/lib/timers.svelte.ts for the reactive wrapper used by the UI, and
-// docs/decisions.md for why this is client-side only in v1). Kept free of
+// docs/adr/0003-client-only-step-timers.md for why). Kept free of
 // Svelte runes so it's plain, fast-to-test TypeScript - the reactive
 // wrapper is a thin shell around these functions.
 //

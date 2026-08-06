@@ -1,6 +1,7 @@
 import { asc, eq, inArray } from 'drizzle-orm';
 import { db } from './db';
 import { profiles, type Profile } from './db/schema';
+import { isUniqueConstraintError, normalizeVocabularyName } from './vocabulary';
 
 export function listProfiles(): Profile[] {
 	return db.select().from(profiles).orderBy(asc(profiles.name)).all();
@@ -32,13 +33,15 @@ export class BlankNameError extends Error {}
 export class DuplicateNameError extends Error {}
 
 export function createProfile(name: string): Profile {
-	const trimmed = name.trim().slice(0, MAX_NAME_LENGTH);
+	// Profile names keep their case - a person's name is a proper noun, not a
+	// vocabulary term matched against by autocomplete.
+	const trimmed = normalizeVocabularyName(name, MAX_NAME_LENGTH, { lowercase: false });
 	if (!trimmed) throw new BlankNameError('Profile name must not be blank');
 
 	try {
 		return db.insert(profiles).values({ name: trimmed }).returning().get();
 	} catch (error) {
-		if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+		if (isUniqueConstraintError(error)) {
 			throw new DuplicateNameError(`Profile name "${trimmed}" is already taken`);
 		}
 		throw error;

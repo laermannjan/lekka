@@ -1,10 +1,10 @@
 # lekka
 
-Self-hosted, household-shared recipe manager. See `CONTEXT.md` for the domain glossary and `docs/decisions.md` for stack/architecture decisions.
+Self-hosted, household-shared recipe manager. See `CONTEXT.md` for the domain glossary and `docs/adr/` for stack/architecture decisions.
 
 ## Stack
 
-SvelteKit (Node adapter) + SQLite (Drizzle ORM), packaged as a single Docker image. See `docs/decisions.md` for why.
+SvelteKit (Node adapter) + SQLite (Drizzle ORM), packaged as a single Docker image. See `docs/adr/0001-sveltekit-sqlite-docker-stack.md` for why.
 
 ## Local development
 
@@ -25,6 +25,8 @@ pnpm run check       # typecheck (svelte-check)
 pnpm run lint         # prettier --check + eslint
 pnpm run format       # prettier --write
 pnpm run test:unit -- --run   # unit tests (vitest)
+pnpm run test:e2e     # e2e tests (playwright, builds and previews the app)
+pnpm run test         # both, the same thing CI runs
 pnpm run db:generate  # generate a new migration after changing the schema
 pnpm run db:studio    # Drizzle Studio, browse the local database
 ```

@@ -1,5 +1,10 @@
 node_modules
+
+# Local agent state. Ignored here rather than left to a developer's global
+# gitignore, so `pnpm lint` (prettier and eslint both read this file) passes on
+# a clean checkout for whoever has these lying around.
 .claude/worktrees
+.claude/settings.local.json
 
 # Output
 .output

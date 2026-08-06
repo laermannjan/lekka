@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from './db';
-import { favorites } from './db/schema';
+import { favorites, profiles, type Profile } from './db/schema';
 
 // Sets or clears a Profile's Favorite mark on a Recipe (see CONTEXT.md).
 // Operates at the Recipe level, not per-Composition - a row's presence is
@@ -33,4 +33,40 @@ export function listFavoriteRecipeIds(profileId: number): number[] {
 		.where(eq(favorites.profileId, profileId))
 		.all();
 	return rows.map((row) => row.recipeId);
+}
+
+// Every Profile that has favorited a Recipe. A Favorite is set per-Profile but
+// visible household-wide (see CONTEXT.md's Favorite) - `profileId` records who
+// marked it, not who may see it, so this deliberately takes no acting Profile.
+export function listFavoriteProfiles(recipeId: number): Profile[] {
+	const rows = db
+		.select({ profile: profiles })
+		.from(favorites)
+		.innerJoin(profiles, eq(profiles.id, favorites.profileId))
+		.where(eq(favorites.recipeId, recipeId))
+		.orderBy(asc(profiles.name))
+		.all();
+	return rows.map((row) => row.profile);
+}
+
+// The same household-wide view for many Recipes at once, keyed by recipeId -
+// for list views that show who favorited each row without one query per row.
+export function listFavoriteProfilesForRecipes(recipeIds: number[]): Map<number, Profile[]> {
+	const byRecipeId = new Map<number, Profile[]>();
+	if (recipeIds.length === 0) return byRecipeId;
+
+	const rows = db
+		.select({ recipeId: favorites.recipeId, profile: profiles })
+		.from(favorites)
+		.innerJoin(profiles, eq(profiles.id, favorites.profileId))
+		.where(inArray(favorites.recipeId, recipeIds))
+		.orderBy(asc(profiles.name))
+		.all();
+
+	for (const row of rows) {
+		const list = byRecipeId.get(row.recipeId) ?? [];
+		list.push(row.profile);
+		byRecipeId.set(row.recipeId, list);
+	}
+	return byRecipeId;
 }

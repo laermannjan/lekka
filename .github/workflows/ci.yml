@@ -24,6 +24,9 @@ jobs:
 
       - run: pnpm run check
 
-      - run: pnpm run test:unit -- --run
-
+      # Kept separate from `pnpm run test` even though the e2e web server
+      # builds too: this one runs with no DATABASE_URL in the environment,
+      # which is the thing that has to keep working.
       - run: pnpm run build
+
+      - run: pnpm run test

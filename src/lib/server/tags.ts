@@ -1,6 +1,7 @@
 import { asc, inArray } from 'drizzle-orm';
 import { db } from './db';
 import { tags, TAG_GROUPS, type Tag, type TagGroup } from './db/schema';
+import { isUniqueConstraintError, normalizeVocabularyName, parseVocabularyIds } from './vocabulary';
 
 export function listTags(): Tag[] {
 	return db.select().from(tags).orderBy(asc(tags.tagGroup), asc(tags.name)).all();
@@ -15,7 +16,7 @@ export class InvalidTagGroupError extends Error {}
 // Tag names are normalized to lowercase so autocomplete-driven reuse doesn't
 // fracture the vocabulary into case variants of the same Tag (see CONTEXT.md).
 export function createTag(name: string, tagGroup: string): Tag {
-	const trimmed = name.trim().slice(0, MAX_NAME_LENGTH).toLowerCase();
+	const trimmed = normalizeVocabularyName(name, MAX_NAME_LENGTH);
 	if (!trimmed) throw new BlankNameError('Tag name must not be blank');
 	if (!TAG_GROUPS.includes(tagGroup as TagGroup)) {
 		throw new InvalidTagGroupError(`Unknown tag group "${tagGroup}"`);
@@ -28,7 +29,7 @@ export function createTag(name: string, tagGroup: string): Tag {
 			.returning()
 			.get();
 	} catch (error) {
-		if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
+		if (isUniqueConstraintError(error)) {
 			throw new DuplicateNameError(`Tag "${trimmed}" already exists`);
 		}
 		throw error;
@@ -36,8 +37,7 @@ export function createTag(name: string, tagGroup: string): Tag {
 }
 
 export function parseTagIds(rawIds: unknown[]): number[] {
-	const ids = rawIds.map(Number).filter((id) => Number.isInteger(id));
-	return [...new Set(ids)];
+	return parseVocabularyIds(rawIds);
 }
 
 export function getTagsByIds(ids: number[]): Tag[] {

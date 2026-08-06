@@ -2,7 +2,7 @@
 // use, and persisted to `vapid_keys` so it survives restarts/redeploys - a
 // Web Push subscription is bound to the public key that created it, so a
 // self-hoster who never touches an env var still gets a stable keypair
-// (see docs/decisions.md's migrate-on-boot entry for the same
+// (see docs/adr/0002-generated-migrations-applied-on-boot.md for the same
 // no-manual-step philosophy).
 import webpush from 'web-push';
 import { db } from '../db';

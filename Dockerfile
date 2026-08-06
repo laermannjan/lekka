@@ -14,9 +14,6 @@ RUN for dir in node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3; 
 		( cd "$dir" && npx node-gyp rebuild --release ); \
 	done
 COPY . .
-# SvelteKit's build-time route analysis imports server modules, which need a
-# DATABASE_URL to open a (throwaway, build-only) SQLite handle.
-ENV DATABASE_URL=/tmp/build.db
 RUN pnpm run build
 RUN pnpm prune --prod
 

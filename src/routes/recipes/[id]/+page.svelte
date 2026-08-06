@@ -17,7 +17,8 @@
 	const allUsages = $derived(data.recipe.composition.steps.flatMap((step) => step.usages));
 	const basePath = $derived(resolve('/recipes/[id]', { id: String(data.recipe.id) }));
 
-	// Step timers: purely client-side countdown (see docs/decisions.md),
+	// Step timers: purely client-side countdown (see
+	// docs/adr/0003-client-only-step-timers.md),
 	// scoped to this page - one TimerStore is the single source of truth
 	// the badge, panel, and each Step card all read from, keyed by
 	// compositionStepId (unique per Step-as-rendered-in-this-Composition).
@@ -87,6 +88,11 @@
 			{data.isFavorite ? '★ Favorited' : '☆ Mark as favorite'}
 		</button>
 	</form>
+	<!-- A Favorite is yours to set but visible household-wide (see CONTEXT.md's
+	     Favorite), so show everyone who marked it, not just the acting Profile. -->
+	{#if data.favoritedBy.length > 0}
+		<p><em>Favorited by {data.favoritedBy.map((p) => p.name).join(', ')}.</em></p>
+	{/if}
 </section>
 
 <section>

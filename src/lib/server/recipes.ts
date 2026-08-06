@@ -85,6 +85,36 @@ function insertStep(
 		.get();
 }
 
+// Clones every Ingredient Usage from one Step onto another, preserving order.
+// Used wherever a Step's content gets copied into a fresh Step row - seeding a
+// Variant's override (`createVariant`) and taking over an unmodified Step as an
+// override (`overrideStep`) - since Step is the sole override unit and an
+// override owns its own Usages outright (see CONTEXT.md's Composition).
+function copyUsagesToStep(tx: Tx, fromStepId: number, toStepId: number): void {
+	const sourceUsages = tx
+		.select()
+		.from(ingredientUsages)
+		.where(eq(ingredientUsages.stepId, fromStepId))
+		.orderBy(asc(ingredientUsages.position))
+		.all();
+	if (sourceUsages.length === 0) return;
+
+	tx.insert(ingredientUsages)
+		.values(
+			sourceUsages.map((usage) => ({
+				stepId: toStepId,
+				ingredientId: usage.ingredientId,
+				position: usage.position,
+				quantityValue: usage.quantityValue,
+				quantityUnit: usage.quantityUnit,
+				prepAttribute: usage.prepAttribute,
+				alternativeIngredientId: usage.alternativeIngredientId,
+				note: usage.note
+			}))
+		)
+		.run();
+}
+
 export function createRecipe(title: string, servings: number = DEFAULT_SERVINGS): Recipe {
 	const trimmed = title.trim().slice(0, MAX_TITLE_LENGTH);
 	if (!trimmed) throw new BlankTitleError('Title must not be blank');
@@ -292,28 +322,7 @@ export function createVariant(
 					durationMax: sourceOverride.durationMax,
 					durationUnit: sourceOverride.durationUnit
 				});
-				const sourceUsages = tx
-					.select()
-					.from(ingredientUsages)
-					.where(eq(ingredientUsages.stepId, row.overrideStepId))
-					.orderBy(asc(ingredientUsages.position))
-					.all();
-				if (sourceUsages.length > 0) {
-					tx.insert(ingredientUsages)
-						.values(
-							sourceUsages.map((usage) => ({
-								stepId: copiedOverride.id,
-								ingredientId: usage.ingredientId,
-								position: usage.position,
-								quantityValue: usage.quantityValue,
-								quantityUnit: usage.quantityUnit,
-								prepAttribute: usage.prepAttribute,
-								alternativeIngredientId: usage.alternativeIngredientId,
-								note: usage.note
-							}))
-						)
-						.run();
-				}
+				copyUsagesToStep(tx, row.overrideStepId, copiedOverride.id);
 				overrideStepId = copiedOverride.id;
 			}
 
@@ -467,28 +476,7 @@ export function overrideStep(
 			durationUnit: durationColumns?.durationUnit ?? null
 		});
 
-		const previousUsages = tx
-			.select()
-			.from(ingredientUsages)
-			.where(eq(ingredientUsages.stepId, previousContentStepId))
-			.orderBy(asc(ingredientUsages.position))
-			.all();
-		if (previousUsages.length > 0) {
-			tx.insert(ingredientUsages)
-				.values(
-					previousUsages.map((usage) => ({
-						stepId: overrideStepRow.id,
-						ingredientId: usage.ingredientId,
-						position: usage.position,
-						quantityValue: usage.quantityValue,
-						quantityUnit: usage.quantityUnit,
-						prepAttribute: usage.prepAttribute,
-						alternativeIngredientId: usage.alternativeIngredientId,
-						note: usage.note
-					}))
-				)
-				.run();
-		}
+		copyUsagesToStep(tx, previousContentStepId, overrideStepRow.id);
 
 		const previousOverrideStepId = row.overrideStepId;
 
