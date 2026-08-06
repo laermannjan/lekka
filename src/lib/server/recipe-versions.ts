@@ -46,18 +46,26 @@ export type RecipeSnapshot = {
 		| 'alternativeIngredientId'
 		| 'note'
 	>[];
-	scalingFormulas: Pick<
-		ScalingFormula,
-		| 'ingredientUsageId'
-		| 'stepId'
-		| 'kind'
-		| 'ratePercent'
-		| 'otherUsageId'
-		| 'perUnitAmount'
-		| 'direction'
-		| 'thresholdSide'
-	>[];
+	scalingFormulas: ScalingFormulaContent[];
 };
+
+// Everything a Scaling Formula carries apart from its own identity: the two
+// recipe-scoped ids it hangs off, plus the template's own fields. Named
+// because both places that recreate a formula on new rows - a snapshot
+// revert and a Step-content copy - have to move exactly this column set, and
+// a column added here has to reach both or the new field gets silently
+// dropped on one path (see `insertRemappedFormula` in recipes.ts).
+export type ScalingFormulaContent = Pick<
+	ScalingFormula,
+	| 'ingredientUsageId'
+	| 'stepId'
+	| 'kind'
+	| 'ratePercent'
+	| 'otherUsageId'
+	| 'perUnitAmount'
+	| 'direction'
+	| 'thresholdSide'
+>;
 
 export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot {
 	const compositionRows = tx

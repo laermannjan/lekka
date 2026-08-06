@@ -60,6 +60,8 @@ An optional, author-written override on an Ingredient Usage's Quantity or a Step
 
 Whole-unit rounding (you can't cook 3.33 eggs) is a property of the Quantity's Unit, not a Scaling Formula template — it applies even under default linear scaling.
 
+A formula is part of the thing it scales, and does not outlive it. It travels wherever that thing's content is copied - an override taking over a Step, a Variant seeded from a Composition holding one, a revert to a Version - and is dropped when its Quantity or Duration goes away. So an override that clears the Step's Duration clears that Duration's formula with it: there is nothing left for the rule to scale, and a formula on a Duration-less Step is a state authoring refuses to create in the first place.
+
 **Version**:
 A point in a Recipe's edit history — one shared timeline covering the Step pool and every Composition together, not a per-Variant history. Reverting restores the whole Recipe, pool and all Compositions, to that point.
 

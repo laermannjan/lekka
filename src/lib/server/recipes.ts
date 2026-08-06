@@ -32,7 +32,7 @@ import {
 	getDurationScalingFormulasByStepIds,
 	getQuantityScalingFormulasByUsageIds
 } from './scaling';
-import { recordVersion, type RecipeSnapshot } from './recipe-versions';
+import { recordVersion, type RecipeSnapshot, type ScalingFormulaContent } from './recipe-versions';
 
 // A second reference to `ingredients`, so a Usage's primary Ingredient and
 // its optional Alternative Ingredient (see CONTEXT.md) can both be
@@ -126,16 +126,57 @@ function copyUsagesAndFormulasToStep(tx: Tx, fromStepId: number, toStep: Step): 
 	copyScalingFormulasToStep(tx, fromStepId, toStep, usageIdMap);
 }
 
+// Recreates one Scaling Formula against a fresh set of rows, translating each
+// of its three recipe-scoped ids through the given maps, and does nothing if
+// any of them has no counterpart - a formula whose Usage or Step didn't make
+// it across has nothing left to attach to.
+//
+// Every path that recreates formulas on new rows goes through here: reverting
+// to a snapshot and copying a Step's content both move the same columns under
+// the same remap, and keeping that in one place is what stops a path from
+// quietly dropping a field. This omission has already shipped twice - commit
+// 20f1080 on the Version path, and the Step-copy path this helper was
+// extracted from.
+//
+// `otherUsageId` is the one field pointing at another recipe-scoped row -
+// always a Usage on the same Step (see CONTEXT.md). Left unmapped it would
+// resolve against a Usage on a different Step, and would be cascade-deleted
+// the moment the source Step went away (exactly what `overrideStep` does to a
+// Step it re-overrides).
+function insertRemappedFormula(
+	tx: Tx,
+	formula: ScalingFormulaContent,
+	usageIdMap: Map<number, number>,
+	stepIdMap: Map<number, number>
+): void {
+	const ingredientUsageId =
+		formula.ingredientUsageId !== null ? (usageIdMap.get(formula.ingredientUsageId) ?? null) : null;
+	if (formula.ingredientUsageId !== null && ingredientUsageId === null) return;
+
+	const stepId = formula.stepId !== null ? (stepIdMap.get(formula.stepId) ?? null) : null;
+	if (formula.stepId !== null && stepId === null) return;
+
+	const otherUsageId =
+		formula.otherUsageId !== null ? (usageIdMap.get(formula.otherUsageId) ?? null) : null;
+	if (formula.otherUsageId !== null && otherUsageId === null) return;
+
+	tx.insert(scalingFormulas)
+		.values({
+			ingredientUsageId,
+			stepId,
+			kind: formula.kind,
+			ratePercent: formula.ratePercent,
+			otherUsageId,
+			perUnitAmount: formula.perUnitAmount,
+			direction: formula.direction,
+			thresholdSide: formula.thresholdSide
+		})
+		.run();
+}
+
 // Clones the Scaling Formulas that belong to a Step's content onto its copy:
 // one per copied Ingredient Usage's Quantity, plus the Step's own Duration
 // formula. `usageIdMap` maps each source Usage id to its copy.
-//
-// `otherUsageId` is the one formula field pointing at another recipe-scoped
-// row - always a Usage on the same Step (see CONTEXT.md) - so it's remapped
-// onto the copy, the same remap `revertToVersion` does. Left pointing at the
-// source Step's Usage it would resolve against a Usage that isn't on this
-// Step at all, and would be cascade-deleted the moment the source Step went
-// away (which is exactly what `overrideStep` does to a Step it re-overrides).
 function copyScalingFormulasToStep(
 	tx: Tx,
 	fromStepId: number,
@@ -160,28 +201,11 @@ function copyScalingFormulasToStep(
 			: [])
 	];
 
+	// Every Step id in play here is the source Step's, and they all land on the
+	// one copy.
+	const stepIdMap = new Map([[fromStepId, toStep.id]]);
 	for (const formula of sourceFormulas) {
-		const ingredientUsageId =
-			formula.ingredientUsageId !== null
-				? (usageIdMap.get(formula.ingredientUsageId) ?? null)
-				: null;
-		if (formula.ingredientUsageId !== null && ingredientUsageId === null) continue;
-		const otherUsageId =
-			formula.otherUsageId !== null ? (usageIdMap.get(formula.otherUsageId) ?? null) : null;
-		if (formula.otherUsageId !== null && otherUsageId === null) continue;
-
-		tx.insert(scalingFormulas)
-			.values({
-				ingredientUsageId,
-				stepId: formula.stepId !== null ? toStep.id : null,
-				kind: formula.kind,
-				ratePercent: formula.ratePercent,
-				otherUsageId,
-				perUnitAmount: formula.perUnitAmount,
-				direction: formula.direction,
-				thresholdSide: formula.thresholdSide
-			})
-			.run();
+		insertRemappedFormula(tx, formula, usageIdMap, stepIdMap);
 	}
 }
 
@@ -1203,34 +1227,11 @@ export function revertToVersion(recipeId: number, versionId: number): RecipeVers
 			usageIdMap.set(u.id, inserted.id);
 		}
 
-		// `otherUsageId` is the one Scaling Formula field that points at
-		// another recipe-scoped row (an Ingredient Usage) rather than a global
-		// or self-contained value, so it needs the same remap as everything
-		// above - dropped if its target usage didn't make it into this
-		// snapshot's Step (see CONTEXT.md: it's always a Usage on the same
-		// Step as the Duration it's attached to).
+		// Formulas hang off ids this revert has just reissued, so each one goes
+		// through the same remap as the Step-content copy path - dropped if the
+		// Usage or Step it attached to didn't make it into this snapshot.
 		for (const f of snapshot.scalingFormulas) {
-			const newIngredientUsageId =
-				f.ingredientUsageId !== null ? (usageIdMap.get(f.ingredientUsageId) ?? null) : null;
-			const newStepId = f.stepId !== null ? (stepIdMap.get(f.stepId) ?? null) : null;
-			if (f.ingredientUsageId !== null && newIngredientUsageId === null) continue;
-			if (f.stepId !== null && newStepId === null) continue;
-			const newOtherUsageId =
-				f.otherUsageId !== null ? (usageIdMap.get(f.otherUsageId) ?? null) : null;
-			if (f.otherUsageId !== null && newOtherUsageId === null) continue;
-
-			tx.insert(scalingFormulas)
-				.values({
-					ingredientUsageId: newIngredientUsageId,
-					stepId: newStepId,
-					kind: f.kind,
-					ratePercent: f.ratePercent,
-					otherUsageId: newOtherUsageId,
-					perUnitAmount: f.perUnitAmount,
-					direction: f.direction,
-					thresholdSide: f.thresholdSide
-				})
-				.run();
+			insertRemappedFormula(tx, f, usageIdMap, stepIdMap);
 		}
 
 		return recordVersion(tx, recipeId, versionId);
