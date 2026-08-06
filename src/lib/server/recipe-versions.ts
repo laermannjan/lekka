@@ -4,6 +4,7 @@ import {
 	compositions,
 	compositionSteps,
 	ingredientUsages,
+	recipes,
 	recipeVersions,
 	scalingFormulas,
 	steps,
@@ -24,15 +25,19 @@ import {
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-// A self-contained capture of a Recipe's Step pool and every Composition
-// together, plus each Usage's Alternative Ingredient and every Scaling
-// Formula on that pool - the unit `recordVersion` stores and
+// A self-contained capture of a Recipe's base servings, its Step pool and
+// every Composition together, plus each Usage's Alternative Ingredient and
+// every Scaling Formula on that pool - the unit `recordVersion` stores and
 // `revertToVersion` (in ./recipes) restores (see CONTEXT.md's Version: one
 // shared timeline, no per-Variant history). Row ids are the ones live at
 // capture time, and `revertToVersion` restores each row under the id recorded
 // here rather than renumbering it - that identity is what a Cook Log
 // Annotation pinned to a Step or Usage survives a revert by (see #51).
 export type RecipeSnapshot = {
+	// Optional only because it is: every row written before #56 is valid JSON
+	// with no `servings` key, and `revertToVersion` has to keep working on one.
+	// `captureRecipeSnapshot` always writes it.
+	servings?: number;
 	compositions: Pick<Composition, 'id' | 'name' | 'isDefault' | 'seededFromCompositionId'>[];
 	steps: (Pick<Step, 'id'> & StepContent)[];
 	compositionSteps: Pick<
@@ -44,6 +49,11 @@ export type RecipeSnapshot = {
 };
 
 export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot {
+	const recipeRow = tx
+		.select({ servings: recipes.servings })
+		.from(recipes)
+		.where(eq(recipes.id, recipeId))
+		.get();
 	const compositionRows = tx
 		.select()
 		.from(compositions)
@@ -80,6 +90,7 @@ export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot 
 		.all();
 
 	return {
+		servings: recipeRow?.servings,
 		compositions: compositionRows.map((c) => ({
 			id: c.id,
 			name: c.name,
@@ -103,10 +114,17 @@ export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot 
 }
 
 // Records a new Version at the end of the Recipe's single shared timeline,
-// capturing the pool, every Composition, and every Scaling Formula together
-// in one snapshot (see CONTEXT.md). Called at the end of every mutating
-// operation on the pool/compositions/Usages/Scaling Formulas, so the
-// timeline never has a gap where the live state doesn't match any Version.
+// capturing base servings, the pool, every Composition and every Scaling
+// Formula together in one snapshot (see CONTEXT.md).
+//
+// Every operation that changes something `RecipeSnapshot` covers has to call
+// this itself, in the same transaction as the change, or the timeline gains a
+// gap where the live state matches no Version. Nothing enforces that, and the
+// one caller that was missing - `updateServings` - stayed missing for a while
+// because this comment used to claim it was "called at the end of every
+// mutating operation" (#56). It isn't a rule about mutations in general: what
+// a Version restores is exactly what `RecipeSnapshot` holds, so a Cook, a
+// Favorite, a Collection and a Recipe's Categories deliberately record none.
 export function recordVersion(
 	tx: Tx,
 	recipeId: number,

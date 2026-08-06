@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
-import { cooks, scalingFormulas, steps } from './db/schema';
+import { cooks, recipeVersions, scalingFormulas, steps } from './db/schema';
 import { createIngredient } from './ingredients';
 import {
 	addCookLogAnnotation,
@@ -10,6 +10,7 @@ import {
 	logCook
 } from './cooks';
 import { createProfile } from './profiles';
+import type { RecipeSnapshot } from './recipe-versions';
 import {
 	BlankInstructionError,
 	BlankTitleError,
@@ -942,6 +943,15 @@ describe('recipes', () => {
 
 		it('rejects updating servings on a non-existent recipe', () => {
 			expect(() => updateServings(999999, 4)).toThrow(RecipeNotFoundError);
+		});
+
+		it('records a version when the usual servings change', () => {
+			const recipe = createRecipe('Chilli con carne', 4);
+			const versionsBefore = listRecipeVersions(recipe.id);
+
+			updateServings(recipe.id, 8);
+
+			expect(listRecipeVersions(recipe.id)).toHaveLength(versionsBefore.length + 1);
 		});
 
 		it('recomputes every usage quantity linearly by default when servings change', () => {
@@ -1974,6 +1984,99 @@ describe('recipes', () => {
 					'Banana bread',
 					'Apple pie'
 				]);
+			});
+		});
+
+		// Base servings is what default linear scaling treats as 1x (see
+		// CONTEXT.md's Scaling Formula), so it is part of the whole Recipe a
+		// Version restores: putting a Quantity back without the baseline it was
+		// authored against gives a cook a different number than that Version had.
+		// Changing it used to record no Version at all and the snapshot had no
+		// field to carry it (#56).
+		describe('base servings across a revert', () => {
+			it('carries the base servings in the version snapshot', () => {
+				const recipe = createRecipe('Chilli con carne', 4);
+
+				const [version] = listRecipeVersions(recipe.id).slice(-1);
+				expect((JSON.parse(version.snapshot) as RecipeSnapshot).servings).toEqual(4);
+			});
+
+			it('restores the base servings of the target version alongside the pool', () => {
+				const recipe = createRecipe('Chilli con carne', 4);
+				const defaultComposition = getDefaultComposition(recipe.id);
+				addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+
+				const [versionAtFour] = listRecipeVersions(recipe.id).slice(-1);
+
+				updateServings(recipe.id, 8);
+				addStep(defaultComposition.id, { instruction: 'Simmer.' });
+
+				revertToVersion(recipe.id, versionAtFour.id);
+
+				const reverted = getRecipe(recipe.id, defaultComposition.id);
+				expect(reverted?.servings).toEqual(4);
+				expect(reverted?.targetServings).toEqual(4);
+				expect(reverted?.composition.steps.map((s) => s.instruction)).toEqual(['Brown the mince.']);
+			});
+
+			it('reads a scaled quantity against the restored baseline, not the one it was changed to', () => {
+				const recipe = createRecipe('Chilli con carne', 4);
+				const defaultComposition = getDefaultComposition(recipe.id);
+				const beef = createIngredient({ baseTerm: 'beef mince' });
+				const { step } = addStep(defaultComposition.id, { instruction: 'Brown {{1}} of mince.' });
+				addIngredientUsage(step.id, {
+					ingredientId: beef.id,
+					quantityValue: 500,
+					quantityUnit: 'g'
+				});
+
+				// At this Version the line reads "500 g feeds 4", so cooking for 8
+				// asks for 1000 g.
+				const [versionAtFour] = listRecipeVersions(recipe.id).slice(-1);
+				expect(
+					getRecipe(recipe.id, defaultComposition.id, 8)?.composition.steps[0].usages[0]
+						.scaledQuantityValue
+				).toEqual(1000);
+
+				// Re-authored around a bigger pot: the same stored 500 g now feeds 8.
+				updateServings(recipe.id, 8);
+				expect(
+					getRecipe(recipe.id, defaultComposition.id, 8)?.composition.steps[0].usages[0]
+						.scaledQuantityValue
+				).toEqual(500);
+
+				revertToVersion(recipe.id, versionAtFour.id);
+
+				const atEight = getRecipe(recipe.id, defaultComposition.id, 8);
+				expect(atEight?.composition.steps[0].usages[0].scaledQuantityValue).toEqual(1000);
+				expect(atEight?.composition.steps[0].renderedInstruction).toEqual('Brown 1000 g of mince.');
+			});
+
+			it('leaves the live base servings alone when the target snapshot predates the servings field', () => {
+				const recipe = createRecipe('Chilli con carne', 4);
+				const defaultComposition = getDefaultComposition(recipe.id);
+				addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+
+				// What every recipe_versions row in an existing database looks like:
+				// valid JSON, no `servings` key at all.
+				const [target] = listRecipeVersions(recipe.id).slice(-1);
+				const legacySnapshot = JSON.parse(target.snapshot) as Record<string, unknown>;
+				delete legacySnapshot.servings;
+				db.update(recipeVersions)
+					.set({ snapshot: JSON.stringify(legacySnapshot) })
+					.where(eq(recipeVersions.id, target.id))
+					.run();
+
+				updateServings(recipe.id, 8);
+				addStep(defaultComposition.id, { instruction: 'Simmer.' });
+
+				revertToVersion(recipe.id, target.id);
+
+				// The pool comes back; the servings count the snapshot never recorded
+				// stays as the household last set it.
+				const reverted = getRecipe(recipe.id, defaultComposition.id);
+				expect(reverted?.composition.steps.map((s) => s.instruction)).toEqual(['Brown the mince.']);
+				expect(reverted?.servings).toEqual(8);
 			});
 		});
 	});
