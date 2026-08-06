@@ -708,6 +708,10 @@
 	<ol>
 		{#each data.cooks as cook (cook.id)}
 			{@const annotations = data.annotationsByCookId[cook.id] ?? []}
+			<!-- A Cook outlives the Composition it was cooked on: reverting past the
+			     Version that added a Variant removes that line, and the Cook stays in the
+			     history without it (see #51 and docs/adr/0005). -->
+			{@const cookedComposition = data.recipe.compositions.find((c) => c.id === cook.compositionId)}
 			<li>
 				<p>
 					<time datetime={cook.cookedAt}>{cook.cookedAt}</time> —
@@ -715,6 +719,13 @@
 					{#if cook.actingProfile}by {cook.actingProfile.name}{/if}
 					{#if cook.diners.length > 0}
 						— diners: {cook.diners.map((d) => d.name).join(', ')}
+					{/if}
+				</p>
+				<p>
+					{#if cookedComposition}
+						Cooked on {cookedComposition.name ?? 'Default'}.
+					{:else}
+						Cooked on a composition this recipe no longer has.
 					{/if}
 				</p>
 				{#if cook.summary}

@@ -85,6 +85,13 @@
       "when": 1785970920610,
       "tag": "0011_dark_sasquatch",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1786020721527,
+      "tag": "0012_cooks_survive_composition_removal",
+      "breakpoints": true
     }
   ]
 }
