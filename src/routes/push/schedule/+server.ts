@@ -1,5 +1,5 @@
 // Schedules (or cancels) the server-side Web Push fallback for one running
-// Step timer - see docs/decisions.md's Web Push entry and
+// Step timer - see docs/adr/0004-web-push-timer-notifications.md and
 // src/lib/server/push/scheduler.ts. The client calls POST at timer-start
 // time and DELETE when a timer is finished manually before firing.
 import { json, error } from '@sveltejs/kit';

@@ -7,7 +7,7 @@
 // and the in-memory `setTimeout` in sync.
 //
 // A plain `setTimeout` is enough here - lekka's persistent Node server
-// (see docs/decisions.md's stack entry) is exactly the kind of long-running
+// (see docs/adr/0001-sveltekit-sqlite-docker-stack.md) is exactly the kind of long-running
 // process this needs, and cook timers are minutes/hours out, nowhere near
 // setTimeout's ~24.8 day overflow ceiling.
 import { and, eq, isNull } from 'drizzle-orm';

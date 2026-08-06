@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
 // Each run starts from an empty database. The server migrates on boot (see
-// docs/decisions.md, "Schema migrations"), so clearing the file is the whole
+// docs/adr/0002-generated-migrations-applied-on-boot.md), so clearing the file is the whole
 // of the setup. It's part of the server command rather than module scope
 // here because Playwright re-evaluates this config in every worker process -
 // deleting from module scope would wipe the database out from under the

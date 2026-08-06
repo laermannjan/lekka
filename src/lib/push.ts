@@ -1,5 +1,6 @@
 // Browser-side Web Push helpers backing the "notify me while my phone is
-// locked" fallback for Step timers (see docs/decisions.md and
+// locked" fallback for Step timers (see
+// docs/adr/0004-web-push-timer-notifications.md and
 // docs/research/pwa-timer-notifications.md). Deliberately not
 // device-authenticated beyond the subscription id itself - a device that
 // opted in stores its subscription id in localStorage and hands it back
