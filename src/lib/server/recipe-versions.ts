@@ -11,9 +11,16 @@ import {
 	type CompositionStep,
 	type IngredientUsage,
 	type RecipeVersion,
-	type ScalingFormula,
 	type Step
 } from './db/schema';
+import {
+	toIngredientUsageContent,
+	toPortableScalingFormula,
+	toStepContent,
+	type IngredientUsageContent,
+	type PortableScalingFormula,
+	type StepContent
+} from './db/content';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -26,46 +33,14 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // rather than trying to resurrect the same ids.
 export type RecipeSnapshot = {
 	compositions: Pick<Composition, 'id' | 'name' | 'isDefault' | 'seededFromCompositionId'>[];
-	steps: Pick<
-		Step,
-		'id' | 'instruction' | 'durationKind' | 'durationMin' | 'durationMax' | 'durationUnit'
-	>[];
+	steps: (Pick<Step, 'id'> & StepContent)[];
 	compositionSteps: Pick<
 		CompositionStep,
 		'compositionId' | 'position' | 'poolStepId' | 'overrideStepId'
 	>[];
-	ingredientUsages: Pick<
-		IngredientUsage,
-		| 'id'
-		| 'stepId'
-		| 'ingredientId'
-		| 'position'
-		| 'quantityValue'
-		| 'quantityUnit'
-		| 'prepAttribute'
-		| 'alternativeIngredientId'
-		| 'note'
-	>[];
-	scalingFormulas: ScalingFormulaContent[];
+	ingredientUsages: (Pick<IngredientUsage, 'id' | 'stepId'> & IngredientUsageContent)[];
+	scalingFormulas: PortableScalingFormula[];
 };
-
-// Everything a Scaling Formula carries apart from its own identity: the two
-// recipe-scoped ids it hangs off, plus the template's own fields. Named
-// because both places that recreate a formula on new rows - a snapshot
-// revert and a Step-content copy - have to move exactly this column set, and
-// a column added here has to reach both or the new field gets silently
-// dropped on one path (see `insertRemappedFormula` in recipes.ts).
-export type ScalingFormulaContent = Pick<
-	ScalingFormula,
-	| 'ingredientUsageId'
-	| 'stepId'
-	| 'kind'
-	| 'ratePercent'
-	| 'otherUsageId'
-	| 'perUnitAmount'
-	| 'direction'
-	| 'thresholdSide'
->;
 
 export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot {
 	const compositionRows = tx
@@ -75,36 +50,33 @@ export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot 
 		.all();
 	const stepRows = tx.select().from(steps).where(eq(steps.recipeId, recipeId)).all();
 
+	// None of the `inArray`s below needs an empty-list guard: drizzle compiles
+	// one over an empty array to `false`, which is exactly the intent.
 	const compositionIds = compositionRows.map((c) => c.id);
-	const compositionStepRows =
-		compositionIds.length === 0
-			? []
-			: tx
-					.select()
-					.from(compositionSteps)
-					.where(inArray(compositionSteps.compositionId, compositionIds))
-					.all();
+	const compositionStepRows = tx
+		.select()
+		.from(compositionSteps)
+		.where(inArray(compositionSteps.compositionId, compositionIds))
+		.all();
 
 	const stepIds = stepRows.map((s) => s.id);
-	const usageRows =
-		stepIds.length === 0
-			? []
-			: tx.select().from(ingredientUsages).where(inArray(ingredientUsages.stepId, stepIds)).all();
+	const usageRows = tx
+		.select()
+		.from(ingredientUsages)
+		.where(inArray(ingredientUsages.stepId, stepIds))
+		.all();
 
 	const usageIds = usageRows.map((u) => u.id);
-	const scalingFormulaRows =
-		stepIds.length === 0 && usageIds.length === 0
-			? []
-			: tx
-					.select()
-					.from(scalingFormulas)
-					.where(
-						or(
-							inArray(scalingFormulas.stepId, stepIds),
-							inArray(scalingFormulas.ingredientUsageId, usageIds)
-						)
-					)
-					.all();
+	const scalingFormulaRows = tx
+		.select()
+		.from(scalingFormulas)
+		.where(
+			or(
+				inArray(scalingFormulas.stepId, stepIds),
+				inArray(scalingFormulas.ingredientUsageId, usageIds)
+			)
+		)
+		.all();
 
 	return {
 		compositions: compositionRows.map((c) => ({
@@ -113,14 +85,7 @@ export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot 
 			isDefault: c.isDefault,
 			seededFromCompositionId: c.seededFromCompositionId
 		})),
-		steps: stepRows.map((s) => ({
-			id: s.id,
-			instruction: s.instruction,
-			durationKind: s.durationKind,
-			durationMin: s.durationMin,
-			durationMax: s.durationMax,
-			durationUnit: s.durationUnit
-		})),
+		steps: stepRows.map((s) => ({ id: s.id, ...toStepContent(s) })),
 		compositionSteps: compositionStepRows.map((cs) => ({
 			compositionId: cs.compositionId,
 			position: cs.position,
@@ -130,24 +95,9 @@ export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot 
 		ingredientUsages: usageRows.map((u) => ({
 			id: u.id,
 			stepId: u.stepId,
-			ingredientId: u.ingredientId,
-			position: u.position,
-			quantityValue: u.quantityValue,
-			quantityUnit: u.quantityUnit,
-			prepAttribute: u.prepAttribute,
-			alternativeIngredientId: u.alternativeIngredientId,
-			note: u.note
+			...toIngredientUsageContent(u)
 		})),
-		scalingFormulas: scalingFormulaRows.map((f) => ({
-			ingredientUsageId: f.ingredientUsageId,
-			stepId: f.stepId,
-			kind: f.kind,
-			ratePercent: f.ratePercent,
-			otherUsageId: f.otherUsageId,
-			perUnitAmount: f.perUnitAmount,
-			direction: f.direction,
-			thresholdSide: f.thresholdSide
-		}))
+		scalingFormulas: scalingFormulaRows.map(toPortableScalingFormula)
 	};
 }
 

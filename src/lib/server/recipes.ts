@@ -23,6 +23,14 @@ import {
 	type Step
 } from './db/schema';
 import {
+	hasDuration,
+	toIngredientUsageContent,
+	toScalingFormulaContent,
+	toStepContent,
+	type PortableScalingFormula,
+	type StepContent
+} from './db/content';
+import {
 	computeScaledDuration,
 	computeScaledQuantity,
 	type DurationScalingFormula,
@@ -32,7 +40,7 @@ import {
 	getDurationScalingFormulasByStepIds,
 	getQuantityScalingFormulasByUsageIds
 } from './scaling';
-import { recordVersion, type RecipeSnapshot, type ScalingFormulaContent } from './recipe-versions';
+import { recordVersion, type RecipeSnapshot } from './recipe-versions';
 
 // A second reference to `ingredients`, so a Usage's primary Ingredient and
 // its optional Alternative Ingredient (see CONTEXT.md) can both be
@@ -67,20 +75,10 @@ function validateServings(servings: number): number {
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-function insertStep(
-	tx: Tx,
-	recipeId: number,
-	content: {
-		instruction: string;
-		durationKind: DurationKind | null;
-		durationMin: number | null;
-		durationMax: number | null;
-		durationUnit: string | null;
-	}
-): Step {
+function insertStep(tx: Tx, recipeId: number, content: StepContent): Step {
 	return tx
 		.insert(steps)
-		.values({ recipeId, ...content })
+		.values({ recipeId, ...toStepContent(content) })
 		.returning()
 		.get();
 }
@@ -93,37 +91,38 @@ function insertStep(
 // is the sole override unit and an override owns its own Usages outright (see
 // CONTEXT.md's Composition: an override carries instruction, Duration and
 // Usages together, and a Scaling Formula is part of that content).
-function copyUsagesAndFormulasToStep(tx: Tx, fromStepId: number, toStep: Step): void {
+function copyUsagesAndFormulasToStep(tx: Tx, fromStep: Step, toStep: Step): void {
 	const sourceUsages = tx
 		.select()
 		.from(ingredientUsages)
-		.where(eq(ingredientUsages.stepId, fromStepId))
+		.where(eq(ingredientUsages.stepId, fromStep.id))
 		.orderBy(asc(ingredientUsages.position))
 		.all();
 
-	// Inserted one at a time rather than as a single batch: each copy's new id
-	// is needed both to key its own Scaling Formula to and to remap a Duration
-	// formula's `otherUsageId` onto.
+	// Each copy's new id is needed twice over - to key its own Scaling Formula
+	// to, and to remap a Duration formula's `otherUsageId` onto - so the copies
+	// have to be matched back to their sources one for one. They're read back
+	// by id rather than from `.returning()`, which gives no row order on a
+	// multi-row insert: `toStep` is a Step this transaction just created, so
+	// the Usages below are its only ones, and AUTOINCREMENT hands out strictly
+	// increasing ids in the order the rows were written.
 	const usageIdMap = new Map<number, number>();
-	for (const usage of sourceUsages) {
-		const inserted = tx
-			.insert(ingredientUsages)
-			.values({
-				stepId: toStep.id,
-				ingredientId: usage.ingredientId,
-				position: usage.position,
-				quantityValue: usage.quantityValue,
-				quantityUnit: usage.quantityUnit,
-				prepAttribute: usage.prepAttribute,
-				alternativeIngredientId: usage.alternativeIngredientId,
-				note: usage.note
-			})
-			.returning()
-			.get();
-		usageIdMap.set(usage.id, inserted.id);
+	if (sourceUsages.length > 0) {
+		tx.insert(ingredientUsages)
+			.values(
+				sourceUsages.map((usage) => ({ stepId: toStep.id, ...toIngredientUsageContent(usage) }))
+			)
+			.run();
+		const copies = tx
+			.select({ id: ingredientUsages.id })
+			.from(ingredientUsages)
+			.where(eq(ingredientUsages.stepId, toStep.id))
+			.orderBy(asc(ingredientUsages.id))
+			.all();
+		sourceUsages.forEach((usage, index) => usageIdMap.set(usage.id, copies[index].id));
 	}
 
-	copyScalingFormulasToStep(tx, fromStepId, toStep, usageIdMap);
+	copyScalingFormulasToStep(tx, fromStep, toStep, sourceUsages, usageIdMap);
 }
 
 // Recreates one Scaling Formula against a fresh set of rows, translating each
@@ -136,7 +135,10 @@ function copyUsagesAndFormulasToStep(tx: Tx, fromStepId: number, toStep: Step): 
 // the same remap, and keeping that in one place is what stops a path from
 // quietly dropping a field. This omission has already shipped twice - commit
 // 20f1080 on the Version path, and the Step-copy path this helper was
-// extracted from.
+// extracted from. The same goes for the "a Duration formula needs a Duration"
+// invariant below: it's enforced here rather than at each call site, so a path
+// added later can't route through the remap and still land a formula on a
+// Duration-less Step.
 //
 // `otherUsageId` is the one field pointing at another recipe-scoped row -
 // always a Usage on the same Step (see CONTEXT.md). Left unmapped it would
@@ -145,7 +147,7 @@ function copyUsagesAndFormulasToStep(tx: Tx, fromStepId: number, toStep: Step): 
 // Step it re-overrides).
 function insertRemappedFormula(
 	tx: Tx,
-	formula: ScalingFormulaContent,
+	formula: PortableScalingFormula,
 	usageIdMap: Map<number, number>,
 	stepIdMap: Map<number, number>
 ): void {
@@ -160,16 +162,22 @@ function insertRemappedFormula(
 		formula.otherUsageId !== null ? (usageIdMap.get(formula.otherUsageId) ?? null) : null;
 	if (formula.otherUsageId !== null && otherUsageId === null) return;
 
+	// A Duration formula only lands on a row that has a Duration for it to
+	// scale - an override may drop the Duration the source Step had, and a
+	// formula on a Duration-less Step is a state `setDurationScalingFormula`
+	// refuses to create in the first place (see CONTEXT.md: a formula is part
+	// of the thing it scales and doesn't outlive it).
+	if (stepId !== null) {
+		const targetStep = tx.select().from(steps).where(eq(steps.id, stepId)).get();
+		if (!targetStep || !hasDuration(targetStep)) return;
+	}
+
 	tx.insert(scalingFormulas)
 		.values({
 			ingredientUsageId,
 			stepId,
-			kind: formula.kind,
-			ratePercent: formula.ratePercent,
 			otherUsageId,
-			perUnitAmount: formula.perUnitAmount,
-			direction: formula.direction,
-			thresholdSide: formula.thresholdSide
+			...toScalingFormulaContent(formula)
 		})
 		.run();
 }
@@ -179,31 +187,35 @@ function insertRemappedFormula(
 // formula. `usageIdMap` maps each source Usage id to its copy.
 function copyScalingFormulasToStep(
 	tx: Tx,
-	fromStepId: number,
+	fromStep: Step,
 	toStep: Step,
+	sourceUsages: IngredientUsage[],
 	usageIdMap: Map<number, number>
 ): void {
-	const sourceUsageIds = [...usageIdMap.keys()];
-	const sourceFormulas = [
-		...(sourceUsageIds.length === 0
-			? []
-			: tx
-					.select()
-					.from(scalingFormulas)
-					.where(inArray(scalingFormulas.ingredientUsageId, sourceUsageIds))
-					.all()),
-		// A Duration formula only travels to a copy that has a Duration for it
-		// to scale - an override may drop the Duration the source Step had, and
-		// a formula on a Duration-less Step is something `setDurationScalingFormula`
-		// refuses to create in the first place.
-		...(toStep.durationKind
-			? tx.select().from(scalingFormulas).where(eq(scalingFormulas.stepId, fromStepId)).all()
-			: [])
-	];
+	const quantityFormulas = getQuantityScalingFormulasByUsageIds(
+		sourceUsages.map((usage) => usage.id),
+		tx
+	);
+	const durationFormula = getDurationScalingFormulasByStepIds([fromStep.id], tx).get(fromStep.id);
+
+	const sourceFormulas = [...quantityFormulas.values()];
+	// "Vs. another Usage" moves the Duration by a per-unit amount expressed in
+	// that Duration's own unit, so it means something different the moment the
+	// unit does - an override re-entering "4 hours" where the source said "240
+	// minutes" would otherwise keep a per-minute amount and read it as
+	// per-hour. There's no unit conversion to fall back on (a Duration's unit
+	// is free text), so the rule is dropped rather than silently reinterpreted,
+	// the same way it's dropped when the Duration goes away entirely.
+	if (
+		durationFormula &&
+		(durationFormula.kind !== 'vs_other_usage' || toStep.durationUnit === fromStep.durationUnit)
+	) {
+		sourceFormulas.push(durationFormula);
+	}
 
 	// Every Step id in play here is the source Step's, and they all land on the
 	// one copy.
-	const stepIdMap = new Map([[fromStepId, toStep.id]]);
+	const stepIdMap = new Map([[fromStep.id, toStep.id]]);
 	for (const formula of sourceFormulas) {
 		insertRemappedFormula(tx, formula, usageIdMap, stepIdMap);
 	}
@@ -401,22 +413,20 @@ export function createVariant(
 			.all();
 
 		for (const row of seedRows) {
+			// A slot whose override Step has gone missing still seeds as a slot -
+			// it falls back to the pool Step it references, rather than dropping
+			// out of the Variant and leaving a hole in the position sequence.
+			// Belt and braces: `overrideStepId` cascades, so deleting the Step
+			// takes the slot with it and this shouldn't be reachable at all.
+			const sourceOverride =
+				row.overrideStepId === null
+					? undefined
+					: tx.select().from(steps).where(eq(steps.id, row.overrideStepId)).get();
+
 			let overrideStepId: number | null = null;
-			if (row.overrideStepId !== null) {
-				const sourceOverride = tx
-					.select()
-					.from(steps)
-					.where(eq(steps.id, row.overrideStepId))
-					.get();
-				if (!sourceOverride) continue;
-				const copiedOverride = insertStep(tx, recipeId, {
-					instruction: sourceOverride.instruction,
-					durationKind: sourceOverride.durationKind,
-					durationMin: sourceOverride.durationMin,
-					durationMax: sourceOverride.durationMax,
-					durationUnit: sourceOverride.durationUnit
-				});
-				copyUsagesAndFormulasToStep(tx, row.overrideStepId, copiedOverride);
+			if (sourceOverride) {
+				const copiedOverride = insertStep(tx, recipeId, sourceOverride);
+				copyUsagesAndFormulasToStep(tx, sourceOverride, copiedOverride);
 				overrideStepId = copiedOverride.id;
 			}
 
@@ -573,7 +583,14 @@ export function overrideStep(
 		// Copied before the previous override Step is dropped below, and with
 		// every Usage reference remapped onto this copy, so nothing the copy
 		// owns is left pointing into the Step about to be deleted.
-		copyUsagesAndFormulasToStep(tx, previousContentStepId, overrideStepRow);
+		const previousContentStep = tx
+			.select()
+			.from(steps)
+			.where(eq(steps.id, previousContentStepId))
+			.get();
+		if (previousContentStep) {
+			copyUsagesAndFormulasToStep(tx, previousContentStep, overrideStepRow);
+		}
 
 		const previousOverrideStepId = row.overrideStepId;
 
@@ -966,7 +983,7 @@ function scaleDurations(
 	>();
 	for (const step of contentSteps) {
 		const formulaRow = durationFormulas.get(step.id);
-		if (step.durationMin === null) {
+		if (!hasDuration(step)) {
 			result.set(step.id, { min: null, max: null, formula: formulaRow ?? null });
 			continue;
 		}
@@ -1159,13 +1176,7 @@ export function revertToVersion(recipeId: number, versionId: number): RecipeVers
 
 		const stepIdMap = new Map<number, number>();
 		for (const s of snapshot.steps) {
-			const inserted = insertStep(tx, recipeId, {
-				instruction: s.instruction,
-				durationKind: s.durationKind,
-				durationMin: s.durationMin,
-				durationMax: s.durationMax,
-				durationUnit: s.durationUnit
-			});
+			const inserted = insertStep(tx, recipeId, s);
 			stepIdMap.set(s.id, inserted.id);
 		}
 
@@ -1209,19 +1220,7 @@ export function revertToVersion(recipeId: number, versionId: number): RecipeVers
 			if (newStepId === undefined) continue;
 			const inserted = tx
 				.insert(ingredientUsages)
-				.values({
-					stepId: newStepId,
-					ingredientId: u.ingredientId,
-					position: u.position,
-					quantityValue: u.quantityValue,
-					quantityUnit: u.quantityUnit,
-					prepAttribute: u.prepAttribute,
-					// The Alternative Ingredient is a global Ingredient reference,
-					// not a recipe-scoped row, so it needs no remapping - unlike
-					// `otherUsageId` on a Scaling Formula below.
-					alternativeIngredientId: u.alternativeIngredientId,
-					note: u.note
-				})
+				.values({ stepId: newStepId, ...toIngredientUsageContent(u) })
 				.returning()
 				.get();
 			usageIdMap.set(u.id, inserted.id);

@@ -1323,6 +1323,44 @@ describe('recipes', () => {
 			).toEqual([]);
 		});
 
+		it('drops a vs_other_usage duration formula when the override changes the duration unit', () => {
+			const { recipe, defaultComposition, compositionStep } = starterVsRiseTime();
+
+			// the same 4 hours the source Step stated as 240 minutes: the rule's
+			// "3 per gram short" was authored in minutes and means nothing per hour
+			const overridden = overrideStep(compositionStep.id, {
+				instruction: 'Let {{1}} rise, covered.',
+				duration: { kind: 'wait', min: 4, unit: 'hours' }
+			});
+
+			const after = getRecipe(recipe.id, defaultComposition.id, 2);
+			const copiedStep = after!.composition.steps[0];
+			expect(copiedStep.durationScalingFormula).toBeNull();
+			// the duration stays as written rather than picking up 3 hours per gram
+			expect(copiedStep.scaledDurationMin).toEqual(4);
+			expect(
+				db.select().from(scalingFormulas).where(eq(scalingFormulas.stepId, overridden.id)).all()
+			).toEqual([]);
+		});
+
+		it('carries a unit-independent duration formula through a duration unit change', () => {
+			const { recipe, defaultComposition, step, compositionStep } = saltAtHalfRate();
+			setDurationScalingFormula(step.id, { kind: 'rate_vs_servings', ratePercent: 100 });
+
+			const overridden = overrideStep(compositionStep.id, {
+				instruction: 'Season the pot generously.',
+				duration: { kind: 'wait', min: 1, unit: 'hours' }
+			});
+
+			const after = getRecipe(recipe.id, defaultComposition.id, 8);
+			expect(after?.composition.steps[0].scaledDurationMin).toEqual(2);
+			expect(after?.composition.steps[0].durationScalingFormula).toMatchObject({
+				kind: 'rate_vs_servings',
+				ratePercent: 100,
+				stepId: overridden.id
+			});
+		});
+
 		it('carries the scaling formulas of an overridden slot into a variant seeded from it', () => {
 			const { recipe, defaultComposition, step, compositionStep } = saltAtHalfRate();
 			setDurationScalingFormula(step.id, { kind: 'rate_vs_servings', ratePercent: 100 });
@@ -1558,6 +1596,50 @@ describe('recipes', () => {
 			expect(restoredStep?.usages[0].scalingFormula?.kind).toEqual('rate_vs_servings');
 			expect(restoredStep?.usages[0].scalingFormula?.ratePercent).toEqual(50);
 			expect(restoredStep?.durationScalingFormula?.kind).toEqual('fixed');
+		});
+
+		// Every revert reissues the ids a formula hangs off, so `otherUsageId`
+		// has to be remapped onto the revived Usage the same way `stepId` and
+		// `ingredientUsageId` are - left alone it would point at a Usage this
+		// revert has already deleted.
+		it('reverting remaps a vs_other_usage duration formula onto the revived usage', () => {
+			const recipe = createRecipe('Sourdough', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, {
+				instruction: 'Let {{1}} rise.',
+				duration: { kind: 'wait', min: 240, unit: 'minutes' }
+			});
+			const starter = createIngredient({ baseTerm: 'sourdough starter' });
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: starter.id,
+				quantityValue: 100,
+				quantityUnit: 'g'
+			});
+			setDurationScalingFormula(step.id, {
+				kind: 'vs_other_usage',
+				otherUsageId: usage.id,
+				perUnitAmount: 3,
+				direction: 'increase',
+				thresholdSide: 'short'
+			});
+
+			const [versionWithFormula] = listRecipeVersions(recipe.id).slice(-1);
+
+			removeDurationScalingFormula(step.id);
+
+			revertToVersion(recipe.id, versionWithFormula.id);
+
+			const restoredStep = getRecipe(recipe.id, defaultComposition.id, 2)?.composition.steps[0];
+			expect(restoredStep?.durationScalingFormula).toMatchObject({
+				kind: 'vs_other_usage',
+				perUnitAmount: 3,
+				stepId: restoredStep!.id,
+				// the revived usage's new id, not the one captured in the snapshot
+				otherUsageId: restoredStep!.usages[0].id
+			});
+			expect(restoredStep!.usages[0].id).not.toEqual(usage.id);
+			// and it still computes: 100g -> 50g at half servings, 3 minutes a gram
+			expect(restoredStep?.scaledDurationMin).toEqual(240 + 3 * 50);
 		});
 
 		it('reverting appends a new version rather than truncating history', () => {
