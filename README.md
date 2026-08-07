@@ -48,3 +48,16 @@ docker compose run --rm --user root lekka chown -R node:node /app/data
 ```
 
 If you deploy behind a different host/port (a reverse proxy, a non-default port, a real domain), update the `ORIGIN` env var in `docker-compose.yml` to match — SvelteKit's Node adapter uses it to validate form submissions and rejects them otherwise.
+
+### Environment variables
+
+Defaults are the ones the Docker image sets (see `Dockerfile`); running the built server directly gets whatever you export yourself.
+
+| Variable          | Default                                                           | What it does                                                                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ORIGIN`          | (none)                                                            | The URL you reach the instance at, scheme + host + port. Required: without it every form submission is rejected as cross-site.                                                                     |
+| `DATABASE_URL`    | `/app/data/lekka.db`                                              | Path to the SQLite file. Keep it on the mounted volume.                                                                                                                                            |
+| `PORT`            | `3000`                                                            | Port the server listens on.                                                                                                                                                                        |
+| `BODY_SIZE_LIMIT` | `64M` (set by the image; `512K` if you run `node build` yourself) | Largest request body accepted. Restoring a backup uploads the whole export in one request, so this has to clear your dump's size; raise it if a restore comes back saying the export is too large. |
+
+If a reverse proxy sits in front of the instance, its own upload limit applies too (`client_max_body_size` in nginx, for example) and has to be raised alongside `BODY_SIZE_LIMIT`.
