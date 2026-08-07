@@ -15,6 +15,15 @@
 -- rename, by explicit column list. Cook ids are preserved by the copy, so the
 -- restored rows point at exactly the same Cooks. `src/lib/server/db/migrations.spec.ts`
 -- holds the whole chain to this.
+--
+-- Both children are emptied explicitly before being restored, rather than
+-- leaning on the drop having cascaded them empty: that cascade is exactly what
+-- the pragma turns off, and this file also runs where the pragma does take
+-- effect - `pnpm db:migrate`, or applying it by hand through the `sqlite3` CLI,
+-- where foreign keys are off by default. Without the deletes those runs
+-- re-insert rows that never left, and the restore aborts on
+-- `cook_diners`'s primary key. The deletes are a no-op under the pragma-on
+-- path this actually boots under.
 CREATE TABLE `__new_cooks` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`recipe_id` integer NOT NULL,
@@ -36,6 +45,8 @@ CREATE TABLE `__kept_cook_diners` AS SELECT "cook_id", "profile_id" FROM `cook_d
 CREATE TABLE `__kept_cook_log_annotations` AS SELECT "id", "cook_id", "step_id", "ingredient_usage_id", "note", "created_at" FROM `cook_log_annotations`;--> statement-breakpoint
 DROP TABLE `cooks`;--> statement-breakpoint
 ALTER TABLE `__new_cooks` RENAME TO `cooks`;--> statement-breakpoint
+DELETE FROM `cook_diners`;--> statement-breakpoint
+DELETE FROM `cook_log_annotations`;--> statement-breakpoint
 INSERT INTO `cook_diners`("cook_id", "profile_id") SELECT "cook_id", "profile_id" FROM `__kept_cook_diners`;--> statement-breakpoint
 INSERT INTO `cook_log_annotations`("id", "cook_id", "step_id", "ingredient_usage_id", "note", "created_at") SELECT "id", "cook_id", "step_id", "ingredient_usage_id", "note", "created_at" FROM `__kept_cook_log_annotations`;--> statement-breakpoint
 DROP TABLE `__kept_cook_diners`;--> statement-breakpoint
