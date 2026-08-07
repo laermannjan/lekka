@@ -11,7 +11,10 @@ import {
 	type ScalingDirection,
 	type ScalingThresholdSide
 } from './db/schema';
+import { hasDuration } from './db/content';
 import { recordVersion } from './recipe-versions';
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export class InvalidScalingFormulaError extends Error {}
 export class ScalingUsageNotFoundError extends Error {}
@@ -131,7 +134,7 @@ export function setDurationScalingFormula(
 
 	const step = db.select().from(steps).where(eq(steps.id, stepId)).get();
 	if (!step) throw new ScalingStepNotFoundError(`No step ${stepId}`);
-	if (!step.durationKind) {
+	if (!hasDuration(step)) {
 		throw new InvalidScalingFormulaError(
 			'This step has no Duration to attach a Scaling Formula to'
 		);
@@ -185,12 +188,15 @@ export function removeDurationScalingFormula(stepId: number): void {
 }
 
 // Every Quantity Scaling Formula among the given Usages, keyed by Usage id.
+// Reads through `handle`, so the read path (plain `db`) and the paths that
+// copy a Step's content mid-transaction share one definition of "the
+// formulas belonging to these Usages".
 export function getQuantityScalingFormulasByUsageIds(
-	usageIds: number[]
+	usageIds: number[],
+	handle: Tx | typeof db = db
 ): Map<number, ScalingFormula> {
 	const result = new Map<number, ScalingFormula>();
-	if (usageIds.length === 0) return result;
-	const rows = db
+	const rows = handle
 		.select()
 		.from(scalingFormulas)
 		.where(inArray(scalingFormulas.ingredientUsageId, usageIds))
@@ -203,11 +209,11 @@ export function getQuantityScalingFormulasByUsageIds(
 
 // Every Duration Scaling Formula among the given Steps, keyed by Step id.
 export function getDurationScalingFormulasByStepIds(
-	stepIds: number[]
+	stepIds: number[],
+	handle: Tx | typeof db = db
 ): Map<number, ScalingFormula> {
 	const result = new Map<number, ScalingFormula>();
-	if (stepIds.length === 0) return result;
-	const rows = db
+	const rows = handle
 		.select()
 		.from(scalingFormulas)
 		.where(inArray(scalingFormulas.stepId, stepIds))
