@@ -41,4 +41,10 @@ docker compose up --build
 
 This builds the production image, runs it on `http://localhost:3000`, and persists the SQLite database in a named volume (`lekka-data`) mounted at `/app/data`.
 
+The container runs as the unprivileged `node` user (uid 1000). A volume created by an earlier, root-running build of this image is owned by root, so the server can't write to it after upgrading - it will fail with `SQLITE_READONLY` and, under `restart: unless-stopped`, crash-loop. Fix the ownership once, then start normally:
+
+```sh
+docker compose run --rm --user root lekka chown -R node:node /app/data
+```
+
 If you deploy behind a different host/port (a reverse proxy, a non-default port, a real domain), update the `ORIGIN` env var in `docker-compose.yml` to match — SvelteKit's Node adapter uses it to validate form submissions and rejects them otherwise.

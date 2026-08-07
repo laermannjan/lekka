@@ -12,7 +12,10 @@
 	     undefined until the app is added to the Home Screen with a manifest
 	     (see docs/research/pwa-timer-notifications.md). -->
 	<link rel="manifest" href="/manifest.json" />
-	<link rel="apple-touch-icon" href="/icon.svg" />
+	<!-- Must be a raster format: iOS silently ignores an SVG apple-touch-icon
+	     and falls back to a screenshot of the page, which undermines the
+	     Home-Screen install that Web Push depends on. -->
+	<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 	<meta name="apple-mobile-web-app-capable" content="yes" />
 	<meta name="theme-color" content="#ff3e00" />
 </svelte:head>
