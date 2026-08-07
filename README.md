@@ -39,9 +39,7 @@ docker compose up --build
 
 This builds the production image, runs it on `http://localhost:3000`, and persists the SQLite database in a named volume (`lekka-data`) mounted at `/app/data`.
 
-The container runs as the unprivileged `node` user (uid 1000). A volume created
-by an earlier, root-running build of this image is owned by root, so the server
-can't write to it after upgrading. Fix it once, then start normally:
+The container runs as the unprivileged `node` user (uid 1000). A volume created by an earlier, root-running build of this image is owned by root, so the server can't write to it after upgrading - it will fail with `SQLITE_READONLY` and, under `restart: unless-stopped`, crash-loop. Fix the ownership once, then start normally:
 
 ```sh
 docker compose run --rm --user root lekka chown -R node:node /app/data

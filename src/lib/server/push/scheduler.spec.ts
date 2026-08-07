@@ -129,10 +129,10 @@ describe('timer push scheduler', () => {
 		expect(db.select().from(scheduledPushes).all()).toHaveLength(0);
 	});
 
-	it('accepts a fire time exactly at the timer ceiling', () => {
+	it('accepts a fire time exactly at the timer ceiling, and arms it', async () => {
 		const subscription = subscribe();
 
-		const row = scheduleTimerPush({
+		scheduleTimerPush({
 			subscriptionId: subscription.id,
 			timerId: 'step-1',
 			title: 'Timer done',
@@ -141,10 +141,15 @@ describe('timer push scheduler', () => {
 		});
 
 		expect(db.select().from(scheduledPushes).all()).toHaveLength(1);
-		expect(row.firesAt).toBeGreaterThan(Date.now());
+
+		await vi.advanceTimersByTimeAsync(MAX_TIMER_PUSH_DELAY_MS - 1);
+		expect(sendNotification).not.toHaveBeenCalled();
+
+		await vi.advanceTimersByTimeAsync(1);
+		expect(sendNotification).toHaveBeenCalledTimes(1);
 	});
 
-	it('drops an un-representable pending row on init rather than firing it', async () => {
+	it('leaves an un-representable pending row un-armed on init rather than firing it', async () => {
 		const subscription = subscribe();
 		db.insert(scheduledPushes)
 			.values({
@@ -160,7 +165,9 @@ describe('timer push scheduler', () => {
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(sendNotification).not.toHaveBeenCalled();
-		expect(db.select().from(scheduledPushes).all()).toHaveLength(0);
+		// The row is the durable source of truth - it stays put rather than
+		// being destroyed over what may be a temporary clock skew.
+		expect(db.select().from(scheduledPushes).all()).toHaveLength(1);
 	});
 
 	it('removes the subscription on a 410 Gone response', async () => {

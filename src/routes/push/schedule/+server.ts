@@ -7,7 +7,7 @@ import type { RequestHandler } from './$types';
 import {
 	cancelTimerPush,
 	scheduleTimerPush,
-	MAX_TIMER_PUSH_DELAY_MS
+	isWithinTimerCeiling
 } from '$lib/server/push/scheduler';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -25,7 +25,9 @@ export const POST: RequestHandler = async ({ request }) => {
 	// A fire time past the scheduler's ceiling can't be represented by the
 	// underlying timer and would fire immediately - reject it outright rather
 	// than notifying the user now for a timer they set for far in the future.
-	if (firesAt - Date.now() > MAX_TIMER_PUSH_DELAY_MS) {
+	// `scheduleTimerPush` throws on this too; checking here turns it into a
+	// 400 instead of an uncaught error surfacing as a 500.
+	if (!isWithinTimerCeiling(firesAt)) {
 		error(400, 'firesAt is too far in the future');
 	}
 
