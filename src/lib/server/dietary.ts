@@ -81,17 +81,20 @@ export function getUsageIdsWithClearingAlternative(
 	usages: readonly { id: number; alternativeIngredientId: number | null }[],
 	avoidTagIds: Set<number>
 ): Set<number> {
-	const withAlternative = usages.filter((usage) => usage.alternativeIngredientId != null);
+	const withAlternative = usages.filter(
+		(usage): usage is { id: number; alternativeIngredientId: number } =>
+			usage.alternativeIngredientId != null
+	);
 	if (withAlternative.length === 0) return new Set();
 	if (avoidTagIds.size === 0) return new Set(withAlternative.map((usage) => usage.id));
 
 	const flaggedByIngredientId = getFlaggedTagsByIngredientIds(
-		withAlternative.map((usage) => usage.alternativeIngredientId as number),
+		withAlternative.map((usage) => usage.alternativeIngredientId),
 		avoidTagIds
 	);
 	return new Set(
 		withAlternative
-			.filter((usage) => !flaggedByIngredientId.has(usage.alternativeIngredientId as number))
+			.filter((usage) => !flaggedByIngredientId.has(usage.alternativeIngredientId))
 			.map((usage) => usage.id)
 	);
 }

@@ -388,12 +388,15 @@
 								{#if flaggedTags.length > 0}
 									<p role="alert">
 										⚠ contains {flaggedTags.map((t) => t.name).join(', ')} — avoided by a selected diner.
-										{#if usage.alternativeIngredient && clearingAlternativeUsageIds.has(usage.id)}
-											Suggested swap: {usage.alternativeIngredient
-												.baseTerm}{#if usage.alternativeIngredient.descriptors}
-												({usage.alternativeIngredient.descriptors}){/if}.
-										{:else if usage.alternativeIngredient}
-											The declared alternative is avoided too — no swap suggested.
+										{#if usage.alternativeIngredient}
+											{#if clearingAlternativeUsageIds.has(usage.id)}
+												Suggested swap: {usage.alternativeIngredient
+													.baseTerm}{#if usage.alternativeIngredient.descriptors}
+													({usage.alternativeIngredient.descriptors}){/if}.
+											{:else}
+												The declared alternative is also avoided by a selected diner, so no swap is
+												suggested.
+											{/if}
 										{:else}
 											No alternative declared for this usage.
 										{/if}
