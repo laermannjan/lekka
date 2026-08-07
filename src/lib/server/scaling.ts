@@ -52,6 +52,9 @@ function validateFormulaInput(
 				'The "vs. another Usage" template only applies to a Duration'
 			);
 		}
+		if (!Number.isInteger(input.otherUsageId) || input.otherUsageId < 1) {
+			throw new InvalidScalingFormulaError('Pick a usage to reference');
+		}
 		if (!Number.isFinite(input.perUnitAmount) || input.perUnitAmount < 0) {
 			throw new InvalidScalingFormulaError('Per-unit amount must be a non-negative number');
 		}
