@@ -5,6 +5,7 @@ import {
 	getAvoidTagIdsForProfiles,
 	getAvoidTagsForProfile,
 	getFlaggedTagsByIngredientIds,
+	getUsageIdsWithClearingAlternative,
 	setProfileAvoidTags
 } from './dietary';
 
@@ -111,5 +112,96 @@ describe('dietary', () => {
 	it('returns empty when no tags are avoided', () => {
 		const milk = makeIngredient('Milk');
 		expect(getFlaggedTagsByIngredientIds([milk.id], new Set())).toEqual(new Map());
+	});
+
+	function tagIngredient(ingredientId: number, tagId: number) {
+		db.insert(ingredientTags).values({ ingredientId, tagId }).run();
+	}
+
+	describe('clearing alternatives', () => {
+		it('suggests an alternative whose own tags clear the flag', () => {
+			const dairy = makeTag('dairy');
+			const butter = makeIngredient('Butter');
+			const oil = makeIngredient('Olive oil');
+			tagIngredient(butter.id, dairy.id);
+
+			const result = getUsageIdsWithClearingAlternative(
+				[{ id: 1, alternativeIngredientId: oil.id }],
+				new Set([dairy.id])
+			);
+
+			expect(result).toEqual(new Set([1]));
+		});
+
+		it('does not suggest an alternative carrying the same avoided tag', () => {
+			const dairy = makeTag('dairy');
+			const butter = makeIngredient('Butter');
+			const margarine = makeIngredient('Margarine');
+			tagIngredient(butter.id, dairy.id);
+			tagIngredient(margarine.id, dairy.id);
+
+			const result = getUsageIdsWithClearingAlternative(
+				[{ id: 1, alternativeIngredientId: margarine.id }],
+				new Set([dairy.id])
+			);
+
+			expect(result).toEqual(new Set());
+		});
+
+		it('does not suggest an alternative carrying a different avoided tag', () => {
+			const dairy = makeTag('dairy');
+			const nuts = makeTag('nut-derived');
+			const almondMilk = makeIngredient('Almond milk');
+			tagIngredient(almondMilk.id, nuts.id);
+
+			const result = getUsageIdsWithClearingAlternative(
+				[{ id: 1, alternativeIngredientId: almondMilk.id }],
+				new Set([dairy.id, nuts.id])
+			);
+
+			expect(result).toEqual(new Set());
+		});
+
+		it('suggests nothing for a usage with no declared alternative', () => {
+			const dairy = makeTag('dairy');
+
+			const result = getUsageIdsWithClearingAlternative(
+				[{ id: 1, alternativeIngredientId: null }],
+				new Set([dairy.id])
+			);
+
+			expect(result).toEqual(new Set());
+		});
+
+		it('judges each usage independently', () => {
+			const dairy = makeTag('dairy');
+			const margarine = makeIngredient('Margarine');
+			const oil = makeIngredient('Olive oil');
+			tagIngredient(margarine.id, dairy.id);
+
+			const result = getUsageIdsWithClearingAlternative(
+				[
+					{ id: 1, alternativeIngredientId: margarine.id },
+					{ id: 2, alternativeIngredientId: oil.id },
+					{ id: 3, alternativeIngredientId: null }
+				],
+				new Set([dairy.id])
+			);
+
+			expect(result).toEqual(new Set([2]));
+		});
+
+		it('suggests every declared alternative when nothing is avoided', () => {
+			const dairy = makeTag('dairy');
+			const margarine = makeIngredient('Margarine');
+			tagIngredient(margarine.id, dairy.id);
+
+			const result = getUsageIdsWithClearingAlternative(
+				[{ id: 1, alternativeIngredientId: margarine.id }],
+				new Set()
+			);
+
+			expect(result).toEqual(new Set([1]));
+		});
 	});
 });
