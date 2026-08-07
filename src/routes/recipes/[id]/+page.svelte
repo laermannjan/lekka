@@ -16,6 +16,9 @@
 
 	const allUsages = $derived(data.recipe.composition.steps.flatMap((step) => step.usages));
 	const basePath = $derived(resolve('/recipes/[id]', { id: String(data.recipe.id) }));
+	// Usages whose declared Alternative clears the dietary flag - only those
+	// get a suggested swap (see CONTEXT.md's Diners).
+	const clearingAlternativeUsageIds = $derived(new Set(data.usageIdsWithClearingAlternative));
 
 	// Step timers: purely client-side countdown (see
 	// docs/adr/0003-client-only-step-timers.md),
@@ -385,10 +388,12 @@
 								{#if flaggedTags.length > 0}
 									<p role="alert">
 										⚠ contains {flaggedTags.map((t) => t.name).join(', ')} — avoided by a selected diner.
-										{#if usage.alternativeIngredient}
+										{#if usage.alternativeIngredient && clearingAlternativeUsageIds.has(usage.id)}
 											Suggested swap: {usage.alternativeIngredient
 												.baseTerm}{#if usage.alternativeIngredient.descriptors}
 												({usage.alternativeIngredient.descriptors}){/if}.
+										{:else if usage.alternativeIngredient}
+											The declared alternative is avoided too — no swap suggested.
 										{:else}
 											No alternative declared for this usage.
 										{/if}
