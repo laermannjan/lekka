@@ -28,6 +28,12 @@ COPY package.json ./
 VOLUME /app/data
 ENV DATABASE_URL=/app/data/lekka.db
 ENV PORT=3000
+# Restore uploads a whole export back (see src/lib/server/data-export.ts), and
+# a real household's dump is far past the Node adapter's 512 KB default - which
+# rejects the upload with a raw 413 before the restore action can say anything
+# useful about it. Set here rather than only in docker-compose.yml so every
+# deployment of this image inherits it (#39).
+ENV BODY_SIZE_LIMIT=64M
 EXPOSE 3000
 
 CMD ["node", "build"]
