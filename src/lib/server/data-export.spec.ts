@@ -1,3 +1,4 @@
+import { getTableName } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { db } from './db';
 import {
@@ -32,13 +33,16 @@ import {
 } from './data-export';
 
 describe('data-export', () => {
-	// A dump covers every domain table, so a test that names two of them passes
-	// just as well when a table is dropped from both export and restore. The
-	// count is checked against the canonical table list rather than a literal,
-	// so a new table joins ./db/tables.ts once and this starts demanding it.
+	// A dump covers every domain table, so a test naming two of them passes just
+	// as well when a table is dropped from both export and restore. The expected
+	// set is the canonical table list (./db/tables.ts) rather than a literal, so
+	// adding a table there is what makes this start demanding it - by name, not
+	// by count, so one table swapped for another is still caught.
 	function expectEveryTablePopulated(data: DataExport['data']) {
 		const keys = Object.keys(data) as (keyof DataExport['data'])[];
-		expect(keys).toHaveLength(DOMAIN_TABLES_CHILD_FIRST.length);
+		const toSqlName = (key: string) => key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+
+		expect(keys.map(toSqlName).sort()).toEqual(DOMAIN_TABLES_CHILD_FIRST.map(getTableName).sort());
 		for (const key of keys) expect(data[key], `table "${key}"`).not.toHaveLength(0);
 	}
 

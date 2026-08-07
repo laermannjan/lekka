@@ -14,7 +14,7 @@ export const actions: Actions = {
 			if (isPayloadTooLarge(error)) {
 				return fail(413, {
 					error:
-						'That export is larger than this instance accepts. Raise the BODY_SIZE_LIMIT env var and restore again.'
+						'That export is larger than this instance accepts. Raise the BODY_SIZE_LIMIT env var - and any upload limit on a proxy in front of it - then restore again.'
 				});
 			}
 			throw error;
@@ -52,7 +52,5 @@ export const actions: Actions = {
 // `SvelteKitError` - an Error carrying a status, not the `HttpError` that
 // `isHttpError` recognizes - so match it structurally (#39).
 function isPayloadTooLarge(error: unknown): boolean {
-	return (
-		error instanceof Error && 'status' in error && (error as { status: unknown }).status === 413
-	);
+	return error instanceof Error && 'status' in error && error.status === 413;
 }
