@@ -270,8 +270,11 @@ export const actions: Actions = {
 		const compositionStepId = parseRowId(data.get('compositionStepId'));
 		const alsoFromCompositionIds = parseRowIds(data.getAll('alsoFromCompositionIds'));
 
-		if (compositionStepId === undefined || alsoFromCompositionIds === undefined) {
+		if (compositionStepId === undefined) {
 			return fail(400, { stepError: 'That step no longer exists in this composition.' });
+		}
+		if (alsoFromCompositionIds === undefined) {
+			return fail(400, { stepError: 'Pick which other compositions to remove this step from.' });
 		}
 
 		try {

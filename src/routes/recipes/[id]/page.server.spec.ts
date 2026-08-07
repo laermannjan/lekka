@@ -11,6 +11,7 @@ import {
 	createRecipe,
 	createVariant,
 	getDefaultComposition,
+	getRecipe,
 	listRecipeVersions,
 	revertToVersion
 } from '$lib/server/recipes';
@@ -92,6 +93,26 @@ describe('recipe page actions', () => {
 	function makeIngredient(baseTerm = 'Onion') {
 		return db.insert(ingredients).values({ baseTerm }).returning().get();
 	}
+
+	// Removing a Step can also remove it from other Compositions at once, so one
+	// unparseable id in that repeated field must not remove it from some of them.
+	it('rejects removing a step when one of the other composition ids is not an id', async () => {
+		const recipe = createRecipe('Chilli con carne');
+		const composition = getDefaultComposition(recipe.id);
+		const { compositionStep } = addStep(composition.id, { instruction: 'Brown the mince.' });
+
+		const result = await runAction('removeStep', {
+			id: String(recipe.id),
+			form: {
+				compositionStepId: String(compositionStep.id),
+				alsoFromCompositionIds: [String(composition.id), 'abc']
+			}
+		});
+
+		expect(result?.status).toBe(400);
+		expect(result?.data?.stepError).toBeTruthy();
+		expect(getRecipe(recipe.id)?.composition.steps).toHaveLength(1);
+	});
 
 	it('rejects removing a category with a non-numeric id, leaving the recipe untouched', async () => {
 		const recipe = createRecipe('Chilli con carne');
