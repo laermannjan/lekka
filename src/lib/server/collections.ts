@@ -63,6 +63,18 @@ export function getCollectionDetail(id: number): CollectionDetail | undefined {
 	return { ...collection, recipes: rows.map((row) => row.recipe) };
 }
 
+// A Collection's members as an id set - what the browse Collection filter
+// narrows to. An unknown Collection id yields no members rather than an error:
+// a stale link is an empty browse view, not a broken page.
+export function listRecipeIdsInCollection(collectionId: number): Set<number> {
+	const rows = db
+		.select({ recipeId: collectionRecipes.recipeId })
+		.from(collectionRecipes)
+		.where(eq(collectionRecipes.collectionId, collectionId))
+		.all();
+	return new Set(rows.map((row) => row.recipeId));
+}
+
 export function listCollectionsForRecipe(recipeId: number): Collection[] {
 	const rows = db
 		.select({ collection: collections })

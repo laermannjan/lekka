@@ -35,6 +35,16 @@ export function listFavoriteRecipeIds(profileId: number): number[] {
 	return rows.map((row) => row.recipeId);
 }
 
+// Every Recipe favorited by anyone in the household - what the browse
+// Favorites filter narrows to. A Favorite is personal to set but visible
+// household-wide (see CONTEXT.md's Favorite), so this deliberately takes no
+// acting Profile: browsing is a household view, and a Recipe only Alex starred
+// is still a Recipe the household has starred.
+export function listFavoritedRecipeIds(): Set<number> {
+	const rows = db.selectDistinct({ recipeId: favorites.recipeId }).from(favorites).all();
+	return new Set(rows.map((row) => row.recipeId));
+}
+
 // Every Profile that has favorited a Recipe. A Favorite is set per-Profile but
 // visible household-wide (see CONTEXT.md's Favorite) - `profileId` records who
 // marked it, not who may see it, so this deliberately takes no acting Profile.
