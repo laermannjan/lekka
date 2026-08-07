@@ -1206,6 +1206,257 @@ describe('recipes', () => {
 		});
 	});
 
+	// A Scaling Formula is part of a Step's content, so it has to travel with
+	// that content wherever a Step is copied into a fresh Step row - overriding
+	// a slot, and seeding a Variant from a Composition holding an override.
+	describe('scaling formulas across step copies', () => {
+		// A salt usage scaling at half the rate of servings: 10 g at a base of 4
+		// resolves to 15 at 8, not the strict-linear 20.
+		function saltAtHalfRate(recipeTitle = 'Chilli con carne') {
+			const recipe = createRecipe(recipeTitle, 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step, compositionStep } = addStep(defaultComposition.id, {
+				instruction: 'Season the pot.',
+				duration: { kind: 'wait', min: 60, unit: 'minutes' }
+			});
+			const salt = createIngredient({ baseTerm: 'salt' });
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: salt.id,
+				quantityValue: 10,
+				quantityUnit: 'g'
+			});
+			setQuantityScalingFormula(usage.id, { kind: 'rate_vs_servings', ratePercent: 50 });
+			return { recipe, defaultComposition, step, compositionStep, usage };
+		}
+
+		// A rise time that lengthens by 3 minutes for every gram of starter the
+		// scaled quantity falls short of its usual 100 g.
+		function starterVsRiseTime() {
+			const recipe = createRecipe('Sourdough', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step, compositionStep } = addStep(defaultComposition.id, {
+				instruction: 'Let {{1}} rise.',
+				duration: { kind: 'wait', min: 240, unit: 'minutes' }
+			});
+			const starter = createIngredient({ baseTerm: 'sourdough starter' });
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: starter.id,
+				quantityValue: 100,
+				quantityUnit: 'g'
+			});
+			setDurationScalingFormula(step.id, {
+				kind: 'vs_other_usage',
+				otherUsageId: usage.id,
+				perUnitAmount: 3,
+				direction: 'increase',
+				thresholdSide: 'short'
+			});
+			return { recipe, defaultComposition, step, compositionStep, usage };
+		}
+
+		it("carries a usage's quantity scaling formula through a step override", () => {
+			const { recipe, defaultComposition, compositionStep } = saltAtHalfRate();
+
+			const before = getRecipe(recipe.id, defaultComposition.id, 8);
+			expect(before?.composition.steps[0].usages[0].scaledQuantityValue).toEqual(15);
+
+			overrideStep(compositionStep.id, {
+				instruction: 'Season the pot generously.',
+				duration: { kind: 'wait', min: 60, unit: 'minutes' }
+			});
+
+			const after = getRecipe(recipe.id, defaultComposition.id, 8);
+			const copiedUsage = after!.composition.steps[0].usages[0];
+			expect(copiedUsage.scaledQuantityValue).toEqual(15);
+			expect(copiedUsage.scalingFormula).toMatchObject({
+				kind: 'rate_vs_servings',
+				ratePercent: 50,
+				// keyed to the copied usage, not the one it was copied from
+				ingredientUsageId: copiedUsage.id
+			});
+		});
+
+		it("carries a step's duration scaling formula through a step override", () => {
+			const { recipe, defaultComposition, step, compositionStep } = saltAtHalfRate();
+			setDurationScalingFormula(step.id, { kind: 'rate_vs_servings', ratePercent: 100 });
+
+			const before = getRecipe(recipe.id, defaultComposition.id, 8);
+			expect(before?.composition.steps[0].scaledDurationMin).toEqual(120);
+
+			const overridden = overrideStep(compositionStep.id, {
+				instruction: 'Season the pot generously.',
+				duration: { kind: 'wait', min: 60, unit: 'minutes' }
+			});
+
+			const after = getRecipe(recipe.id, defaultComposition.id, 8);
+			expect(after?.composition.steps[0].scaledDurationMin).toEqual(120);
+			expect(after?.composition.steps[0].durationScalingFormula).toMatchObject({
+				kind: 'rate_vs_servings',
+				ratePercent: 100,
+				stepId: overridden.id
+			});
+		});
+
+		it('remaps a vs_other_usage duration formula onto the copied usage on override', () => {
+			const { recipe, defaultComposition, compositionStep } = starterVsRiseTime();
+
+			// halving servings halves the starter usage too (100g -> 50g, 50g short)
+			const before = getRecipe(recipe.id, defaultComposition.id, 2);
+			expect(before?.composition.steps[0].scaledDurationMin).toEqual(240 + 3 * 50);
+
+			overrideStep(compositionStep.id, {
+				instruction: 'Let {{1}} rise, covered.',
+				duration: { kind: 'wait', min: 240, unit: 'minutes' }
+			});
+
+			const after = getRecipe(recipe.id, defaultComposition.id, 2);
+			const copiedStep = after!.composition.steps[0];
+			expect(copiedStep.scaledDurationMin).toEqual(240 + 3 * 50);
+			expect(copiedStep.durationScalingFormula?.otherUsageId).toEqual(copiedStep.usages[0].id);
+		});
+
+		it('drops a duration formula whose override no longer has a duration to scale', () => {
+			const { recipe, defaultComposition, step, compositionStep } = saltAtHalfRate();
+			setDurationScalingFormula(step.id, { kind: 'rate_vs_servings', ratePercent: 100 });
+
+			const overridden = overrideStep(compositionStep.id, { instruction: 'Season the pot.' });
+
+			const after = getRecipe(recipe.id, defaultComposition.id, 8);
+			expect(after?.composition.steps[0].durationScalingFormula).toBeNull();
+			expect(
+				db.select().from(scalingFormulas).where(eq(scalingFormulas.stepId, overridden.id)).all()
+			).toEqual([]);
+		});
+
+		it('drops a vs_other_usage duration formula when the override changes the duration unit', () => {
+			const { recipe, defaultComposition, compositionStep } = starterVsRiseTime();
+
+			// the same 4 hours the source Step stated as 240 minutes: the rule's
+			// "3 per gram short" was authored in minutes and means nothing per hour
+			const overridden = overrideStep(compositionStep.id, {
+				instruction: 'Let {{1}} rise, covered.',
+				duration: { kind: 'wait', min: 4, unit: 'hours' }
+			});
+
+			const after = getRecipe(recipe.id, defaultComposition.id, 2);
+			const copiedStep = after!.composition.steps[0];
+			expect(copiedStep.durationScalingFormula).toBeNull();
+			// the duration stays as written rather than picking up 3 hours per gram
+			expect(copiedStep.scaledDurationMin).toEqual(4);
+			expect(
+				db.select().from(scalingFormulas).where(eq(scalingFormulas.stepId, overridden.id)).all()
+			).toEqual([]);
+		});
+
+		it('carries a unit-independent duration formula through a duration unit change', () => {
+			const { recipe, defaultComposition, step, compositionStep } = saltAtHalfRate();
+			setDurationScalingFormula(step.id, { kind: 'rate_vs_servings', ratePercent: 100 });
+
+			const overridden = overrideStep(compositionStep.id, {
+				instruction: 'Season the pot generously.',
+				duration: { kind: 'wait', min: 1, unit: 'hours' }
+			});
+
+			const after = getRecipe(recipe.id, defaultComposition.id, 8);
+			expect(after?.composition.steps[0].scaledDurationMin).toEqual(2);
+			expect(after?.composition.steps[0].durationScalingFormula).toMatchObject({
+				kind: 'rate_vs_servings',
+				ratePercent: 100,
+				stepId: overridden.id
+			});
+		});
+
+		it('carries the scaling formulas of an overridden slot into a variant seeded from it', () => {
+			const { recipe, defaultComposition, step, compositionStep } = saltAtHalfRate();
+			setDurationScalingFormula(step.id, { kind: 'rate_vs_servings', ratePercent: 100 });
+			overrideStep(compositionStep.id, {
+				instruction: 'Season the pot generously.',
+				duration: { kind: 'wait', min: 60, unit: 'minutes' }
+			});
+
+			const variant = createVariant(recipe.id, 'Chilli sin carne', defaultComposition.id);
+
+			const source = getRecipe(recipe.id, defaultComposition.id, 8);
+			const seeded = getRecipe(recipe.id, variant.id, 8);
+			expect(seeded?.composition.steps[0].usages[0].scaledQuantityValue).toEqual(
+				source!.composition.steps[0].usages[0].scaledQuantityValue
+			);
+			expect(seeded?.composition.steps[0].usages[0].scaledQuantityValue).toEqual(15);
+			expect(seeded?.composition.steps[0].scaledDurationMin).toEqual(120);
+			// each copy owns its own formula rows, keyed to its own step and usages
+			expect(seeded?.composition.steps[0].usages[0].scalingFormula?.ingredientUsageId).toEqual(
+				seeded?.composition.steps[0].usages[0].id
+			);
+			expect(seeded?.composition.steps[0].durationScalingFormula?.stepId).toEqual(
+				seeded?.composition.steps[0].id
+			);
+		});
+
+		it('remaps a vs_other_usage duration formula when a variant is seeded from an override', () => {
+			const { recipe, defaultComposition, compositionStep } = starterVsRiseTime();
+			overrideStep(compositionStep.id, {
+				instruction: 'Let {{1}} rise, covered.',
+				duration: { kind: 'wait', min: 240, unit: 'minutes' }
+			});
+
+			const variant = createVariant(recipe.id, 'Overnight', defaultComposition.id);
+
+			const seeded = getRecipe(recipe.id, variant.id, 2);
+			const seededStep = seeded!.composition.steps[0];
+			expect(seededStep.scaledDurationMin).toEqual(240 + 3 * 50);
+			expect(seededStep.durationScalingFormula?.otherUsageId).toEqual(seededStep.usages[0].id);
+		});
+
+		it('re-overriding an already-overridden step keeps the formulas it just copied', () => {
+			const { recipe, defaultComposition, step, compositionStep } = saltAtHalfRate();
+			setDurationScalingFormula(step.id, { kind: 'rate_vs_servings', ratePercent: 100 });
+
+			overrideStep(compositionStep.id, {
+				instruction: 'Season the pot generously.',
+				duration: { kind: 'wait', min: 60, unit: 'minutes' }
+			});
+			const second = overrideStep(compositionStep.id, {
+				instruction: 'Season the pot very generously.',
+				duration: { kind: 'wait', min: 60, unit: 'minutes' }
+			});
+
+			const after = getRecipe(recipe.id, defaultComposition.id, 8);
+			const reOverridden = after!.composition.steps[0];
+			expect(reOverridden.usages[0].scaledQuantityValue).toEqual(15);
+			expect(reOverridden.scaledDurationMin).toEqual(120);
+			expect(reOverridden.usages[0].scalingFormula?.ingredientUsageId).toEqual(
+				reOverridden.usages[0].id
+			);
+			// the discarded override step took its own formula rows with it, and
+			// left the pool step's alone: one quantity and one duration formula
+			// each for the pool step and the live override, nothing stale.
+			const allFormulas = db.select().from(scalingFormulas).all();
+			expect(allFormulas).toHaveLength(4);
+			const durationFormulaStepIds = allFormulas.flatMap((f) =>
+				f.stepId === null ? [] : [f.stepId]
+			);
+			expect(durationFormulaStepIds.sort((a, b) => a - b)).toEqual([step.id, second.id]);
+		});
+
+		it('re-overriding keeps a vs_other_usage duration formula from cascading away', () => {
+			const { recipe, defaultComposition, compositionStep } = starterVsRiseTime();
+
+			overrideStep(compositionStep.id, {
+				instruction: 'Let {{1}} rise, covered.',
+				duration: { kind: 'wait', min: 240, unit: 'minutes' }
+			});
+			overrideStep(compositionStep.id, {
+				instruction: 'Let {{1}} rise, covered, overnight.',
+				duration: { kind: 'wait', min: 240, unit: 'minutes' }
+			});
+
+			const after = getRecipe(recipe.id, defaultComposition.id, 2);
+			const reOverridden = after!.composition.steps[0];
+			expect(reOverridden.scaledDurationMin).toEqual(240 + 3 * 50);
+			expect(reOverridden.durationScalingFormula?.otherUsageId).toEqual(reOverridden.usages[0].id);
+		});
+	});
+
 	describe('version history', () => {
 		it('creates a first version alongside the recipe', () => {
 			const recipe = createRecipe('Chilli con carne');
@@ -1350,6 +1601,53 @@ describe('recipes', () => {
 			expect(restoredStep?.usages[0].scalingFormula?.kind).toEqual('rate_vs_servings');
 			expect(restoredStep?.usages[0].scalingFormula?.ratePercent).toEqual(50);
 			expect(restoredStep?.durationScalingFormula?.kind).toEqual('fixed');
+		});
+
+		// A Formula is rebuilt by every revert, so `otherUsageId` goes through
+		// the same remap as `stepId` and `ingredientUsageId` - onto whichever
+		// row the revert leaves the target Usage on. A Usage the target Version
+		// still holds keeps its own id (#51), so the remap is the identity here;
+		// it is a fresh id only for a Usage the revert has to re-insert.
+		it('reverting remaps a vs_other_usage duration formula onto the restored usage', () => {
+			const recipe = createRecipe('Sourdough', 4);
+			const defaultComposition = getDefaultComposition(recipe.id);
+			const { step } = addStep(defaultComposition.id, {
+				instruction: 'Let {{1}} rise.',
+				duration: { kind: 'wait', min: 240, unit: 'minutes' }
+			});
+			const starter = createIngredient({ baseTerm: 'sourdough starter' });
+			const usage = addIngredientUsage(step.id, {
+				ingredientId: starter.id,
+				quantityValue: 100,
+				quantityUnit: 'g'
+			});
+			setDurationScalingFormula(step.id, {
+				kind: 'vs_other_usage',
+				otherUsageId: usage.id,
+				perUnitAmount: 3,
+				direction: 'increase',
+				thresholdSide: 'short'
+			});
+
+			const [versionWithFormula] = listRecipeVersions(recipe.id).slice(-1);
+
+			removeDurationScalingFormula(step.id);
+
+			revertToVersion(recipe.id, versionWithFormula.id);
+
+			const restoredStep = getRecipe(recipe.id, defaultComposition.id, 2)?.composition.steps[0];
+			expect(restoredStep?.durationScalingFormula).toMatchObject({
+				kind: 'vs_other_usage',
+				perUnitAmount: 3,
+				stepId: restoredStep!.id,
+				// the live Usage the revert leaves on the Step
+				otherUsageId: restoredStep!.usages[0].id
+			});
+			// and that Usage is the same row it was before the revert, not a copy
+			// of it - what keeps a Cook Log Annotation pinned to it (#51)
+			expect(restoredStep!.usages[0].id).toEqual(usage.id);
+			// and it still computes: 100g -> 50g at half servings, 3 minutes a gram
+			expect(restoredStep?.scaledDurationMin).toEqual(240 + 3 * 50);
 		});
 
 		it('reverting appends a new version rather than truncating history', () => {

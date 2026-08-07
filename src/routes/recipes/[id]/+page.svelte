@@ -460,6 +460,13 @@
 						</label>
 						<fieldset>
 							<legend>Duration (optional)</legend>
+							{#if step.durationScalingFormula}
+								<p>
+									This duration has a scaling rule. Clearing the duration removes the rule with it,
+									and changing the unit drops a "vs. another usage" rule, whose per-unit amount is
+									written in the unit below.
+								</p>
+							{/if}
 							<label>
 								Kind
 								<select name="durationKind">
