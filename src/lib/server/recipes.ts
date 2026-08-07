@@ -254,20 +254,23 @@ export function createRecipe(title: string, servings: number = DEFAULT_SERVINGS)
 	});
 }
 
-// Updates a Recipe's base/usual servings count - the baseline every stored
-// Quantity and Duration is "as written" at (see CONTEXT.md). This changes
-// what count default linear scaling treats as 1x; it does not touch any
-// stored Quantity or Duration value.
+// Updates a Recipe's base servings (see CONTEXT.md's Base servings entry).
+// This touches no stored Quantity or Duration value, but it changes what
+// every one of them resolves to, so it is a Recipe edit like any other and
+// records a Version.
 export function updateServings(recipeId: number, servings: number): Recipe {
 	const validServings = validateServings(servings);
-	const recipe = db
-		.update(recipes)
-		.set({ servings: validServings })
-		.where(eq(recipes.id, recipeId))
-		.returning()
-		.get();
-	if (!recipe) throw new RecipeNotFoundError(`No recipe ${recipeId}`);
-	return recipe;
+	return db.transaction((tx) => {
+		const recipe = tx
+			.update(recipes)
+			.set({ servings: validServings })
+			.where(eq(recipes.id, recipeId))
+			.returning()
+			.get();
+		if (!recipe) throw new RecipeNotFoundError(`No recipe ${recipeId}`);
+		recordVersion(tx, recipe.id);
+		return recipe;
+	});
 }
 
 export const RECIPE_SORTS = [
@@ -1175,13 +1178,16 @@ export function getRecipeVersionById(id: number): RecipeVersion | undefined {
 	return db.select().from(recipeVersions).where(eq(recipeVersions.id, id)).get();
 }
 
-// Each `restore*` below reconciles one Recipe-scoped table against the target
-// Version's snapshot **in place**, under the ids the snapshot recorded: a row
-// the snapshot holds is written back as the id it had when the snapshot was
-// taken - updated if that row is still live, re-inserted under that same id if
-// it isn't - and only a live row the snapshot doesn't hold at all is deleted.
-// Each returns the set of ids it restored, which the tables referencing it
-// filter against.
+// Each `restore*` below puts one part of the Recipe back to the target
+// Version's snapshot. The ones covering a Recipe-scoped table reconcile it
+// **in place**, under the ids the snapshot recorded: a row the snapshot holds
+// is written back as the id it had when the snapshot was taken - updated if
+// that row is still live, re-inserted under that same id if it isn't - and
+// only a live row the snapshot doesn't hold at all is deleted. Each of those
+// returns the set of ids it restored, which the tables referencing it filter
+// against. `restoreServings` is the exception - base servings is a single
+// column on the Recipe itself, with no ids to reconcile and nothing
+// referencing it.
 //
 // Rebuilding the Recipe from scratch instead - delete everything, re-insert
 // from the snapshot - is simpler and was what this did, but it gave every row
@@ -1198,6 +1204,18 @@ export function getRecipeVersionById(id: number): RecipeVersion | undefined {
 // an id: an id from a snapshot is either still that very row, or free forever.
 // So nothing is ever renumbered, and a revert is idempotent no matter how many
 // times, or in what order, Versions are restored.
+
+// Why a Version carries base servings at all: see `RecipeSnapshot.servings`.
+//
+// A snapshot written before #56 has no `servings` key. The live value is left
+// alone rather than guessed at: there is no baseline recorded to restore, and
+// inventing one (the current default, say) would change a Recipe the author
+// never asked to change. Reverting an older Recipe therefore still restores
+// everything the snapshot does hold.
+function restoreServings(tx: Tx, recipeId: number, snapshot: RecipeSnapshot): void {
+	if (snapshot.servings === undefined) return;
+	tx.update(recipes).set({ servings: snapshot.servings }).where(eq(recipes.id, recipeId)).run();
+}
 
 // The shared algorithm: write every snapshot row back, then delete the live
 // rows the snapshot didn't account for. One copy, because the three tables
@@ -1389,6 +1407,7 @@ export function revertToVersion(recipeId: number, versionId: number): RecipeVers
 	const snapshot = JSON.parse(version.snapshot) as RecipeSnapshot;
 
 	return db.transaction((tx) => {
+		restoreServings(tx, recipeId, snapshot);
 		const restoredCompositionIds = restoreCompositions(tx, recipeId, snapshot);
 		const restoredStepIds = restoreSteps(tx, recipeId, snapshot);
 		restoreCompositionSteps(tx, snapshot, restoredCompositionIds, restoredStepIds);
