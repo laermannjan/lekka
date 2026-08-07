@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 
 // `drizzle/meta/0005_snapshot.json` has been lost to a rebase twice (bf7cfb2,
@@ -62,5 +63,75 @@ describe('migration metadata', () => {
 		}
 
 		expect(breaks).toEqual([]);
+	});
+});
+
+// SQLite cannot alter a column or a foreign key, so any migration that changes
+// one rebuilds and drops its table - and `DROP TABLE` with foreign keys on
+// performs an implicit `DELETE FROM` that fires every cascade pointed at it.
+// drizzle-kit emits `PRAGMA foreign_keys=OFF` to cover that, which is a no-op
+// here: migrations are applied inside a transaction (drizzle-orm's
+// SQLiteSyncDialect.migrate), and SQLite ignores that pragma while one is open.
+// A generated rebuild of `cooks` therefore empties `cook_diners` and
+// `cook_log_annotations` on boot, silently, on a real household's database -
+// the same class of loss as #51 itself, one level down.
+//
+// This replays the chain the way the app does, against a database that already
+// holds a Cook, so any future migration that quietly empties Cook history fails
+// here instead of on someone's instance.
+function statementsOf(tag: string): string[] {
+	return readFileSync(new URL(`drizzle/${tag}.sql`, repoRoot), 'utf8')
+		.split('--> statement-breakpoint')
+		.map((statement) => statement.trim())
+		.filter(Boolean);
+}
+
+describe('applying the migrations to a database that already has data', () => {
+	it('never empties a Cook, its Diners or its Annotations', () => {
+		const database = new Database(':memory:');
+		database.pragma('foreign_keys = ON');
+
+		// Up to and including whichever migration first creates `cooks` - so the
+		// seed below can be written, and every later migration is under test.
+		const hasCooks = () =>
+			database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'cooks'").get() !== undefined;
+		const remaining = [...journal.entries];
+		while (remaining.length > 0 && !hasCooks()) {
+			const entry = remaining.shift()!;
+			// One transaction per batch, matching the migrator - the pragma's
+			// no-op-inside-a-transaction behaviour is the whole point.
+			database.exec('BEGIN');
+			for (const statement of statementsOf(entry.tag)) database.exec(statement);
+			database.exec('COMMIT');
+		}
+		expect(hasCooks()).toBe(true);
+
+		database.exec(`
+			INSERT INTO profiles (id, name) VALUES (1, 'Jan');
+			INSERT INTO recipes (id, title) VALUES (1, 'Chilli con carne');
+			INSERT INTO compositions (id, recipe_id, name, is_default) VALUES (1, 1, NULL, 1);
+			INSERT INTO steps (id, recipe_id, instruction) VALUES (1, 1, 'Brown the mince.');
+			INSERT INTO recipe_versions (id, recipe_id, snapshot) VALUES (1, 1, '{}');
+			INSERT INTO cooks (id, recipe_id, composition_id, recipe_version_id, acting_profile_id, cooked_at, outcome)
+				VALUES (1, 1, 1, 1, 1, '2026-08-01', 'worked-well');
+			INSERT INTO cook_diners (cook_id, profile_id) VALUES (1, 1);
+			INSERT INTO cook_log_annotations (id, cook_id, step_id, note) VALUES (1, 1, 1, 'Browned too long.');
+		`);
+
+		database.exec('BEGIN');
+		for (const entry of remaining) {
+			for (const statement of statementsOf(entry.tag)) database.exec(statement);
+		}
+		database.exec('COMMIT');
+
+		const count = (table: string) =>
+			(database.prepare(`SELECT count(*) AS c FROM ${table}`).get() as { c: number }).c;
+		expect({
+			cooks: count('cooks'),
+			cookDiners: count('cook_diners'),
+			cookLogAnnotations: count('cook_log_annotations')
+		}).toEqual({ cooks: 1, cookDiners: 1, cookLogAnnotations: 1 });
+
+		database.close();
 	});
 });

@@ -388,14 +388,21 @@ export type CookOutcome = (typeof COOK_OUTCOMES)[number];
 // never mutates the Recipe. `cookedAt` is the author-entered date of the
 // occasion, distinct from `createdAt` (when the log entry itself was
 // written).
+//
+// `compositionId` is nullable and `on delete set null`, unlike every other
+// reference here: a Cook is append-only history that a later Recipe edit must
+// never destroy (see docs/adr/0005), and reverting to a Version that predates
+// a Variant genuinely removes that Composition. Cascading there deleted the
+// whole Cook - the Recipe eating its own history (#51). Null means "the line
+// this was cooked on is no longer part of the Recipe", not "no line".
 export const cooks = sqliteTable('cooks', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	recipeId: integer('recipe_id')
 		.notNull()
 		.references(() => recipes.id, { onDelete: 'cascade' }),
-	compositionId: integer('composition_id')
-		.notNull()
-		.references(() => compositions.id, { onDelete: 'cascade' }),
+	compositionId: integer('composition_id').references(() => compositions.id, {
+		onDelete: 'set null'
+	}),
 	recipeVersionId: integer('recipe_version_id')
 		.notNull()
 		.references(() => recipeVersions.id, { onDelete: 'cascade' }),

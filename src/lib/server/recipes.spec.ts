@@ -15,7 +15,12 @@ import {
 	steps
 } from './db/schema';
 import { createIngredient } from './ingredients';
-import { logCook } from './cooks';
+import {
+	addCookLogAnnotation,
+	listAnnotationsForCooks,
+	listCooksForRecipe,
+	logCook
+} from './cooks';
 import { createProfile } from './profiles';
 import {
 	BlankInstructionError,
@@ -1598,11 +1603,12 @@ describe('recipes', () => {
 			expect(restoredStep?.durationScalingFormula?.kind).toEqual('fixed');
 		});
 
-		// Every revert reissues the ids a formula hangs off, so `otherUsageId`
-		// has to be remapped onto the revived Usage the same way `stepId` and
-		// `ingredientUsageId` are - left alone it would point at a Usage this
-		// revert has already deleted.
-		it('reverting remaps a vs_other_usage duration formula onto the revived usage', () => {
+		// A Formula is rebuilt by every revert, so `otherUsageId` goes through
+		// the same remap as `stepId` and `ingredientUsageId` - onto whichever
+		// row the revert leaves the target Usage on. A Usage the target Version
+		// still holds keeps its own id (#51), so the remap is the identity here;
+		// it is a fresh id only for a Usage the revert has to re-insert.
+		it('reverting remaps a vs_other_usage duration formula onto the restored usage', () => {
 			const recipe = createRecipe('Sourdough', 4);
 			const defaultComposition = getDefaultComposition(recipe.id);
 			const { step } = addStep(defaultComposition.id, {
@@ -1634,10 +1640,12 @@ describe('recipes', () => {
 				kind: 'vs_other_usage',
 				perUnitAmount: 3,
 				stepId: restoredStep!.id,
-				// the revived usage's new id, not the one captured in the snapshot
+				// the live Usage the revert leaves on the Step
 				otherUsageId: restoredStep!.usages[0].id
 			});
-			expect(restoredStep!.usages[0].id).not.toEqual(usage.id);
+			// and that Usage is the same row it was before the revert, not a copy
+			// of it - what keeps a Cook Log Annotation pinned to it (#51)
+			expect(restoredStep!.usages[0].id).toEqual(usage.id);
 			// and it still computes: 100g -> 50g at half servings, 3 minutes a gram
 			expect(restoredStep?.scaledDurationMin).toEqual(240 + 3 * 50);
 		});
@@ -1672,6 +1680,228 @@ describe('recipes', () => {
 		it('rejects reverting to a non-existent version', () => {
 			const recipe = createRecipe('Chilli con carne');
 			expect(() => revertToVersion(recipe.id, 999999)).toThrow(RecipeVersionNotFoundError);
+		});
+
+		// A Cook is append-only household history, never a part of the Recipe a
+		// Version restores (see CONTEXT.md's Cook). Reverting used to rebuild the
+		// Recipe by deleting every Composition and Step, which cascade-deleted
+		// every Cook, Cook Diner and Cook Log Annotation with them - silently,
+		// and invisibly to the whole suite (#51).
+		describe('cook history across a revert', () => {
+			// A Recipe whose first Step - and the Version holding just it - predate
+			// a second Step, so reverting to that Version really does change the
+			// Recipe rather than being a no-op.
+			function recipeWithVersionBeforeSecondStep() {
+				const recipe = createRecipe('Chilli con carne');
+				const defaultComposition = getDefaultComposition(recipe.id);
+				const { step } = addStep(defaultComposition.id, { instruction: 'Brown {{1}} of mince.' });
+				const beef = createIngredient({ baseTerm: 'beef mince' });
+				const usage = addIngredientUsage(step.id, {
+					ingredientId: beef.id,
+					quantityValue: 500,
+					quantityUnit: 'g'
+				});
+
+				const [target] = listRecipeVersions(recipe.id).slice(-1);
+				addStep(defaultComposition.id, { instruction: 'Simmer.' });
+
+				return { recipe, defaultComposition, step, usage, target };
+			}
+
+			it('leaves every Cook intact, with its Diners', () => {
+				const jan = createProfile('Jan');
+				const alex = createProfile('Alex');
+				const { recipe, defaultComposition, target } = recipeWithVersionBeforeSecondStep();
+
+				logCook(recipe.id, {
+					compositionId: defaultComposition.id,
+					actingProfileId: jan.id,
+					dinerProfileIds: [jan.id, alex.id],
+					cookedAt: '2026-08-01',
+					outcome: 'worked-well',
+					summary: 'Needed more chipotle.'
+				});
+
+				revertToVersion(recipe.id, target.id);
+
+				const cooksAfter = listCooksForRecipe(recipe.id);
+				expect(cooksAfter).toHaveLength(1);
+				expect(cooksAfter[0].summary).toEqual('Needed more chipotle.');
+				expect(cooksAfter[0].outcome).toEqual('worked-well');
+				expect(cooksAfter[0].actingProfile?.name).toEqual('Jan');
+				expect(cooksAfter[0].diners.map((d) => d.name).sort()).toEqual(['Alex', 'Jan']);
+				expect(db.select().from(cooks).where(eq(cooks.recipeId, recipe.id)).all()).toHaveLength(1);
+			});
+
+			it('keeps each Cook pointing at the Composition it was cooked on', () => {
+				const jan = createProfile('Jan');
+				const { recipe, defaultComposition, target } = recipeWithVersionBeforeSecondStep();
+
+				logCook(recipe.id, {
+					compositionId: defaultComposition.id,
+					actingProfileId: jan.id,
+					dinerProfileIds: [jan.id],
+					cookedAt: '2026-08-01',
+					outcome: 'worked-well'
+				});
+
+				revertToVersion(recipe.id, target.id);
+
+				expect(listCooksForRecipe(recipe.id)[0].compositionId).toEqual(defaultComposition.id);
+			});
+
+			it('keeps a Cook whose Composition the revert removes, with nothing left to point at', () => {
+				const jan = createProfile('Jan');
+				const recipe = createRecipe('Chilli con carne');
+				const defaultComposition = getDefaultComposition(recipe.id);
+				addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+
+				const [versionBeforeVariant] = listRecipeVersions(recipe.id).slice(-1);
+				const variant = createVariant(recipe.id, 'Chilli sin carne', defaultComposition.id);
+
+				const cook = logCook(recipe.id, {
+					compositionId: variant.id,
+					actingProfileId: jan.id,
+					dinerProfileIds: [jan.id],
+					cookedAt: '2026-08-01',
+					outcome: 'worked-well',
+					summary: 'The sin carne line.'
+				});
+
+				revertToVersion(recipe.id, versionBeforeVariant.id);
+
+				const cooksAfter = listCooksForRecipe(recipe.id);
+				expect(cooksAfter.map((c) => c.id)).toEqual([cook.id]);
+				expect(cooksAfter[0].summary).toEqual('The sin carne line.');
+				expect(cooksAfter[0].diners.map((d) => d.name)).toEqual(['Jan']);
+				expect(cooksAfter[0].compositionId).toBeNull();
+			});
+
+			it('keeps each Cook Log Annotation pinned to the Step or Usage it was written against', () => {
+				const jan = createProfile('Jan');
+				const { recipe, defaultComposition, step, usage, target } =
+					recipeWithVersionBeforeSecondStep();
+
+				const cook = logCook(recipe.id, {
+					compositionId: defaultComposition.id,
+					actingProfileId: jan.id,
+					dinerProfileIds: [jan.id],
+					cookedAt: '2026-08-01',
+					outcome: 'needs-tweaks'
+				});
+				addCookLogAnnotation(cook.id, { stepId: step.id, note: 'Browned it far too long.' });
+				addCookLogAnnotation(cook.id, { ingredientUsageId: usage.id, note: 'Used turkey mince.' });
+
+				revertToVersion(recipe.id, target.id);
+
+				const annotations = listAnnotationsForCooks([cook.id]).get(cook.id) ?? [];
+				expect(annotations.map((a) => a.note)).toEqual([
+					'Browned it far too long.',
+					'Used turkey mince.'
+				]);
+
+				// Still pointing at the live rows, not at ids the revert orphaned.
+				const restoredStep = getRecipe(recipe.id, defaultComposition.id)!.composition.steps[0];
+				expect(annotations[0].stepId).toEqual(restoredStep.id);
+				expect(annotations[1].ingredientUsageId).toEqual(restoredStep.usages[0].id);
+			});
+
+			// The boundary docs/adr/0005 draws: an Annotation is a pointer into the
+			// Recipe as it currently stands, so one pinned to a Step the revert
+			// genuinely removes goes with it. The Cook itself does not.
+			it('drops an Annotation pinned to a Step the revert removes, keeping the Cook', () => {
+				const jan = createProfile('Jan');
+				const recipe = createRecipe('Chilli con carne');
+				const defaultComposition = getDefaultComposition(recipe.id);
+				addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+
+				const [target] = listRecipeVersions(recipe.id).slice(-1);
+				const { step: laterStep } = addStep(defaultComposition.id, { instruction: 'Simmer.' });
+
+				const cook = logCook(recipe.id, {
+					compositionId: defaultComposition.id,
+					actingProfileId: jan.id,
+					dinerProfileIds: [jan.id],
+					cookedAt: '2026-08-01',
+					outcome: 'needs-tweaks',
+					summary: 'Simmered it dry.'
+				});
+				addCookLogAnnotation(cook.id, { stepId: laterStep.id, note: 'Boiled over.' });
+
+				revertToVersion(recipe.id, target.id);
+
+				expect(listAnnotationsForCooks([cook.id]).get(cook.id)).toBeUndefined();
+				expect(listCooksForRecipe(recipe.id).map((c) => c.summary)).toEqual(['Simmered it dry.']);
+			});
+
+			it('keeps Annotations pinned when the same Version is reverted to twice', () => {
+				const jan = createProfile('Jan');
+				const { recipe, defaultComposition, step, target } = recipeWithVersionBeforeSecondStep();
+
+				const cook = logCook(recipe.id, {
+					compositionId: defaultComposition.id,
+					actingProfileId: jan.id,
+					dinerProfileIds: [jan.id],
+					cookedAt: '2026-08-01',
+					outcome: 'needs-tweaks'
+				});
+				addCookLogAnnotation(cook.id, { stepId: step.id, note: 'Browned it far too long.' });
+
+				revertToVersion(recipe.id, target.id);
+				addStep(defaultComposition.id, { instruction: 'Simmer again.' });
+				revertToVersion(recipe.id, target.id);
+
+				const annotations = listAnnotationsForCooks([cook.id]).get(cook.id) ?? [];
+				const restoredStep = getRecipe(recipe.id, defaultComposition.id)!.composition.steps[0];
+				expect(annotations.map((a) => a.stepId)).toEqual([restoredStep.id]);
+			});
+
+			it('leaves the last-cooked and most-cooked browse sorts untouched', () => {
+				const profile = createProfile('Alex');
+				const {
+					recipe: chilli,
+					defaultComposition: chilliComposition,
+					target
+				} = recipeWithVersionBeforeSecondStep();
+				const banana = createRecipe('Banana bread');
+				const bananaComposition = getDefaultComposition(banana.id);
+				createRecipe('Apple pie');
+
+				logCook(chilli.id, {
+					compositionId: chilliComposition.id,
+					actingProfileId: profile.id,
+					dinerProfileIds: [],
+					cookedAt: '2024-01-01',
+					outcome: 'worked-well'
+				});
+				logCook(chilli.id, {
+					compositionId: chilliComposition.id,
+					actingProfileId: profile.id,
+					dinerProfileIds: [],
+					cookedAt: '2024-02-01',
+					outcome: 'worked-well'
+				});
+				logCook(banana.id, {
+					compositionId: bananaComposition.id,
+					actingProfileId: profile.id,
+					dinerProfileIds: [],
+					cookedAt: '2024-06-01',
+					outcome: 'worked-well'
+				});
+
+				revertToVersion(chilli.id, target.id);
+
+				expect(listRecipes({ sort: 'last-cooked' }).map((r) => r.title)).toEqual([
+					'Banana bread',
+					'Chilli con carne',
+					'Apple pie'
+				]);
+				expect(listRecipes({ sort: 'most-cooked' }).map((r) => r.title)).toEqual([
+					'Chilli con carne',
+					'Banana bread',
+					'Apple pie'
+				]);
+			});
 		});
 	});
 });
