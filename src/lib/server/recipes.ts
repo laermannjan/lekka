@@ -849,9 +849,8 @@ export function formatQuantity(value: number, unit: string, ingredient: Ingredie
 
 // Weaves each `{{n}}` token in a Step's instruction into the formatted
 // Quantity of that Step's nth Ingredient Usage (1-indexed, in Usage
-// order) - see CONTEXT.md's "Quantities are woven directly into a Step's
-// instruction text at point of use". A token with no matching Usage is
-// left as-is.
+// order) - see CONTEXT.md's Instruction weaving. A token with no matching
+// Usage is left as-is.
 export function renderInstruction(
 	instruction: string,
 	usages: (IngredientUsage & { ingredient: Ingredient })[]
