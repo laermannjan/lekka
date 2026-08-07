@@ -45,6 +45,9 @@ One named or default line through a Recipe: an ordered list of Step references. 
 The line linking an Ingredient to a Step within a specific Recipe — where Quantity, Prep Attributes, Alternatives, and a free-text Note live. The same Ingredient looks different on every Usage line without becoming a different Ingredient.
 _Avoid_: Recipe ingredient, ingredient line (fine informally; "Usage" is canonical)
 
+**Instruction weaving**:
+A Step's instruction text naming its own Ingredient Usages' Quantities at point of use ("stir in {{1}} of flour") instead of repeating the numbers by hand. A `{{n}}` token refers to the Step's nth Usage in Usage order, and resolves at display time to that Usage's Quantity - already scaled to the serving count being viewed and formatted under its Ingredient's rounding toggle - so a woven quantity can never drift from the Usage line it came from. A token with no matching Usage stays as written. Weaving is optional: an instruction that names no token is normal, and the Usage lines are shown alongside the Step either way.
+
 **Prep Attribute**:
 A preparation state (chilled, room-temperature, diced) that applies to an Ingredient only in the context of one Usage — never a property of the Ingredient itself.
 

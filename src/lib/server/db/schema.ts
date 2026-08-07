@@ -105,9 +105,10 @@ export type DurationKind = (typeof DURATION_KINDS)[number];
 
 // One instruction, optionally carrying a Duration and referencing zero or
 // more Ingredient Usages. `instruction` may contain `{{n}}` tokens that
-// weave a Usage's Quantity into the text at point of use - see
-// src/lib/server/recipes.ts's renderInstruction. Belongs to a Recipe's
-// shared Step pool; a Step used only as a Composition-local override (see
+// weave a Usage's Quantity into the text at point of use (see CONTEXT.md's
+// Instruction weaving; applied by src/lib/server/recipes.ts's
+// renderInstruction). Belongs to a Recipe's shared Step pool; a Step used
+// only as a Composition-local override (see
 // `compositionSteps.overrideStepId`) is owned by exactly that one row and
 // otherwise shaped the same way.
 export const steps = sqliteTable('steps', {

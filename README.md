@@ -28,6 +28,8 @@ pnpm run test:unit -- --run   # unit tests (vitest)
 pnpm run test:e2e     # e2e tests (playwright, builds and previews the app)
 pnpm run test         # both, the same thing CI runs
 pnpm run db:generate  # generate a new migration after changing the schema
+pnpm run db:migrate   # apply pending migrations to the local database by hand
+                      # (the app does this itself on boot - see ADR-0002)
 pnpm run db:studio    # Drizzle Studio, browse the local database
 ```
 
