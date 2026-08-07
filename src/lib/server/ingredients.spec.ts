@@ -1,6 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
-import { db } from './db';
-import { ingredients, tags } from './db/schema';
+import { describe, expect, it } from 'vitest';
 import {
 	BlankBaseTermError,
 	createIngredient,
@@ -10,11 +8,6 @@ import {
 import { createTag } from './tags';
 
 describe('ingredients', () => {
-	beforeEach(() => {
-		db.delete(ingredients).run();
-		db.delete(tags).run();
-	});
-
 	it('lists no ingredients initially', () => {
 		expect(listIngredients()).toEqual([]);
 	});

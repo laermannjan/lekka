@@ -29,8 +29,9 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // Formula on that pool - the unit `recordVersion` stores and
 // `revertToVersion` (in ./recipes) restores (see CONTEXT.md's Version: one
 // shared timeline, no per-Variant history). Row ids are the ones live at
-// capture time; `revertToVersion` remaps them to freshly-inserted rows
-// rather than trying to resurrect the same ids.
+// capture time, and `revertToVersion` restores each row under the id recorded
+// here rather than renumbering it - that identity is what a Cook Log
+// Annotation pinned to a Step or Usage survives a revert by (see #51).
 export type RecipeSnapshot = {
 	compositions: Pick<Composition, 'id' | 'name' | 'isDefault' | 'seededFromCompositionId'>[];
 	steps: (Pick<Step, 'id'> & StepContent)[];

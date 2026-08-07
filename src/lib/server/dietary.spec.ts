@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { db } from './db';
-import { ingredientTags, ingredients, profileAvoidTags, profiles, tags } from './db/schema';
+import { ingredientTags, ingredients, profiles, tags } from './db/schema';
 import {
 	getAvoidTagIdsForProfiles,
 	getAvoidTagsForProfile,
@@ -9,14 +9,6 @@ import {
 } from './dietary';
 
 describe('dietary', () => {
-	beforeEach(() => {
-		db.delete(profileAvoidTags).run();
-		db.delete(ingredientTags).run();
-		db.delete(ingredients).run();
-		db.delete(profiles).run();
-		db.delete(tags).run();
-	});
-
 	function makeProfile(name = 'Jan') {
 		return db.insert(profiles).values({ name }).returning().get();
 	}

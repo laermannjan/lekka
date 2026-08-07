@@ -1,6 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
-import { db } from './db';
-import { profiles } from './db/schema';
+import { describe, expect, it } from 'vitest';
 import {
 	BlankNameError,
 	DuplicateNameError,
@@ -12,10 +10,6 @@ import {
 } from './profiles';
 
 describe('profiles', () => {
-	beforeEach(() => {
-		db.delete(profiles).run();
-	});
-
 	it('lists no profiles initially', () => {
 		expect(listProfiles()).toEqual([]);
 	});

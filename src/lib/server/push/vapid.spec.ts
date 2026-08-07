@@ -5,7 +5,6 @@ import { _resetVapidCacheForTests, getVapidKeys } from './vapid';
 
 describe('vapid keys', () => {
 	beforeEach(() => {
-		db.delete(vapidKeys).run();
 		_resetVapidCacheForTests();
 	});
 

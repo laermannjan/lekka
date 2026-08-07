@@ -1,13 +1,7 @@
-import { describe, expect, it, beforeEach } from 'vitest';
-import { db } from './db';
-import { tags } from './db/schema';
+import { describe, expect, it } from 'vitest';
 import { BlankNameError, DuplicateNameError, createTag, listTags } from './tags';
 
 describe('tags', () => {
-	beforeEach(() => {
-		db.delete(tags).run();
-	});
-
 	it('lists no tags initially', () => {
 		expect(listTags()).toEqual([]);
 	});

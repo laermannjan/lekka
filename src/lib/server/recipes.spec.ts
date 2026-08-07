@@ -1,19 +1,7 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
-import {
-	compositions,
-	compositionSteps,
-	cookDiners,
-	cooks,
-	ingredients,
-	ingredientUsages,
-	profiles,
-	recipes,
-	recipeVersions,
-	scalingFormulas,
-	steps
-} from './db/schema';
+import { cooks, scalingFormulas, steps } from './db/schema';
 import { createIngredient } from './ingredients';
 import {
 	addCookLogAnnotation,
@@ -66,20 +54,6 @@ import {
 } from './scaling';
 
 describe('recipes', () => {
-	beforeEach(() => {
-		db.delete(cookDiners).run();
-		db.delete(cooks).run();
-		db.delete(scalingFormulas).run();
-		db.delete(recipeVersions).run();
-		db.delete(ingredientUsages).run();
-		db.delete(compositionSteps).run();
-		db.delete(steps).run();
-		db.delete(compositions).run();
-		db.delete(recipes).run();
-		db.delete(ingredients).run();
-		db.delete(profiles).run();
-	});
-
 	it('creates a recipe with a title', () => {
 		const recipe = createRecipe('Chilli con carne');
 
@@ -107,7 +81,7 @@ describe('recipes', () => {
 		expect(listRecipes()).toEqual([]);
 	});
 
-	it('lists created recipes, most recently added first by default', () => {
+	it('lists created most recently added first by default', () => {
 		createRecipe('Chilli con carne');
 		createRecipe('Banana bread');
 
@@ -1854,6 +1828,105 @@ describe('recipes', () => {
 				const annotations = listAnnotationsForCooks([cook.id]).get(cook.id) ?? [];
 				const restoredStep = getRecipe(recipe.id, defaultComposition.id)!.composition.steps[0];
 				expect(annotations.map((a) => a.stepId)).toEqual([restoredStep.id]);
+			});
+
+			// The same loss as #51, one revert deeper: the first revert has to
+			// re-create a Step the Recipe had dropped, and everything logged
+			// against that re-created row is at the mercy of what the *second*
+			// revert does with it. Restoring under the snapshot's own id is what
+			// makes a Version restore the same Recipe every time it's applied.
+			it('keeps an Annotation written against a Step an earlier revert re-created', () => {
+				const jan = createProfile('Jan');
+				const recipe = createRecipe('Chilli con carne');
+				const defaultComposition = getDefaultComposition(recipe.id);
+				addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+				const { compositionStep: simmer } = addStep(defaultComposition.id, {
+					instruction: 'Simmer.'
+				});
+
+				const [target] = listRecipeVersions(recipe.id).slice(-1);
+				removeStepFromComposition(simmer.id);
+				revertToVersion(recipe.id, target.id);
+
+				// Written against the Step as the first revert brought it back.
+				const recreated = getRecipe(recipe.id, defaultComposition.id)!.composition.steps[1];
+				const cook = logCook(recipe.id, {
+					compositionId: defaultComposition.id,
+					actingProfileId: jan.id,
+					dinerProfileIds: [jan.id],
+					cookedAt: '2026-08-01',
+					outcome: 'needs-tweaks'
+				});
+				addCookLogAnnotation(cook.id, { stepId: recreated.id, note: 'Simmered it dry.' });
+
+				addStep(defaultComposition.id, { instruction: 'Season.' });
+				revertToVersion(recipe.id, target.id);
+
+				const annotations = listAnnotationsForCooks([cook.id]).get(cook.id) ?? [];
+				expect(annotations.map((a) => a.note)).toEqual(['Simmered it dry.']);
+				const stepsAfter = getRecipe(recipe.id, defaultComposition.id)!.composition.steps;
+				expect(stepsAfter.map((s) => s.instruction)).toEqual(['Brown the mince.', 'Simmer.']);
+				expect(annotations[0].stepId).toEqual(stepsAfter[1].id);
+			});
+
+			// The other edge of that boundary: an Annotation names a place in the
+			// Recipe, not a version of its text, so it stays put when a revert
+			// rewrites the instruction under it - exactly as it does when the
+			// instruction is edited directly. Dropping it instead would destroy
+			// Cook history to protect a caption (see docs/adr/0005).
+			it('keeps an Annotation pinned to a Step whose instruction the revert rewrites', () => {
+				const jan = createProfile('Jan');
+				const recipe = createRecipe('Chilli con carne');
+				const defaultComposition = getDefaultComposition(recipe.id);
+				const { step } = addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+
+				const [target] = listRecipeVersions(recipe.id).slice(-1);
+				updateStepInstruction(step.id, 'Sauté the onions.');
+
+				const cook = logCook(recipe.id, {
+					compositionId: defaultComposition.id,
+					actingProfileId: jan.id,
+					dinerProfileIds: [jan.id],
+					cookedAt: '2026-08-01',
+					outcome: 'needs-tweaks'
+				});
+				addCookLogAnnotation(cook.id, { stepId: step.id, note: 'Onions burned.' });
+
+				revertToVersion(recipe.id, target.id);
+
+				const annotations = listAnnotationsForCooks([cook.id]).get(cook.id) ?? [];
+				expect(annotations.map((a) => a.note)).toEqual(['Onions burned.']);
+				expect(annotations[0].stepId).toEqual(step.id);
+				// The Step reads as the restored Version has it, and the Cook still
+				// records the Version it was cooked at, whose snapshot holds the
+				// instruction the note was written against.
+				const restored = getRecipe(recipe.id, defaultComposition.id)!.composition.steps[0];
+				expect(restored.instruction).toEqual('Brown the mince.');
+			});
+
+			// Variant order is creation order, and a revert that brings a Variant
+			// back is restoring the one that was there - not creating a newer one
+			// that jumps to the end of the recipe page's tabs.
+			it('restores a removed Variant to its old place in the Variant list', () => {
+				const recipe = createRecipe('Chilli con carne');
+				const defaultComposition = getDefaultComposition(recipe.id);
+				addStep(defaultComposition.id, { instruction: 'Brown the mince.' });
+				createVariant(recipe.id, 'Chilli sin carne', defaultComposition.id);
+
+				const [target] = listRecipeVersions(recipe.id).slice(-1);
+				const later = createVariant(recipe.id, 'Chilli con pollo', defaultComposition.id);
+				// Reverting past `later` removes it; reverting back to it restores
+				// the sin carne line, which was created first.
+				const [withBoth] = listRecipeVersions(recipe.id).slice(-1);
+				revertToVersion(recipe.id, target.id);
+				revertToVersion(recipe.id, withBoth.id);
+
+				expect(listCompositions(recipe.id).map((c) => c.name)).toEqual([
+					null,
+					'Chilli sin carne',
+					'Chilli con pollo'
+				]);
+				expect(listCompositions(recipe.id).map((c) => c.id)).toContain(later.id);
 			});
 
 			it('leaves the last-cooked and most-cooked browse sorts untouched', () => {
