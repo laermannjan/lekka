@@ -1,19 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
-import { db } from '$lib/server/db';
-import {
-	compositions,
-	cookDiners,
-	cookLogAnnotations,
-	cooks,
-	compositionSteps,
-	ingredientUsages,
-	ingredients,
-	profiles,
-	recipeVersions,
-	recipes,
-	scalingFormulas,
-	steps
-} from '$lib/server/db/schema';
+import { describe, expect, it } from 'vitest';
 import { logCook, type CookWithDiners } from '$lib/server/cooks';
 import { createProfile } from '$lib/server/profiles';
 import {
@@ -31,21 +16,6 @@ import { load } from './+page.server';
 // hands that history to the template - including a Cook whose Composition the
 // revert removed, which no longer has a Composition to resolve (#51).
 describe('recipe page load', () => {
-	beforeEach(() => {
-		db.delete(cookLogAnnotations).run();
-		db.delete(cookDiners).run();
-		db.delete(cooks).run();
-		db.delete(scalingFormulas).run();
-		db.delete(recipeVersions).run();
-		db.delete(ingredientUsages).run();
-		db.delete(compositionSteps).run();
-		db.delete(steps).run();
-		db.delete(compositions).run();
-		db.delete(recipes).run();
-		db.delete(ingredients).run();
-		db.delete(profiles).run();
-	});
-
 	// `load` only reads `params`, `url` and `locals`, so the rest of a
 	// RequestEvent would be dead weight here. Its declared return type is the
 	// generic `MaybePromise<void | ...>` every PageServerLoad has; this one is

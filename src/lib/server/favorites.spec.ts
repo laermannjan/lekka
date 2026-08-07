@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { db } from './db';
-import { favorites, profiles, recipes } from './db/schema';
+import { profiles, recipes } from './db/schema';
 import {
 	isFavorite,
 	listFavoriteProfiles,
@@ -10,12 +10,6 @@ import {
 } from './favorites';
 
 describe('favorites', () => {
-	beforeEach(() => {
-		db.delete(favorites).run();
-		db.delete(recipes).run();
-		db.delete(profiles).run();
-	});
-
 	function makeRecipe(title = 'Chilli con carne') {
 		return db.insert(recipes).values({ title }).returning().get();
 	}

@@ -47,8 +47,24 @@ import {
 	type Cook,
 	type CookLogAnnotation
 } from './db/schema';
+import { DOMAIN_TABLES_CHILD_FIRST } from './db/tables';
 
-export const EXPORT_SCHEMA_VERSION = 1;
+// Bumped whenever the schema changes such that a dump this build writes is one
+// an older build cannot restore - a `notNull` dropped, a column added, a
+// constraint loosened. That is the whole job of the version: `restoreData`
+// wipes every table before it inserts anything, so an older build handed a
+// newer dump has to refuse it up front rather than discover the mismatch
+// halfway through.
+//
+// 2: `cooks.composition_id` became nullable (#51, docs/adr/0005), so a dump can
+// now hold a Cook whose Composition a revert removed - a row version 1's schema
+// rejects outright.
+export const EXPORT_SCHEMA_VERSION = 2;
+
+// The versions this build can read. Older dumps stay restorable as long as
+// every row shape they hold is still valid here, which is what a loosened
+// constraint means - version 1 never had the null this build allows.
+const RESTORABLE_SCHEMA_VERSIONS = [1, EXPORT_SCHEMA_VERSION];
 
 export interface DataExport {
 	schemaVersion: number;
@@ -76,30 +92,6 @@ export interface DataExport {
 		cookLogAnnotations: CookLogAnnotation[];
 	};
 }
-
-// Child-before-parent, mirroring `restoreData`'s delete pass.
-const TABLES_CHILD_FIRST = [
-	cookLogAnnotations,
-	cookDiners,
-	cooks,
-	scalingFormulas,
-	ingredientUsages,
-	compositionSteps,
-	recipeVersions,
-	steps,
-	compositions,
-	favorites,
-	recipeCategories,
-	collectionRecipes,
-	collections,
-	profileAvoidTags,
-	ingredientTags,
-	categories,
-	tags,
-	ingredients,
-	recipes,
-	profiles
-];
 
 export function exportData(): DataExport {
 	return {
@@ -132,7 +124,7 @@ export function exportData(): DataExport {
 
 export class InvalidExportError extends Error {}
 
-// Full replace, not merge: every table in `TABLES_CHILD_FIRST` is wiped
+// Full replace, not merge: every table in `DOMAIN_TABLES_CHILD_FIRST` is wiped
 // before anything is reinserted, deleted child-first and reinserted
 // parent-first so FK constraints hold throughout - no need to touch the
 // `foreign_keys` pragma. Row ids are preserved as-is from the dump; SQLite's
@@ -143,7 +135,7 @@ export function restoreData(raw: unknown): void {
 	const { data } = parsed;
 
 	db.transaction((tx) => {
-		for (const table of TABLES_CHILD_FIRST) {
+		for (const table of DOMAIN_TABLES_CHILD_FIRST) {
 			tx.delete(table).run();
 		}
 
@@ -209,9 +201,12 @@ function validateExport(raw: unknown): DataExport {
 	}
 	const candidate = raw as Record<string, unknown>;
 
-	if (candidate.schemaVersion !== EXPORT_SCHEMA_VERSION) {
+	if (
+		typeof candidate.schemaVersion !== 'number' ||
+		!RESTORABLE_SCHEMA_VERSIONS.includes(candidate.schemaVersion)
+	) {
 		throw new InvalidExportError(
-			`Unsupported schema version ${String(candidate.schemaVersion)}, expected ${EXPORT_SCHEMA_VERSION}`
+			`Unsupported schema version ${String(candidate.schemaVersion)}, expected ${RESTORABLE_SCHEMA_VERSIONS.join(' or ')}`
 		);
 	}
 

@@ -145,21 +145,33 @@ function copyUsagesAndFormulasToStep(tx: Tx, fromStep: Step, toStep: Step): void
 // resolve against a Usage on a different Step, and would be cascade-deleted
 // the moment the source Step went away (exactly what `overrideStep` does to a
 // Step it re-overrides).
+//
+// Where a source id lands is the caller's business: copying a Step's content
+// moves every id (`usageIdMap.get`), while reverting keeps them all (see
+// `keptId`), so both pass a lookup rather than a shared map shape.
+type IdLookup = (sourceId: number) => number | undefined;
+
+// The lookup for a path that doesn't move ids: an id survives as itself, or
+// not at all.
+function keptId(kept: Set<number>): IdLookup {
+	return (sourceId) => (kept.has(sourceId) ? sourceId : undefined);
+}
+
 function insertRemappedFormula(
 	tx: Tx,
 	formula: PortableScalingFormula,
-	usageIdMap: Map<number, number>,
-	stepIdMap: Map<number, number>
+	lookupUsageId: IdLookup,
+	lookupStepId: IdLookup
 ): void {
 	const ingredientUsageId =
-		formula.ingredientUsageId !== null ? (usageIdMap.get(formula.ingredientUsageId) ?? null) : null;
+		formula.ingredientUsageId !== null ? (lookupUsageId(formula.ingredientUsageId) ?? null) : null;
 	if (formula.ingredientUsageId !== null && ingredientUsageId === null) return;
 
-	const stepId = formula.stepId !== null ? (stepIdMap.get(formula.stepId) ?? null) : null;
+	const stepId = formula.stepId !== null ? (lookupStepId(formula.stepId) ?? null) : null;
 	if (formula.stepId !== null && stepId === null) return;
 
 	const otherUsageId =
-		formula.otherUsageId !== null ? (usageIdMap.get(formula.otherUsageId) ?? null) : null;
+		formula.otherUsageId !== null ? (lookupUsageId(formula.otherUsageId) ?? null) : null;
 	if (formula.otherUsageId !== null && otherUsageId === null) return;
 
 	// A Duration formula only lands on a row that has a Duration for it to
@@ -215,9 +227,13 @@ function copyScalingFormulasToStep(
 
 	// Every Step id in play here is the source Step's, and they all land on the
 	// one copy.
-	const stepIdMap = new Map([[fromStep.id, toStep.id]]);
 	for (const formula of sourceFormulas) {
-		insertRemappedFormula(tx, formula, usageIdMap, stepIdMap);
+		insertRemappedFormula(
+			tx,
+			formula,
+			(sourceId) => usageIdMap.get(sourceId),
+			(sourceId) => (sourceId === fromStep.id ? toStep.id : undefined)
+		);
 	}
 }
 
@@ -349,11 +365,17 @@ export function getRecipeById(id: number): Recipe | undefined {
 // creation order (see CONTEXT.md). No Composition is structurally
 // privileged; `isDefault` only decides this ordering and which line loads
 // first.
+//
+// Creation order is read off the id, not `createdAt`: ids are handed out in
+// order and never reused, and `revertToVersion` restores a Variant under the
+// id it had, so a Variant a revert brings back sits where it always sat rather
+// than jumping to the end of the Variant tabs with a fresh timestamp.
+// `createdAt` only has whole-second resolution anyway.
 export function listCompositions(recipeId: number): Composition[] {
 	const rows = db.select().from(compositions).where(eq(compositions.recipeId, recipeId)).all();
 	return rows.sort((a, b) => {
 		if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
-		return a.createdAt.localeCompare(b.createdAt);
+		return a.id - b.id;
 	});
 }
 
@@ -1154,109 +1176,109 @@ export function getRecipeVersionById(id: number): RecipeVersion | undefined {
 }
 
 // Each `restore*` below reconciles one Recipe-scoped table against the target
-// Version's snapshot **in place**: a row the snapshot still holds keeps its own
-// id and is updated to the snapshot's content, a row the snapshot has since
-// gained is inserted, and only a row the snapshot genuinely doesn't have is
-// deleted. They return a snapshot-id -> live-id map for the rows that
-// reference them.
+// Version's snapshot **in place**, under the ids the snapshot recorded: a row
+// the snapshot holds is written back as the id it had when the snapshot was
+// taken - updated if that row is still live, re-inserted under that same id if
+// it isn't - and only a live row the snapshot doesn't hold at all is deleted.
+// Each returns the set of ids it restored, which the tables referencing it
+// filter against.
 //
 // Rebuilding the Recipe from scratch instead - delete everything, re-insert
 // from the snapshot - is simpler and was what this did, but it gave every row
 // a new id, and a Cook is not part of the Recipe a Version restores: it
 // referenced those ids from the outside and cascade-died with them, taking its
-// Diners and its Cook Log Annotations along (#51). Reconciling means an
-// unchanged Step is still literally the same row afterwards, so a Cook Log
-// Annotation pinned to it stays pinned - and stays pinned across repeated
-// reverts, which remapping ids inside one revert could never manage, since the
-// second revert has no correspondence left between live rows and the snapshot.
+// Diners and its Cook Log Annotations along (#51).
+//
+// Keeping a *live* row's id covers a Cook logged against a Step the revert
+// doesn't touch. Re-inserting a *removed* row under its old id is what covers
+// the rest: reverting to the same Version twice would otherwise hand the second
+// revert's re-insert a fresh id and cascade away everything logged against the
+// first one - #51 again, one revert deeper. It is safe because every table here
+// is `integer primary key autoincrement`, which SQLite guarantees never reuses
+// an id: an id from a snapshot is either still that very row, or free forever.
+// So nothing is ever renumbered, and a revert is idempotent no matter how many
+// times, or in what order, Versions are restored.
 
-function restoreSteps(tx: Tx, recipeId: number, snapshot: RecipeSnapshot): Map<number, number> {
-	const liveStepIds = new Set(
-		tx
-			.select({ id: steps.id })
-			.from(steps)
-			.where(eq(steps.recipeId, recipeId))
-			.all()
-			.map((step) => step.id)
-	);
+// The shared algorithm: write every snapshot row back, then delete the live
+// rows the snapshot didn't account for. One copy, because the three tables
+// differ only in how a row is written and what its removal cascades into - and
+// getting "which rows die" right in two of three places is how #51 shipped.
+function reconcile<TRow extends { id: number }>(
+	liveIds: number[],
+	snapshotRows: TRow[],
+	write: (row: TRow) => void,
+	drop: (ids: number[]) => void
+): Set<number> {
+	for (const row of snapshotRows) write(row);
 
-	const stepIdMap = new Map<number, number>();
-	for (const s of snapshot.steps) {
-		const content = toStepContent(s);
-		if (liveStepIds.has(s.id)) {
-			tx.update(steps).set(content).where(eq(steps.id, s.id)).run();
-			stepIdMap.set(s.id, s.id);
-		} else {
-			stepIdMap.set(s.id, insertStep(tx, recipeId, content).id);
-		}
-	}
+	const restored = new Set(snapshotRows.map((row) => row.id));
+	drop(liveIds.filter((id) => !restored.has(id)));
 
-	// Cascades: a Step dropped here takes its composition_steps references, its
-	// ingredient_usages, its Scaling Formula and any Annotation pinned to it -
-	// it is genuinely not part of the Recipe at this Version.
-	const restored = new Set(stepIdMap.values());
-	const dropped = [...liveStepIds].filter((id) => !restored.has(id));
-	if (dropped.length > 0) tx.delete(steps).where(inArray(steps.id, dropped)).run();
-
-	return stepIdMap;
+	return restored;
 }
 
-function restoreCompositions(
-	tx: Tx,
-	recipeId: number,
-	snapshot: RecipeSnapshot
-): Map<number, number> {
-	const liveCompositionIds = new Set(
-		tx
-			.select({ id: compositions.id })
-			.from(compositions)
-			.where(eq(compositions.recipeId, recipeId))
-			.all()
-			.map((composition) => composition.id)
-	);
+function restoreSteps(tx: Tx, recipeId: number, snapshot: RecipeSnapshot): Set<number> {
+	const liveStepIds = tx
+		.select({ id: steps.id })
+		.from(steps)
+		.where(eq(steps.recipeId, recipeId))
+		.all()
+		.map((step) => step.id);
 
-	const compositionIdMap = new Map<number, number>();
-	for (const c of snapshot.compositions) {
-		if (liveCompositionIds.has(c.id)) {
-			tx.update(compositions)
-				.set({ name: c.name, isDefault: c.isDefault })
-				.where(eq(compositions.id, c.id))
+	return reconcile(
+		liveStepIds,
+		snapshot.steps,
+		(s) => {
+			const content = toStepContent(s);
+			tx.insert(steps)
+				.values({ id: s.id, recipeId, ...content })
+				.onConflictDoUpdate({ target: steps.id, set: content })
 				.run();
-			compositionIdMap.set(c.id, c.id);
-		} else {
-			const inserted = tx
-				.insert(compositions)
-				.values({ recipeId, name: c.name, isDefault: c.isDefault, seededFromCompositionId: null })
-				.returning()
-				.get();
-			compositionIdMap.set(c.id, inserted.id);
-		}
-	}
+		},
+		// Cascades: a Step dropped here takes its composition_steps references, its
+		// ingredient_usages, its Scaling Formula and any Annotation pinned to it -
+		// it is genuinely not part of the Recipe at this Version.
+		(dropped) => tx.delete(steps).where(inArray(steps.id, dropped)).run()
+	);
+}
 
-	// Second pass: `seededFromCompositionId` is informational lineage only (see
-	// CONTEXT.md) - remapped now that every Composition in the snapshot has a
-	// live id, and cleared if its source isn't in this snapshot at all.
-	for (const c of snapshot.compositions) {
-		const seededFromCompositionId =
-			c.seededFromCompositionId === null
-				? null
-				: (compositionIdMap.get(c.seededFromCompositionId) ?? null);
-		tx.update(compositions)
-			.set({ seededFromCompositionId })
-			.where(eq(compositions.id, compositionIdMap.get(c.id)!))
-			.run();
-	}
+function restoreCompositions(tx: Tx, recipeId: number, snapshot: RecipeSnapshot): Set<number> {
+	const liveCompositionIds = tx
+		.select({ id: compositions.id })
+		.from(compositions)
+		.where(eq(compositions.recipeId, recipeId))
+		.all()
+		.map((composition) => composition.id);
 
-	// A Composition dropped here - a Variant created after this Version - takes
-	// its composition_steps with it, but no longer takes the Cooks logged
-	// against it: `cooks.composition_id` is `on delete set null` (see
-	// ./db/schema.ts and docs/adr/0005). Those Cooks stay in the history with
-	// no Composition to point at.
-	const restored = new Set(compositionIdMap.values());
-	const dropped = [...liveCompositionIds].filter((id) => !restored.has(id));
-	if (dropped.length > 0) tx.delete(compositions).where(inArray(compositions.id, dropped)).run();
+	// `seededFromCompositionId` is informational lineage only (see CONTEXT.md).
+	// Nothing to remap now that ids don't move - it just has to be dropped if
+	// the Composition it names isn't part of this snapshot at all.
+	const inSnapshot = new Set(snapshot.compositions.map((c) => c.id));
 
-	return compositionIdMap;
+	return reconcile(
+		liveCompositionIds,
+		snapshot.compositions,
+		(c) => {
+			const content = {
+				name: c.name,
+				isDefault: c.isDefault,
+				seededFromCompositionId:
+					c.seededFromCompositionId !== null && inSnapshot.has(c.seededFromCompositionId)
+						? c.seededFromCompositionId
+						: null
+			};
+			tx.insert(compositions)
+				.values({ id: c.id, recipeId, ...content })
+				.onConflictDoUpdate({ target: compositions.id, set: content })
+				.run();
+		},
+		// A Composition dropped here - a Variant created after this Version - takes
+		// its composition_steps with it, but no longer takes the Cooks logged
+		// against it: `cooks.composition_id` is `on delete set null` (see
+		// ./db/schema.ts and docs/adr/0005). Those Cooks stay in the history with
+		// no Composition to point at.
+		(dropped) => tx.delete(compositions).where(inArray(compositions.id, dropped)).run()
+	);
 }
 
 // Unlike the rest, these are rebuilt rather than reconciled: the snapshot
@@ -1266,24 +1288,27 @@ function restoreCompositions(
 function restoreCompositionSteps(
 	tx: Tx,
 	snapshot: RecipeSnapshot,
-	compositionIdMap: Map<number, number>,
-	stepIdMap: Map<number, number>
+	restoredCompositionIds: Set<number>,
+	restoredStepIds: Set<number>
 ): void {
-	const compositionIds = [...compositionIdMap.values()];
-	if (compositionIds.length > 0) {
-		tx.delete(compositionSteps)
-			.where(inArray(compositionSteps.compositionId, compositionIds))
-			.run();
-	}
+	tx.delete(compositionSteps)
+		.where(inArray(compositionSteps.compositionId, [...restoredCompositionIds]))
+		.run();
 
 	for (const cs of snapshot.compositionSteps) {
-		const compositionId = compositionIdMap.get(cs.compositionId);
-		const poolStepId = stepIdMap.get(cs.poolStepId);
-		if (compositionId === undefined || poolStepId === undefined) continue;
+		if (!restoredCompositionIds.has(cs.compositionId)) continue;
+		if (!restoredStepIds.has(cs.poolStepId)) continue;
 		const overrideStepId =
-			cs.overrideStepId !== null ? (stepIdMap.get(cs.overrideStepId) ?? null) : null;
+			cs.overrideStepId !== null && restoredStepIds.has(cs.overrideStepId)
+				? cs.overrideStepId
+				: null;
 		tx.insert(compositionSteps)
-			.values({ compositionId, position: cs.position, poolStepId, overrideStepId })
+			.values({
+				compositionId: cs.compositionId,
+				position: cs.position,
+				poolStepId: cs.poolStepId,
+				overrideStepId
+			})
 			.run();
 	}
 }
@@ -1291,68 +1316,58 @@ function restoreCompositionSteps(
 function restoreIngredientUsages(
 	tx: Tx,
 	snapshot: RecipeSnapshot,
-	stepIdMap: Map<number, number>
-): Map<number, number> {
-	const stepIds = [...stepIdMap.values()];
-	const liveUsageIds = new Set(
-		stepIds.length === 0
-			? []
-			: tx
-					.select({ id: ingredientUsages.id })
-					.from(ingredientUsages)
-					.where(inArray(ingredientUsages.stepId, stepIds))
-					.all()
-					.map((usage) => usage.id)
+	restoredStepIds: Set<number>
+): Set<number> {
+	const liveUsageIds = tx
+		.select({ id: ingredientUsages.id })
+		.from(ingredientUsages)
+		.where(inArray(ingredientUsages.stepId, [...restoredStepIds]))
+		.all()
+		.map((usage) => usage.id);
+
+	// A Usage whose Step this Version doesn't hold has nothing to hang off. The
+	// snapshot is self-contained, so this only bites a snapshot written before
+	// it was.
+	const snapshotUsages = snapshot.ingredientUsages.filter((u) => restoredStepIds.has(u.stepId));
+
+	return reconcile(
+		liveUsageIds,
+		snapshotUsages,
+		(u) => {
+			const content = { stepId: u.stepId, ...toIngredientUsageContent(u) };
+			tx.insert(ingredientUsages)
+				.values({ id: u.id, ...content })
+				.onConflictDoUpdate({ target: ingredientUsages.id, set: content })
+				.run();
+		},
+		(dropped) => tx.delete(ingredientUsages).where(inArray(ingredientUsages.id, dropped)).run()
 	);
-
-	const usageIdMap = new Map<number, number>();
-	for (const u of snapshot.ingredientUsages) {
-		const stepId = stepIdMap.get(u.stepId);
-		if (stepId === undefined) continue;
-		const content = { stepId, ...toIngredientUsageContent(u) };
-		if (liveUsageIds.has(u.id)) {
-			tx.update(ingredientUsages).set(content).where(eq(ingredientUsages.id, u.id)).run();
-			usageIdMap.set(u.id, u.id);
-		} else {
-			usageIdMap.set(u.id, tx.insert(ingredientUsages).values(content).returning().get().id);
-		}
-	}
-
-	const restored = new Set(usageIdMap.values());
-	const dropped = [...liveUsageIds].filter((id) => !restored.has(id));
-	if (dropped.length > 0) {
-		tx.delete(ingredientUsages).where(inArray(ingredientUsages.id, dropped)).run();
-	}
-
-	return usageIdMap;
 }
 
 function restoreScalingFormulas(
 	tx: Tx,
 	snapshot: RecipeSnapshot,
-	stepIdMap: Map<number, number>,
-	usageIdMap: Map<number, number>
+	restoredStepIds: Set<number>,
+	restoredUsageIds: Set<number>
 ): void {
 	// Rebuilt, like composition_steps, and for the same reason - the snapshot
 	// carries no id for a Formula. A Formula still sitting on a reconciled Step
 	// or Usage has to go first, or it collides with the snapshot's own on
 	// `scaling_formulas_step_unique`/`_usage_unique`; one on a row the revert
 	// dropped is already gone with it.
-	const stepIds = [...stepIdMap.values()];
-	const usageIds = [...usageIdMap.values()];
-	if (stepIds.length > 0) {
-		tx.delete(scalingFormulas).where(inArray(scalingFormulas.stepId, stepIds)).run();
-	}
-	if (usageIds.length > 0) {
-		tx.delete(scalingFormulas).where(inArray(scalingFormulas.ingredientUsageId, usageIds)).run();
-	}
+	tx.delete(scalingFormulas)
+		.where(inArray(scalingFormulas.stepId, [...restoredStepIds]))
+		.run();
+	tx.delete(scalingFormulas)
+		.where(inArray(scalingFormulas.ingredientUsageId, [...restoredUsageIds]))
+		.run();
 
-	// Each Formula hangs off ids this revert has just reconciled, so it goes
-	// through the same remap as the Step-content copy path - dropped if the
-	// Usage or Step it attached to, or the Usage its `otherUsageId` points at,
-	// isn't in this snapshot.
+	// A Formula hangs off ids this revert has just restored, so it goes through
+	// the same lookup as the Step-content copy path - dropped if the Usage or
+	// Step it attached to, or the Usage its `otherUsageId` points at, isn't in
+	// this snapshot.
 	for (const f of snapshot.scalingFormulas) {
-		insertRemappedFormula(tx, f, usageIdMap, stepIdMap);
+		insertRemappedFormula(tx, f, keptId(restoredUsageIds), keptId(restoredStepIds));
 	}
 }
 
@@ -1374,11 +1389,11 @@ export function revertToVersion(recipeId: number, versionId: number): RecipeVers
 	const snapshot = JSON.parse(version.snapshot) as RecipeSnapshot;
 
 	return db.transaction((tx) => {
-		const compositionIdMap = restoreCompositions(tx, recipeId, snapshot);
-		const stepIdMap = restoreSteps(tx, recipeId, snapshot);
-		restoreCompositionSteps(tx, snapshot, compositionIdMap, stepIdMap);
-		const usageIdMap = restoreIngredientUsages(tx, snapshot, stepIdMap);
-		restoreScalingFormulas(tx, snapshot, stepIdMap, usageIdMap);
+		const restoredCompositionIds = restoreCompositions(tx, recipeId, snapshot);
+		const restoredStepIds = restoreSteps(tx, recipeId, snapshot);
+		restoreCompositionSteps(tx, snapshot, restoredCompositionIds, restoredStepIds);
+		const restoredUsageIds = restoreIngredientUsages(tx, snapshot, restoredStepIds);
+		restoreScalingFormulas(tx, snapshot, restoredStepIds, restoredUsageIds);
 
 		return recordVersion(tx, recipeId, versionId);
 	});

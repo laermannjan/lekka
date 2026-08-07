@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../db';
-import { pushSubscriptions, scheduledPushes, vapidKeys } from '../db/schema';
+import { pushSubscriptions, scheduledPushes } from '../db/schema';
 import { saveSubscription } from './subscriptions';
 
 const sendNotification = vi.fn();
@@ -19,9 +19,6 @@ describe('timer push scheduler', () => {
 		vi.useFakeTimers();
 		sendNotification.mockReset();
 		sendNotification.mockResolvedValue(undefined);
-		db.delete(scheduledPushes).run();
-		db.delete(pushSubscriptions).run();
-		db.delete(vapidKeys).run();
 	});
 
 	afterEach(() => {

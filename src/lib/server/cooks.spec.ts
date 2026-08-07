@@ -1,17 +1,6 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { db } from './db';
-import {
-	cookDiners,
-	cookLogAnnotations,
-	cooks,
-	compositions,
-	ingredientUsages,
-	ingredients,
-	profiles,
-	recipeVersions,
-	recipes,
-	steps
-} from './db/schema';
+import { ingredients, profiles, recipeVersions } from './db/schema';
 import { createRecipe, getDefaultComposition, addStep, addIngredientUsage } from './recipes';
 import {
 	AnnotationTargetError,
@@ -26,19 +15,6 @@ import {
 } from './cooks';
 
 describe('cooks', () => {
-	beforeEach(() => {
-		db.delete(cookLogAnnotations).run();
-		db.delete(cookDiners).run();
-		db.delete(cooks).run();
-		db.delete(ingredientUsages).run();
-		db.delete(steps).run();
-		db.delete(compositions).run();
-		db.delete(recipeVersions).run();
-		db.delete(recipes).run();
-		db.delete(ingredients).run();
-		db.delete(profiles).run();
-	});
-
 	function makeProfile(name = 'Jan') {
 		return db.insert(profiles).values({ name }).returning().get();
 	}

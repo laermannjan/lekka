@@ -1,6 +1,6 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { db } from './db';
-import { categories, recipeCategories, recipes } from './db/schema';
+import { recipes } from './db/schema';
 import {
 	BlankNameError,
 	CategoryNotFoundError,
@@ -16,12 +16,6 @@ import {
 } from './categories';
 
 describe('categories', () => {
-	beforeEach(() => {
-		db.delete(recipeCategories).run();
-		db.delete(categories).run();
-		db.delete(recipes).run();
-	});
-
 	it('lists no categories initially', () => {
 		expect(listCategories()).toEqual([]);
 	});

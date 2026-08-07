@@ -79,6 +79,14 @@ describe('migration metadata', () => {
 // This replays the chain the way the app does, against a database that already
 // holds a Cook, so any future migration that quietly empties Cook history fails
 // here instead of on someone's instance.
+//
+// Both pragma states are replayed, because the same SQL is applied under both
+// and the two fail in opposite directions. `foreign_keys = ON` is how the app
+// boots (see ./index.ts) and is where a `DROP TABLE` cascades the children
+// empty; `foreign_keys = OFF` is SQLite's own default, and therefore what
+// `pnpm db:migrate` and a hand-run `sqlite3 app.db < 00xx.sql` get, where the
+// same drop leaves the children populated and a migration that re-inserts them
+// collides with rows that never left. A migration has to survive both.
 function statementsOf(tag: string): string[] {
 	return readFileSync(new URL(`drizzle/${tag}.sql`, repoRoot), 'utf8')
 		.split('--> statement-breakpoint')
@@ -86,10 +94,33 @@ function statementsOf(tag: string): string[] {
 		.filter(Boolean);
 }
 
-describe('applying the migrations to a database that already has data', () => {
+// Every table a Cook's history hangs off, seeded so each one has something to
+// lose: the Cook itself, its Diners, and an Annotation of each kind - one
+// pinned to a Step, one to an Ingredient Usage, since they cascade off
+// different tables and a migration can rebuild either.
+const SEED = `
+	INSERT INTO profiles (id, name) VALUES (1, 'Jan');
+	INSERT INTO ingredients (id, base_term) VALUES (1, 'mince');
+	INSERT INTO recipes (id, title) VALUES (1, 'Chilli con carne');
+	INSERT INTO compositions (id, recipe_id, name, is_default) VALUES (1, 1, NULL, 1);
+	INSERT INTO steps (id, recipe_id, instruction) VALUES (1, 1, 'Brown the mince.');
+	INSERT INTO ingredient_usages (id, step_id, ingredient_id, position, quantity_value, quantity_unit)
+		VALUES (1, 1, 1, 1, 500, 'g');
+	INSERT INTO recipe_versions (id, recipe_id, snapshot) VALUES (1, 1, '{}');
+	INSERT INTO cooks (id, recipe_id, composition_id, recipe_version_id, acting_profile_id, cooked_at, outcome)
+		VALUES (1, 1, 1, 1, 1, '2026-08-01', 'worked-well');
+	INSERT INTO cook_diners (cook_id, profile_id) VALUES (1, 1);
+	INSERT INTO cook_log_annotations (id, cook_id, step_id, note) VALUES (1, 1, 1, 'Browned too long.');
+	INSERT INTO cook_log_annotations (id, cook_id, ingredient_usage_id, note) VALUES (2, 1, 1, 'Too much mince.');
+`;
+
+describe.each([
+	['foreign_keys = ON', 'ON'],
+	['foreign_keys = OFF', 'OFF']
+])('applying the migrations to a database that already has data, %s', (_name, pragma) => {
 	it('never empties a Cook, its Diners or its Annotations', () => {
 		const database = new Database(':memory:');
-		database.pragma('foreign_keys = ON');
+		database.pragma(`foreign_keys = ${pragma}`);
 
 		// Up to and including whichever migration first creates `cooks` - so the
 		// seed below can be written, and every later migration is under test.
@@ -106,17 +137,7 @@ describe('applying the migrations to a database that already has data', () => {
 		}
 		expect(hasCooks()).toBe(true);
 
-		database.exec(`
-			INSERT INTO profiles (id, name) VALUES (1, 'Jan');
-			INSERT INTO recipes (id, title) VALUES (1, 'Chilli con carne');
-			INSERT INTO compositions (id, recipe_id, name, is_default) VALUES (1, 1, NULL, 1);
-			INSERT INTO steps (id, recipe_id, instruction) VALUES (1, 1, 'Brown the mince.');
-			INSERT INTO recipe_versions (id, recipe_id, snapshot) VALUES (1, 1, '{}');
-			INSERT INTO cooks (id, recipe_id, composition_id, recipe_version_id, acting_profile_id, cooked_at, outcome)
-				VALUES (1, 1, 1, 1, 1, '2026-08-01', 'worked-well');
-			INSERT INTO cook_diners (cook_id, profile_id) VALUES (1, 1);
-			INSERT INTO cook_log_annotations (id, cook_id, step_id, note) VALUES (1, 1, 1, 'Browned too long.');
-		`);
+		database.exec(SEED);
 
 		database.exec('BEGIN');
 		for (const entry of remaining) {
@@ -130,7 +151,7 @@ describe('applying the migrations to a database that already has data', () => {
 			cooks: count('cooks'),
 			cookDiners: count('cook_diners'),
 			cookLogAnnotations: count('cook_log_annotations')
-		}).toEqual({ cooks: 1, cookDiners: 1, cookLogAnnotations: 1 });
+		}).toEqual({ cooks: 1, cookDiners: 1, cookLogAnnotations: 2 });
 
 		database.close();
 	});

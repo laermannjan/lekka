@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { db } from './db';
 import {
 	categories,
@@ -25,29 +25,6 @@ import {
 import { EXPORT_SCHEMA_VERSION, InvalidExportError, exportData, restoreData } from './data-export';
 
 describe('data-export', () => {
-	beforeEach(() => {
-		db.delete(cookLogAnnotations).run();
-		db.delete(cookDiners).run();
-		db.delete(cooks).run();
-		db.delete(scalingFormulas).run();
-		db.delete(ingredientUsages).run();
-		db.delete(compositionSteps).run();
-		db.delete(recipeVersions).run();
-		db.delete(steps).run();
-		db.delete(compositions).run();
-		db.delete(favorites).run();
-		db.delete(recipeCategories).run();
-		db.delete(collectionRecipes).run();
-		db.delete(collections).run();
-		db.delete(profileAvoidTags).run();
-		db.delete(ingredientTags).run();
-		db.delete(categories).run();
-		db.delete(tags).run();
-		db.delete(ingredients).run();
-		db.delete(recipes).run();
-		db.delete(profiles).run();
-	});
-
 	// Seeds one row (or join row) into every table `exportData`/`restoreData`
 	// touch, wired together so every FK actually resolves - a broad smoke
 	// fixture rather than exercising each table's domain rules.
@@ -179,9 +156,22 @@ describe('data-export', () => {
 		expect(db.select().from(profiles).all()).toHaveLength(dump.data.profiles.length);
 	});
 
-	it('rejects a dump with the wrong schema version', () => {
+	it('rejects a dump from a newer build than this one', () => {
 		const dump = exportData();
 		expect(() => restoreData({ ...dump, schemaVersion: 999 })).toThrow(InvalidExportError);
+	});
+
+	// A version bump means "an older build can't read this", never "this build
+	// stops reading what it already wrote" - a self-hoster's existing dump has
+	// to keep restoring across an upgrade.
+	it('still restores a dump from an older schema version', () => {
+		seedFullFixture();
+		const dump = exportData();
+		db.delete(favorites).run();
+
+		restoreData({ ...dump, schemaVersion: 1 });
+
+		expect(exportData().data).toEqual(dump.data);
 	});
 
 	it('rejects malformed input', () => {

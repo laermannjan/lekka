@@ -1,13 +1,7 @@
-import { describe, expect, it, beforeEach } from 'vitest';
-import { db } from '../db';
-import { pushSubscriptions } from '../db/schema';
+import { describe, expect, it } from 'vitest';
 import { getSubscriptionById, removeSubscription, saveSubscription } from './subscriptions';
 
 describe('push subscriptions', () => {
-	beforeEach(() => {
-		db.delete(pushSubscriptions).run();
-	});
-
 	function input(endpoint = 'https://push.example/abc') {
 		return { endpoint, p256dh: 'p256dh-key', auth: 'auth-secret' };
 	}
