@@ -4,7 +4,11 @@
 // time and DELETE when a timer is finished manually before firing.
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { cancelTimerPush, scheduleTimerPush } from '$lib/server/push/scheduler';
+import {
+	cancelTimerPush,
+	scheduleTimerPush,
+	MAX_TIMER_PUSH_DELAY_MS
+} from '$lib/server/push/scheduler';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json();
@@ -16,6 +20,13 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	if (!subscriptionId || !timerId || !title || !firesAt) {
 		error(400, 'Missing subscriptionId, timerId, title, or firesAt');
+	}
+
+	// A fire time past the scheduler's ceiling can't be represented by the
+	// underlying timer and would fire immediately - reject it outright rather
+	// than notifying the user now for a timer they set for far in the future.
+	if (firesAt - Date.now() > MAX_TIMER_PUSH_DELAY_MS) {
+		error(400, 'firesAt is too far in the future');
 	}
 
 	const row = scheduleTimerPush({ subscriptionId, timerId, title, body: bodyText, firesAt });

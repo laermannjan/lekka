@@ -19,6 +19,13 @@ import { getSubscriptionById, removeSubscription } from './subscriptions';
 
 const timers = new Map<number, ReturnType<typeof setTimeout>>();
 
+// The furthest out a push can be scheduled: `setTimeout`'s delay is coerced
+// to a 32-bit signed int, so anything past this overflows and fires on the
+// next tick - i.e. a timer meant for next year would notify immediately.
+// Cook timers are minutes/hours out, so this bound only ever catches a
+// nonsense or hostile request; better a 400 than a surprise notification.
+export const MAX_TIMER_PUSH_DELAY_MS = 2_147_483_647;
+
 export type ScheduleInput = {
 	subscriptionId: number;
 	timerId: string;
@@ -39,6 +46,11 @@ export function initScheduler(): void {
 }
 
 export function scheduleTimerPush(input: ScheduleInput): ScheduledPush {
+	if (input.firesAt - Date.now() > MAX_TIMER_PUSH_DELAY_MS) {
+		throw new RangeError(
+			`firesAt is more than ${MAX_TIMER_PUSH_DELAY_MS}ms in the future, which the timer cannot represent`
+		);
+	}
 	const row = db.insert(scheduledPushes).values(input).returning().get();
 	arm(row);
 	return row;
@@ -74,6 +86,17 @@ function arm(row: ScheduledPush): void {
 	const delay = row.firesAt - Date.now();
 	if (delay <= 0) {
 		void fire(row);
+		return;
+	}
+	// `scheduleTimerPush` refuses these, so a row can only get here by having
+	// been written directly into the DB. Arming it would overflow the delay
+	// and fire it now, which is the exact failure the bound exists to avoid -
+	// drop it instead, rather than leaving a row that re-triggers every boot.
+	if (delay > MAX_TIMER_PUSH_DELAY_MS) {
+		console.error(
+			`Dropping scheduled push ${row.id}: fires_at is beyond the timer's ${MAX_TIMER_PUSH_DELAY_MS}ms ceiling`
+		);
+		db.delete(scheduledPushes).where(eq(scheduledPushes.id, row.id)).run();
 		return;
 	}
 	const handle = setTimeout(() => void fire(row), delay);
