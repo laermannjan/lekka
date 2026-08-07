@@ -254,11 +254,10 @@ export function createRecipe(title: string, servings: number = DEFAULT_SERVINGS)
 	});
 }
 
-// Updates a Recipe's base/usual servings count - the baseline every stored
-// Quantity and Duration is "as written" at (see CONTEXT.md). This changes
-// what count default linear scaling treats as 1x; it does not touch any
-// stored Quantity or Duration value, but it changes what every one of them
-// resolves to, so it is a Recipe edit like any other and records a Version.
+// Updates a Recipe's base servings (see CONTEXT.md's Base servings entry).
+// This touches no stored Quantity or Duration value, but it changes what
+// every one of them resolves to, so it is a Recipe edit like any other and
+// records a Version.
 export function updateServings(recipeId: number, servings: number): Recipe {
 	const validServings = validateServings(servings);
 	return db.transaction((tx) => {
@@ -1206,10 +1205,7 @@ export function getRecipeVersionById(id: number): RecipeVersion | undefined {
 // So nothing is ever renumbered, and a revert is idempotent no matter how many
 // times, or in what order, Versions are restored.
 
-// Base servings is what default linear scaling treats as 1x, so restoring the
-// Quantities without it resolves them against whatever baseline happens to be
-// live - the numbers a cook reads after a revert would not be the ones that
-// Version was authored with (#56).
+// Why a Version carries base servings at all: see `RecipeSnapshot.servings`.
 //
 // A snapshot written before #56 has no `servings` key. The live value is left
 // alone rather than guessed at: there is no baseline recorded to restore, and

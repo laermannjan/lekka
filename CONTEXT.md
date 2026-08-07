@@ -24,6 +24,10 @@ A small, fixed classification of what kind of thing a Tag describes — allergen
 **Recipe**:
 A named dish: a shared pool of Steps plus one or more Compositions (a default line and any named Variants) that each select, order, and optionally override those Steps. Evolves over time via Version — one shared timeline covering the pool and every Composition together. Optionally carries Categories, shared across every Composition — Chilli con carne and its Chilli sin carne Variant are still both "dinner, Mexican-ish, main."
 
+**Base servings**:
+The serving count a Recipe's Steps are written for - the baseline every stored Quantity and Duration is "as written" at, and what default linear scaling treats as 1x. Changing it rewrites nothing: every stored value stays exactly as authored, but each now resolves against a different baseline, so it is a Recipe edit like any other and is covered by Version.
+_Avoid_: Servings on its own (ambiguous - a cook also picks a serving count to scale _to_, which is a view over the Recipe and changes nothing about it)
+
 **Category**:
 A browsing classification for a whole Recipe — meal type, cuisine, course (e.g. `dinner`, `mexican`, `main-course`) — drawn from a curated, growable, household-extensible vocabulary, same governance shape as Tag. Fully optional; a Recipe with none is normal. Distinct from Tag: Tag describes what an Ingredient is, Category describes what kind of dish a Recipe is — a Recipe being vegan already falls out of its Ingredients' Tags via Diners, but "Mexican" or "breakfast" has no Ingredient-level fact to derive from.
 _Avoid_: Tag (reserved for Ingredient classification — conflating the two would blur a dietary/allergen fact with a genre fact)
@@ -63,7 +67,7 @@ Whole-unit rounding (you can't cook 3.33 eggs) is a property of the Quantity's U
 A formula is part of the thing it scales, and does not outlive it. It travels wherever that thing's content is copied - an override taking over a Step, a Variant seeded from a Composition holding one, a revert to a Version - and is dropped when its Quantity or Duration goes away. So an override that clears the Step's Duration clears that Duration's formula with it: there is nothing left for the rule to scale, and a formula on a Duration-less Step is a state authoring refuses to create in the first place. An override that changes the Duration's unit drops a Vs. another Usage rule the same way: that template's per-unit amount is stated in the Duration's own unit, and units are free text with no conversion between them, so the rule would otherwise be reread in a unit it was never written for.
 
 **Version**:
-A point in a Recipe's edit history — one shared timeline covering the Step pool and every Composition together, not a per-Variant history. Reverting restores the whole Recipe, pool and all Compositions, to that point.
+A point in a Recipe's edit history — one shared timeline covering base servings, the Step pool and every Composition together, not a per-Variant history. Reverting restores the whole Recipe, base servings and pool and all Compositions, to that point.
 
 **Variant**:
 A named Composition other than the default one (e.g. "Chilli sin carne" alongside the default "Chilli con carne" line). Created by seeding a new Composition from an existing one's current list of Step references — that seed is recorded only as informational lineage ("derived from"), not an ongoing structural link. No merge or cherry-pick operation exists between Compositions; a Step edited in the shared pool already reaches every Composition that hasn't overridden it, which is what a merge would otherwise be for.

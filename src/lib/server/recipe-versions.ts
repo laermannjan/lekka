@@ -34,9 +34,15 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // here rather than renumbering it - that identity is what a Cook Log
 // Annotation pinned to a Step or Usage survives a revert by (see #51).
 export type RecipeSnapshot = {
-	// Optional only because it is: every row written before #56 is valid JSON
-	// with no `servings` key, and `revertToVersion` has to keep working on one.
-	// `captureRecipeSnapshot` always writes it.
+	// Base servings is what default linear scaling treats as 1x (see
+	// CONTEXT.md), so a snapshot without it restores every Quantity against
+	// whatever baseline happens to be live, and the numbers a cook reads after
+	// a revert are not the ones that Version was authored with.
+	//
+	// Optional only because it genuinely is: every row written before #56 is
+	// valid JSON with no `servings` key, and `revertToVersion` has to keep
+	// working on one. `captureRecipeSnapshot` always writes it, so an absent
+	// key means a pre-#56 row and nothing else.
 	servings?: number;
 	compositions: Pick<Composition, 'id' | 'name' | 'isDefault' | 'seededFromCompositionId'>[];
 	steps: (Pick<Step, 'id'> & StepContent)[];
@@ -49,11 +55,16 @@ export type RecipeSnapshot = {
 };
 
 export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot {
+	// Not a not-found case to hand back to a caller: every caller already holds
+	// the Recipe in this transaction. Throwing keeps a missing row from writing
+	// `servings: undefined`, which `JSON.stringify` drops - producing a
+	// snapshot indistinguishable from a legitimate pre-#56 one.
 	const recipeRow = tx
 		.select({ servings: recipes.servings })
 		.from(recipes)
 		.where(eq(recipes.id, recipeId))
 		.get();
+	if (!recipeRow) throw new Error(`Cannot snapshot recipe ${recipeId}: no such row`);
 	const compositionRows = tx
 		.select()
 		.from(compositions)
@@ -90,7 +101,7 @@ export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot 
 		.all();
 
 	return {
-		servings: recipeRow?.servings,
+		servings: recipeRow.servings,
 		compositions: compositionRows.map((c) => ({
 			id: c.id,
 			name: c.name,
@@ -119,12 +130,12 @@ export function captureRecipeSnapshot(tx: Tx, recipeId: number): RecipeSnapshot 
 //
 // Every operation that changes something `RecipeSnapshot` covers has to call
 // this itself, in the same transaction as the change, or the timeline gains a
-// gap where the live state matches no Version. Nothing enforces that, and the
-// one caller that was missing - `updateServings` - stayed missing for a while
-// because this comment used to claim it was "called at the end of every
-// mutating operation" (#56). It isn't a rule about mutations in general: what
-// a Version restores is exactly what `RecipeSnapshot` holds, so a Cook, a
-// Favorite, a Collection and a Recipe's Categories deliberately record none.
+// gap where the live state matches no Version. Nothing enforces that - adding
+// a field to `RecipeSnapshot` means finding its writers by hand.
+//
+// It isn't a rule about mutations in general: what a Version restores is
+// exactly what `RecipeSnapshot` holds, so a Cook, a Favorite, a Collection and
+// a Recipe's Categories deliberately record none.
 export function recordVersion(
 	tx: Tx,
 	recipeId: number,

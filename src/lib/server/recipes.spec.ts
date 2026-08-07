@@ -1987,12 +1987,10 @@ describe('recipes', () => {
 			});
 		});
 
-		// Base servings is what default linear scaling treats as 1x (see
-		// CONTEXT.md's Scaling Formula), so it is part of the whole Recipe a
-		// Version restores: putting a Quantity back without the baseline it was
-		// authored against gives a cook a different number than that Version had.
-		// Changing it used to record no Version at all and the snapshot had no
-		// field to carry it (#56).
+		// Base servings (see CONTEXT.md) is part of the whole Recipe a Version
+		// restores; `RecipeSnapshot.servings` says why. These cover both halves
+		// of #56: changing it used to record no Version at all, and the snapshot
+		// had no field to carry it.
 		describe('base servings across a revert', () => {
 			it('carries the base servings in the version snapshot', () => {
 				const recipe = createRecipe('Chilli con carne', 4);
