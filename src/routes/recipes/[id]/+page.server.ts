@@ -13,10 +13,12 @@ import {
 	InvalidServingsError,
 	RecipeNotFoundError,
 	RecipeVersionNotFoundError,
+	StepNotFoundError,
 	addIngredientUsage,
 	addStep,
 	createVariant,
 	getRecipe,
+	getRecipeById,
 	listRecipeVersions,
 	overrideStep,
 	removeStepFromComposition,
@@ -35,12 +37,11 @@ import {
 	setQuantityScalingFormula,
 	type ScalingFormulaInput
 } from '$lib/server/scaling';
+import { parseRowId, parseRowIds } from '$lib/server/form';
 import {
 	DURATION_KINDS,
 	CATEGORY_GROUPS,
 	COOK_OUTCOMES,
-	SCALING_DIRECTIONS,
-	SCALING_THRESHOLD_SIDES,
 	type ScalingDirection,
 	type ScalingThresholdSide
 } from '$lib/server/db/schema';
@@ -74,11 +75,13 @@ import {
 import {
 	AnnotationTargetError,
 	BlankCookedAtError,
+	BlankNoteError,
 	CompositionNotFoundError as CookCompositionNotFoundError,
 	CookNotFoundError,
 	IngredientUsageNotFoundError as CookIngredientUsageNotFoundError,
 	InvalidOutcomeError,
 	NoVersionHistoryError,
+	ProfileNotFoundError,
 	StepNotFoundError as CookStepNotFoundError,
 	addCookLogAnnotation,
 	listAnnotationsForCooks,
@@ -87,11 +90,15 @@ import {
 } from '$lib/server/cooks';
 
 export const load: PageServerLoad = ({ params, url, locals }) => {
-	const id = Number(params.id);
-	const compositionIdParam = url.searchParams.get('composition');
-	const compositionId = compositionIdParam ? Number(compositionIdParam) : undefined;
-	const servingsParam = url.searchParams.get('servings');
-	const targetServings = servingsParam ? Number(servingsParam) : undefined;
+	const id = parseRowId(params.id);
+	if (id === undefined) error(404, 'Recipe not found');
+
+	const compositionId = parseRowId(url.searchParams.get('composition'));
+	// A serving count to scale *to*, not the Recipe's base servings - a garbage
+	// one falls back to the Recipe's own baseline rather than resolving every
+	// Quantity against NaN.
+	const servings = Number(url.searchParams.get('servings') ?? '');
+	const targetServings = Number.isInteger(servings) && servings >= 1 ? servings : undefined;
 
 	const recipe = getRecipe(id, compositionId, targetServings);
 	if (!recipe) error(404, 'Recipe not found');
@@ -150,28 +157,46 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 	};
 };
 
+// The Recipe a route is scoped to. Route params are raw strings, so
+// `/recipes/abc` reaches an action just as readily as `/recipes/7`, and
+// `/recipes/999999` as readily as either. Both get the same 404 the page load
+// gives - a well-formed id for a Recipe that isn't there would otherwise reach
+// an insert and fail on the foreign key, and an action that creates something
+// before attaching it (a Category, a Collection) would leave that behind as an
+// orphan whose name then blocks the next legitimate attempt.
+function requireRecipeId(params: { id: string }): number {
+	const recipeId = parseRowId(params.id);
+	if (recipeId === undefined || !getRecipeById(recipeId)) error(404, 'Recipe not found');
+	return recipeId;
+}
+
 // Reads a guided-template Scaling Formula out of a submitted form, shared by
 // both the Quantity and Duration authoring forms (see CONTEXT.md's v1
 // catalog). Returns `null` when no template was selected, which the caller
-// treats as "remove any formula".
+// treats as "remove any formula". Field values are passed on as submitted -
+// the domain layer owns which kinds, directions and threshold sides exist, and
+// substituting a default for an unrecognised one here would silently store a
+// rule the author never wrote.
 function readScalingFormula(data: FormData): ScalingFormulaInput | null {
 	const kind = String(data.get('scalingKind') ?? '');
+	// The authoring form posts `none` for "no formula"; an absent field means
+	// the same. Anything else is a template name and must be one the domain
+	// layer knows.
+	if (!kind || kind === 'none') return null;
 	if (kind === 'fixed') return { kind: 'fixed' };
 	if (kind === 'rate_vs_servings') {
 		return { kind: 'rate_vs_servings', ratePercent: Number(data.get('ratePercent') ?? '') };
 	}
 	if (kind === 'vs_other_usage') {
-		const direction = String(data.get('direction') ?? '') as ScalingDirection;
-		const thresholdSide = String(data.get('thresholdSide') ?? '') as ScalingThresholdSide;
 		return {
 			kind: 'vs_other_usage',
-			otherUsageId: Number(data.get('otherUsageId')),
+			otherUsageId: Number(data.get('otherUsageId') ?? ''),
 			perUnitAmount: Number(data.get('perUnitAmount') ?? ''),
-			direction: SCALING_DIRECTIONS.includes(direction) ? direction : 'increase',
-			thresholdSide: SCALING_THRESHOLD_SIDES.includes(thresholdSide) ? thresholdSide : 'short'
+			direction: String(data.get('direction') ?? '') as ScalingDirection,
+			thresholdSide: String(data.get('thresholdSide') ?? '') as ScalingThresholdSide
 		};
 	}
-	return null;
+	return { kind } as ScalingFormulaInput;
 }
 
 function readDuration(data: FormData) {
@@ -191,9 +216,11 @@ function readDuration(data: FormData) {
 export const actions: Actions = {
 	addStep: async ({ request }) => {
 		const data = await request.formData();
-		const compositionId = Number(data.get('compositionId'));
+		const compositionId = parseRowId(data.get('compositionId'));
 		const instruction = String(data.get('instruction') ?? '');
 		const duration = readDuration(data);
+
+		if (compositionId === undefined) return fail(400, { stepError: 'Pick a composition.' });
 
 		try {
 			addStep(compositionId, { instruction, duration });
@@ -213,8 +240,10 @@ export const actions: Actions = {
 
 	updateStepInstruction: async ({ request }) => {
 		const data = await request.formData();
-		const stepId = Number(data.get('stepId'));
+		const stepId = parseRowId(data.get('stepId'));
 		const instruction = String(data.get('instruction') ?? '');
+
+		if (stepId === undefined) return fail(400, { stepError: 'That step no longer exists.' });
 
 		try {
 			updateStepInstruction(stepId, instruction);
@@ -222,15 +251,24 @@ export const actions: Actions = {
 			if (err instanceof BlankInstructionError) {
 				return fail(400, { stepError: 'Enter an instruction.' });
 			}
+			// A Step really can go away underneath an open page: removing it from
+			// the last Composition referencing it drops it from the pool too.
+			if (err instanceof StepNotFoundError) {
+				return fail(400, { stepError: 'That step no longer exists.' });
+			}
 			throw err;
 		}
 	},
 
 	overrideStep: async ({ request }) => {
 		const data = await request.formData();
-		const compositionStepId = Number(data.get('compositionStepId'));
+		const compositionStepId = parseRowId(data.get('compositionStepId'));
 		const instruction = String(data.get('instruction') ?? '');
 		const duration = readDuration(data);
+
+		if (compositionStepId === undefined) {
+			return fail(400, { stepError: 'That step no longer exists in this composition.' });
+		}
 
 		try {
 			overrideStep(compositionStepId, { instruction, duration });
@@ -250,10 +288,15 @@ export const actions: Actions = {
 
 	removeStep: async ({ request }) => {
 		const data = await request.formData();
-		const compositionStepId = Number(data.get('compositionStepId'));
-		const alsoFromCompositionIds = data
-			.getAll('alsoFromCompositionIds')
-			.map((value) => Number(value));
+		const compositionStepId = parseRowId(data.get('compositionStepId'));
+		const alsoFromCompositionIds = parseRowIds(data.getAll('alsoFromCompositionIds'));
+
+		if (compositionStepId === undefined) {
+			return fail(400, { stepError: 'That step no longer exists in this composition.' });
+		}
+		if (alsoFromCompositionIds === undefined) {
+			return fail(400, { stepError: 'Pick which other compositions to remove this step from.' });
+		}
 
 		try {
 			removeStepFromComposition(compositionStepId, alsoFromCompositionIds);
@@ -267,16 +310,22 @@ export const actions: Actions = {
 
 	addIngredientUsage: async ({ request }) => {
 		const data = await request.formData();
-		const stepId = Number(data.get('stepId'));
-		const ingredientId = Number(data.get('ingredientId'));
+		const stepId = parseRowId(data.get('stepId'));
+		const ingredientId = parseRowId(data.get('ingredientId'));
 		const quantityValue = Number(data.get('quantityValue'));
 		const quantityUnit = String(data.get('quantityUnit') ?? '');
 		const prepAttribute = String(data.get('prepAttribute') ?? '');
 		const alternativeIngredientIdRaw = String(data.get('alternativeIngredientId') ?? '');
 		const alternativeIngredientId = alternativeIngredientIdRaw
-			? Number(alternativeIngredientIdRaw)
+			? parseRowId(alternativeIngredientIdRaw)
 			: null;
 		const note = String(data.get('note') ?? '');
+
+		if (stepId === undefined) return fail(400, { usageError: 'That step no longer exists.' });
+		if (ingredientId === undefined) return fail(400, { usageError: 'Pick an ingredient.' });
+		if (alternativeIngredientId === undefined) {
+			return fail(400, { usageError: 'Pick an alternative ingredient.' });
+		}
 
 		try {
 			addIngredientUsage(stepId, {
@@ -294,17 +343,27 @@ export const actions: Actions = {
 			if (err instanceof IngredientNotFoundError) {
 				return fail(400, { usageError: 'Pick an ingredient.' });
 			}
+			if (err instanceof StepNotFoundError) {
+				return fail(400, { usageError: 'That step no longer exists.' });
+			}
 			throw err;
 		}
 	},
 
 	setUsageAlternative: async ({ request }) => {
 		const data = await request.formData();
-		const usageId = Number(data.get('usageId'));
+		const usageId = parseRowId(data.get('usageId'));
 		const alternativeIngredientIdRaw = String(data.get('alternativeIngredientId') ?? '');
 		const alternativeIngredientId = alternativeIngredientIdRaw
-			? Number(alternativeIngredientIdRaw)
+			? parseRowId(alternativeIngredientIdRaw)
 			: null;
+
+		if (usageId === undefined) {
+			return fail(400, { usageError: 'That ingredient usage no longer exists.' });
+		}
+		if (alternativeIngredientId === undefined) {
+			return fail(400, { usageError: 'Pick an alternative ingredient.' });
+		}
 
 		try {
 			setUsageAlternative(usageId, alternativeIngredientId);
@@ -320,10 +379,14 @@ export const actions: Actions = {
 	},
 
 	createVariant: async ({ request, params }) => {
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '');
-		const seedFromCompositionId = Number(data.get('seedFromCompositionId'));
+		const seedFromCompositionId = parseRowId(data.get('seedFromCompositionId'));
+
+		if (seedFromCompositionId === undefined) {
+			return fail(400, { variantError: 'Pick a composition to seed from.' });
+		}
 
 		try {
 			createVariant(recipeId, name, seedFromCompositionId);
@@ -339,7 +402,7 @@ export const actions: Actions = {
 	},
 
 	updateServings: async ({ request, params }) => {
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
 		const servings = Number(data.get('servings'));
 
@@ -357,9 +420,11 @@ export const actions: Actions = {
 	},
 
 	addCategory: async ({ request, params }) => {
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
-		const categoryId = Number(data.get('categoryId'));
+		const categoryId = parseRowId(data.get('categoryId'));
+
+		if (categoryId === undefined) return fail(400, { categoryError: 'Pick a category.' });
 
 		try {
 			addCategoryToRecipe(recipeId, categoryId);
@@ -373,8 +438,12 @@ export const actions: Actions = {
 
 	setUsageScalingFormula: async ({ request }) => {
 		const data = await request.formData();
-		const ingredientUsageId = Number(data.get('ingredientUsageId'));
+		const ingredientUsageId = parseRowId(data.get('ingredientUsageId'));
 		const formula = readScalingFormula(data);
+
+		if (ingredientUsageId === undefined) {
+			return fail(400, { scalingError: 'That ingredient usage no longer exists.' });
+		}
 
 		try {
 			if (formula) {
@@ -394,15 +463,19 @@ export const actions: Actions = {
 	},
 
 	removeCategory: async ({ request, params }) => {
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
-		const categoryId = Number(data.get('categoryId'));
+		const categoryId = parseRowId(data.get('categoryId'));
+
+		if (categoryId === undefined) {
+			return fail(400, { categoryError: 'That category no longer exists.' });
+		}
 
 		removeCategoryFromRecipe(recipeId, categoryId);
 	},
 
 	createCategory: async ({ request, params }) => {
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '');
 		const categoryGroup = String(data.get('categoryGroup') ?? '');
@@ -424,16 +497,12 @@ export const actions: Actions = {
 		}
 	},
 
-	removeUsageScalingFormula: async ({ request }) => {
-		const data = await request.formData();
-		const ingredientUsageId = Number(data.get('ingredientUsageId'));
-		removeQuantityScalingFormula(ingredientUsageId);
-	},
-
 	setDurationScalingFormula: async ({ request }) => {
 		const data = await request.formData();
-		const stepId = Number(data.get('stepId'));
+		const stepId = parseRowId(data.get('stepId'));
 		const formula = readScalingFormula(data);
+
+		if (stepId === undefined) return fail(400, { scalingError: 'That step no longer exists.' });
 
 		try {
 			if (formula) {
@@ -458,7 +527,7 @@ export const actions: Actions = {
 	toggleFavorite: async ({ request, params, locals }) => {
 		if (!locals.profile) return fail(401, { favoriteError: 'Pick a profile first.' });
 
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
 		const isFavoriteNow = data.get('isFavorite') === 'true';
 
@@ -466,9 +535,11 @@ export const actions: Actions = {
 	},
 
 	addToCollection: async ({ request, params }) => {
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
-		const collectionId = Number(data.get('collectionId'));
+		const collectionId = parseRowId(data.get('collectionId'));
+
+		if (collectionId === undefined) return fail(400, { collectionError: 'Pick a collection.' });
 
 		try {
 			addRecipeToCollection(collectionId, recipeId);
@@ -480,16 +551,14 @@ export const actions: Actions = {
 		}
 	},
 
-	removeDurationScalingFormula: async ({ request }) => {
-		const data = await request.formData();
-		const stepId = Number(data.get('stepId'));
-		removeDurationScalingFormula(stepId);
-	},
-
 	removeFromCollection: async ({ request, params }) => {
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
-		const collectionId = Number(data.get('collectionId'));
+		const collectionId = parseRowId(data.get('collectionId'));
+
+		if (collectionId === undefined) {
+			return fail(400, { collectionError: 'That collection no longer exists.' });
+		}
 
 		removeRecipeFromCollection(collectionId, recipeId);
 	},
@@ -497,7 +566,7 @@ export const actions: Actions = {
 	createCollection: async ({ request, params, locals }) => {
 		if (!locals.profile) return fail(401, { collectionError: 'Pick a profile first.' });
 
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '');
 
@@ -515,13 +584,16 @@ export const actions: Actions = {
 	logCook: async ({ request, params, locals }) => {
 		if (!locals.profile) return fail(401, { cookError: 'Pick a profile first.' });
 
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
-		const compositionId = Number(data.get('compositionId'));
+		const compositionId = parseRowId(data.get('compositionId'));
 		const cookedAt = String(data.get('cookedAt') ?? '');
 		const outcome = String(data.get('outcome') ?? '');
 		const summary = String(data.get('summary') ?? '');
-		const dinerProfileIds = data.getAll('dinerProfileIds').map((value) => Number(value));
+		const dinerProfileIds = parseRowIds(data.getAll('dinerProfileIds'));
+
+		if (compositionId === undefined) return fail(400, { cookError: 'Pick a composition.' });
+		if (dinerProfileIds === undefined) return fail(400, { cookError: 'Pick the diners again.' });
 
 		try {
 			logCook(recipeId, {
@@ -545,26 +617,42 @@ export const actions: Actions = {
 			if (err instanceof NoVersionHistoryError) {
 				return fail(400, { cookError: 'This recipe has no version history yet.' });
 			}
+			if (err instanceof ProfileNotFoundError) {
+				return fail(400, { cookError: 'One of those profiles no longer exists.' });
+			}
 			throw err;
 		}
 	},
 
 	addCookAnnotation: async ({ request }) => {
 		const data = await request.formData();
-		const cookId = Number(data.get('cookId'));
+		const cookId = parseRowId(data.get('cookId'));
 		const stepIdRaw = String(data.get('stepId') ?? '');
 		const ingredientUsageIdRaw = String(data.get('ingredientUsageId') ?? '');
+		const stepId = stepIdRaw ? parseRowId(stepIdRaw) : undefined;
+		const ingredientUsageId = ingredientUsageIdRaw ? parseRowId(ingredientUsageIdRaw) : undefined;
 		const note = String(data.get('note') ?? '');
 
+		if (cookId === undefined) {
+			return fail(400, { annotationError: 'That cook no longer exists.' });
+		}
+		// An unparseable target would otherwise read as "no target given", so a
+		// garbage step id would be reported as an annotation pinned to nothing.
+		if (stepIdRaw && stepId === undefined) {
+			return fail(400, { annotationError: 'That step no longer exists.' });
+		}
+		if (ingredientUsageIdRaw && ingredientUsageId === undefined) {
+			return fail(400, { annotationError: 'That ingredient usage no longer exists.' });
+		}
+
 		try {
-			addCookLogAnnotation(cookId, {
-				stepId: stepIdRaw ? Number(stepIdRaw) : undefined,
-				ingredientUsageId: ingredientUsageIdRaw ? Number(ingredientUsageIdRaw) : undefined,
-				note
-			});
+			addCookLogAnnotation(cookId, { stepId, ingredientUsageId, note });
 		} catch (err) {
 			if (err instanceof AnnotationTargetError) {
 				return fail(400, { annotationError: err.message });
+			}
+			if (err instanceof BlankNoteError) {
+				return fail(400, { annotationError: 'Enter a note.' });
 			}
 			if (err instanceof CookNotFoundError) {
 				return fail(400, { annotationError: 'That cook no longer exists.' });
@@ -580,9 +668,13 @@ export const actions: Actions = {
 	},
 
 	revertToVersion: async ({ request, params }) => {
-		const recipeId = Number(params.id);
+		const recipeId = requireRecipeId(params);
 		const data = await request.formData();
-		const versionId = Number(data.get('versionId'));
+		const versionId = parseRowId(data.get('versionId'));
+
+		if (versionId === undefined) {
+			return fail(400, { versionError: 'That version no longer exists.' });
+		}
 
 		try {
 			revertToVersion(recipeId, versionId);

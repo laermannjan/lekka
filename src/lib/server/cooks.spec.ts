@@ -4,9 +4,11 @@ import { ingredients, profiles, recipeVersions } from './db/schema';
 import { createRecipe, getDefaultComposition, addStep, addIngredientUsage } from './recipes';
 import {
 	AnnotationTargetError,
+	BlankNoteError,
 	CookNotFoundError,
 	CompositionNotFoundError,
 	IngredientUsageNotFoundError,
+	ProfileNotFoundError,
 	StepNotFoundError,
 	addCookLogAnnotation,
 	listAnnotationsForCook,
@@ -110,6 +112,61 @@ describe('cooks', () => {
 				summary: ''
 			})
 		).toThrow(CompositionNotFoundError);
+	});
+
+	// The acting Profile comes from a cookie and the Diners from a form, so
+	// either can name a Profile that has since been deleted. Without these
+	// checks the stale id reaches the insert and surfaces as a raw foreign-key
+	// error, past every domain-error handler the route has (#47).
+	it('rejects a Cook whose acting Profile does not exist', () => {
+		const recipe = createRecipe('Chilli con carne');
+		const composition = getDefaultComposition(recipe.id);
+
+		expect(() =>
+			logCook(recipe.id, {
+				compositionId: composition.id,
+				actingProfileId: 9999,
+				dinerProfileIds: [],
+				cookedAt: '2026-08-06',
+				outcome: 'worked-well',
+				summary: ''
+			})
+		).toThrow(ProfileNotFoundError);
+	});
+
+	it('rejects a Cook naming a Diner that does not exist', () => {
+		const recipe = createRecipe('Chilli con carne');
+		const composition = getDefaultComposition(recipe.id);
+		const jan = makeProfile('Jan');
+
+		expect(() =>
+			logCook(recipe.id, {
+				compositionId: composition.id,
+				actingProfileId: jan.id,
+				dinerProfileIds: [jan.id, 9999],
+				cookedAt: '2026-08-06',
+				outcome: 'worked-well',
+				summary: ''
+			})
+		).toThrow(ProfileNotFoundError);
+	});
+
+	it('records no Cook at all when a Diner id is stale', () => {
+		const recipe = createRecipe('Chilli con carne');
+		const composition = getDefaultComposition(recipe.id);
+		const jan = makeProfile('Jan');
+
+		expect(() =>
+			logCook(recipe.id, {
+				compositionId: composition.id,
+				actingProfileId: jan.id,
+				dinerProfileIds: [9999],
+				cookedAt: '2026-08-06',
+				outcome: 'worked-well',
+				summary: ''
+			})
+		).toThrow(ProfileNotFoundError);
+		expect(listCooksForRecipe(recipe.id)).toEqual([]);
 	});
 
 	it('pins a Cook Log Annotation to a Step', () => {
@@ -234,6 +291,27 @@ describe('cooks', () => {
 
 		expect(() => addCookLogAnnotation(cook.id, { ingredientUsageId: 999999, note: 'x' })).toThrow(
 			IngredientUsageNotFoundError
+		);
+	});
+
+	// A blank note is a blank note, not a target problem: naming it
+	// AnnotationTargetError told the route the annotation was pinned wrong (#47).
+	it('rejects an annotation whose note is blank', () => {
+		const recipe = createRecipe('Chilli con carne');
+		const composition = getDefaultComposition(recipe.id);
+		const { step } = addStep(composition.id, { instruction: 'Simmer for 20 minutes.' });
+		const jan = makeProfile('Jan');
+		const cook = logCook(recipe.id, {
+			compositionId: composition.id,
+			actingProfileId: jan.id,
+			dinerProfileIds: [],
+			cookedAt: '2026-08-06',
+			outcome: 'worked-well',
+			summary: ''
+		});
+
+		expect(() => addCookLogAnnotation(cook.id, { stepId: step.id, note: '   ' })).toThrow(
+			BlankNoteError
 		);
 	});
 

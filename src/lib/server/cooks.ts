@@ -21,12 +21,29 @@ export class CookNotFoundError extends Error {}
 export class StepNotFoundError extends Error {}
 export class IngredientUsageNotFoundError extends Error {}
 export class AnnotationTargetError extends Error {}
+export class BlankNoteError extends Error {}
 export class InvalidOutcomeError extends Error {}
 export class BlankCookedAtError extends Error {}
 export class NoVersionHistoryError extends Error {}
+export class ProfileNotFoundError extends Error {}
 
 const MAX_SUMMARY_LENGTH = 2000;
 const MAX_NOTE_LENGTH = 1000;
+
+function requireProfiles(ids: number[], role: string): void {
+	if (ids.length === 0) return;
+
+	const found = db
+		.select({ id: profiles.id })
+		.from(profiles)
+		.where(inArray(profiles.id, ids))
+		.all();
+	const foundIds = new Set(found.map((row) => row.id));
+	const missing = ids.filter((id) => !foundIds.has(id));
+	if (missing.length > 0) {
+		throw new ProfileNotFoundError(`No ${role} ${missing.join(', ')}`);
+	}
+}
 
 export type LogCookInput = {
 	compositionId: number;
@@ -74,6 +91,13 @@ export function logCook(recipeId: number, input: LogCookInput): Cook {
 
 	const summary = input.summary?.trim().slice(0, MAX_SUMMARY_LENGTH) || null;
 	const dinerIds = [...new Set(input.dinerProfileIds)];
+
+	// The acting Profile arrives from a cookie and the Diners from a form, so
+	// either may name a Profile that has since been deleted. Checking here means
+	// a stale id is a domain error the route can phrase, not a foreign-key
+	// failure raised past every handler it has.
+	requireProfiles([input.actingProfileId], 'acting profile');
+	requireProfiles(dinerIds, 'diner');
 
 	return db.transaction((tx) => {
 		const cook = tx
@@ -184,7 +208,7 @@ export function addCookLogAnnotation(cookId: number, input: AddAnnotationInput):
 	}
 
 	const note = input.note.trim().slice(0, MAX_NOTE_LENGTH);
-	if (!note) throw new AnnotationTargetError('Annotation note must not be blank');
+	if (!note) throw new BlankNoteError('Annotation note must not be blank');
 
 	return db
 		.insert(cookLogAnnotations)

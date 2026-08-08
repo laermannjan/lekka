@@ -2,13 +2,17 @@
 	import { resolve } from '$app/paths';
 	import type { PageProps } from './$types';
 
-	let { data }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 
 	const memberRecipeIds = $derived(new Set(data.collection.recipes.map((r) => r.id)));
 	const availableRecipes = $derived(data.recipes.filter((r) => !memberRecipeIds.has(r.id)));
 </script>
 
 <h1>{data.collection.name}</h1>
+
+{#if form?.recipeError}
+	<p role="alert">{form.recipeError}</p>
+{/if}
 
 {#if data.collection.recipes.length > 0}
 	<ul>
