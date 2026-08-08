@@ -68,3 +68,33 @@ export function getFlaggedTagsByIngredientIds(
 	}
 	return result;
 }
+
+// Which Usages may have their declared Alternative surfaced as a suggested
+// swap - only those whose Alternative Ingredient clears the flag, i.e. carries
+// none of the avoided Tags itself (see CONTEXT.md's Diners: "if that Usage has
+// an Alternative *clearing* the flag"). Margarine tagged `dairy` is never
+// offered to a Diner avoiding `dairy`, and neither is an Alternative carrying
+// some other avoided Tag - swapping one flag for another clears nothing. The
+// Usage itself stays flagged and visible either way; this only decides whether
+// a swap is offered alongside the flag.
+export function getUsageIdsWithClearingAlternative(
+	usages: readonly { id: number; alternativeIngredientId: number | null }[],
+	avoidTagIds: Set<number>
+): Set<number> {
+	const withAlternative = usages.filter(
+		(usage): usage is { id: number; alternativeIngredientId: number } =>
+			usage.alternativeIngredientId != null
+	);
+	if (withAlternative.length === 0) return new Set();
+	if (avoidTagIds.size === 0) return new Set(withAlternative.map((usage) => usage.id));
+
+	const flaggedByIngredientId = getFlaggedTagsByIngredientIds(
+		withAlternative.map((usage) => usage.alternativeIngredientId),
+		avoidTagIds
+	);
+	return new Set(
+		withAlternative
+			.filter((usage) => !flaggedByIngredientId.has(usage.alternativeIngredientId))
+			.map((usage) => usage.id)
+	);
+}

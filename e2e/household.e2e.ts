@@ -61,3 +61,40 @@ test('a favorite set by one profile is visible to another', async ({ browser }) 
 	await expect(otherPage.getByRole('button', { name: '☆ Mark as favorite' })).toBeVisible();
 	await otherContext.close();
 });
+
+// The browse filters live in the URL and nowhere else (#44), which is what
+// makes a filtered view linkable - so the check that matters end to end is
+// that applying one lands in the URL and survives a fresh load of it.
+test('a browse filter lands in the URL and survives a reload', async ({ page }) => {
+	await pickProfile(page, 'Kim');
+	await page.getByLabel('Title').fill('Pierogi');
+	await page.getByRole('button', { name: 'Add recipe' }).click();
+	await page.getByLabel('Title').fill('Bigos');
+	await page.getByRole('button', { name: 'Add recipe' }).click();
+
+	await page.getByRole('link', { name: 'Pierogi' }).click();
+	await page.getByRole('button', { name: '☆ Mark as favorite' }).click();
+	await expect(page.getByRole('button', { name: '★ Favorited' })).toBeVisible();
+	await page.goto('/');
+
+	await page.getByLabel('Favorites only').check();
+	await page.getByRole('button', { name: 'Apply' }).click();
+
+	await expect(page).toHaveURL(/favorites=1/);
+	await expect(page.getByRole('link', { name: 'Pierogi' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Bigos' })).toHaveCount(0);
+
+	// Reloading the same URL reproduces the same filtered view.
+	await page.reload();
+	await expect(page.getByLabel('Favorites only')).toBeChecked();
+	await expect(page.getByRole('link', { name: 'Pierogi' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Bigos' })).toHaveCount(0);
+
+	// Adding a Recipe posts to this same page, and must not throw the filters
+	// away on the way through.
+	await page.getByLabel('Title').fill('Zurek');
+	await page.getByRole('button', { name: 'Add recipe' }).click();
+	await expect(page).toHaveURL(/favorites=1/);
+	await expect(page.getByLabel('Favorites only')).toBeChecked();
+	await expect(page.getByRole('link', { name: 'Pierogi' })).toBeVisible();
+});

@@ -71,8 +71,12 @@
 
 <section>
 	<h2>Diners</h2>
+	<!-- "Diners" is the glossary term; "who's eating" is explicitly avoided
+	     there, and the acting Profile is a separate thing (see CONTEXT.md's
+	     Diners). -->
 	<p>
-		Who's eating? Defaults to you, but is independent of who's logged in and persists until changed.
+		The Profiles present and eating, driving the dietary filter across the app. Defaults to just the
+		acting Profile, but is adjustable and persists until changed.
 	</p>
 	{#if form?.error}
 		<p role="alert">{form.error}</p>

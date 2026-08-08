@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import type { PageProps } from './$types';
 	import ScalingFormulaEditor from '$lib/components/ScalingFormulaEditor.svelte';
+	import { CATEGORY_GROUP_LABELS } from '$lib/categories';
 	import { formatRemaining, parseDurationSeconds } from '$lib/duration';
 	import { TimerStore } from '$lib/timers.svelte';
 	import {
@@ -16,6 +17,9 @@
 
 	const allUsages = $derived(data.recipe.composition.steps.flatMap((step) => step.usages));
 	const basePath = $derived(resolve('/recipes/[id]', { id: String(data.recipe.id) }));
+	// Usages whose declared Alternative clears the dietary flag - only those
+	// get a suggested swap (see CONTEXT.md's Diners).
+	const clearingAlternativeUsageIds = $derived(new Set(data.usageIdsWithClearingAlternative));
 
 	// Step timers: purely client-side countdown (see
 	// docs/adr/0003-client-only-step-timers.md),
@@ -53,11 +57,6 @@
 		void cancelTimerPush(timerId);
 	}
 
-	const categoryGroupLabels: Record<string, string> = {
-		'meal-type': 'Meal type',
-		cuisine: 'Cuisine',
-		course: 'Course'
-	};
 	const attachedCategoryIds = $derived(new Set(data.recipeCategories.map((c) => c.id)));
 	const availableCategories = $derived(
 		data.categories.filter((c) => !attachedCategoryIds.has(c.id))
@@ -105,7 +104,7 @@
 		<ul>
 			{#each data.recipeCategories as category (category.id)}
 				<li>
-					{category.name} <em>({categoryGroupLabels[category.categoryGroup]})</em>
+					{category.name} <em>({CATEGORY_GROUP_LABELS[category.categoryGroup]})</em>
 					<form method="POST" action="?/removeCategory" style="display: inline">
 						<input type="hidden" name="categoryId" value={category.id} />
 						<button type="submit">Remove</button>
@@ -122,7 +121,7 @@
 			<label>
 				Attach an existing category
 				<select name="categoryId">
-					{#each Object.entries(categoryGroupLabels) as [group, label] (group)}
+					{#each Object.entries(CATEGORY_GROUP_LABELS) as [group, label] (group)}
 						{#each availableCategories.filter((c) => c.categoryGroup === group) as category (category.id)}
 							<option value={category.id}>{label}: {category.name}</option>
 						{/each}
@@ -149,7 +148,7 @@
 				Group
 				<select name="categoryGroup" required>
 					{#each data.categoryGroups as group (group)}
-						<option value={group}>{categoryGroupLabels[group]}</option>
+						<option value={group}>{CATEGORY_GROUP_LABELS[group]}</option>
 					{/each}
 				</select>
 			</label>
@@ -386,9 +385,14 @@
 									<p role="alert">
 										⚠ contains {flaggedTags.map((t) => t.name).join(', ')} — avoided by a selected diner.
 										{#if usage.alternativeIngredient}
-											Suggested swap: {usage.alternativeIngredient
-												.baseTerm}{#if usage.alternativeIngredient.descriptors}
-												({usage.alternativeIngredient.descriptors}){/if}.
+											{#if clearingAlternativeUsageIds.has(usage.id)}
+												Suggested swap: {usage.alternativeIngredient
+													.baseTerm}{#if usage.alternativeIngredient.descriptors}
+													({usage.alternativeIngredient.descriptors}){/if}.
+											{:else}
+												The declared alternative is also avoided by a selected diner, so no swap is
+												suggested.
+											{/if}
 										{:else}
 											No alternative declared for this usage.
 										{/if}
