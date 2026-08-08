@@ -13,10 +13,12 @@ import {
 	InvalidServingsError,
 	RecipeNotFoundError,
 	RecipeVersionNotFoundError,
+	StepNotFoundError,
 	addIngredientUsage,
 	addStep,
 	createVariant,
 	getRecipe,
+	getRecipeById,
 	listRecipeVersions,
 	overrideStep,
 	removeStepFromComposition,
@@ -145,12 +147,15 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 };
 
 // The Recipe a route is scoped to. Route params are raw strings, so
-// `/recipes/abc` reaches an action just as readily as `/recipes/7`; resolving
-// the id up front keeps NaN out of the database and gives such a request the
-// same 404 the page load gives.
+// `/recipes/abc` reaches an action just as readily as `/recipes/7`, and
+// `/recipes/999999` as readily as either. Both get the same 404 the page load
+// gives - a well-formed id for a Recipe that isn't there would otherwise reach
+// an insert and fail on the foreign key, and an action that creates something
+// before attaching it (a Category, a Collection) would leave that behind as an
+// orphan whose name then blocks the next legitimate attempt.
 function requireRecipeId(params: { id: string }): number {
 	const recipeId = parseRowId(params.id);
-	if (recipeId === undefined) error(404, 'Recipe not found');
+	if (recipeId === undefined || !getRecipeById(recipeId)) error(404, 'Recipe not found');
 	return recipeId;
 }
 
@@ -234,6 +239,11 @@ export const actions: Actions = {
 		} catch (err) {
 			if (err instanceof BlankInstructionError) {
 				return fail(400, { stepError: 'Enter an instruction.' });
+			}
+			// A Step really can go away underneath an open page: removing it from
+			// the last Composition referencing it drops it from the pool too.
+			if (err instanceof StepNotFoundError) {
+				return fail(400, { stepError: 'That step no longer exists.' });
 			}
 			throw err;
 		}
@@ -321,6 +331,9 @@ export const actions: Actions = {
 			}
 			if (err instanceof IngredientNotFoundError) {
 				return fail(400, { usageError: 'Pick an ingredient.' });
+			}
+			if (err instanceof StepNotFoundError) {
+				return fail(400, { usageError: 'That step no longer exists.' });
 			}
 			throw err;
 		}

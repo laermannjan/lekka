@@ -20,7 +20,14 @@ describe('parseRowId', () => {
 		['fractional', '4.2'],
 		['zero', '0'],
 		['negative', '-1'],
-		['infinite', 'Infinity']
+		['infinite', 'Infinity'],
+		// Every other numeric literal form JS accepts names a row nobody typed,
+		// so `/recipes/0x7` must not resolve to recipe 7.
+		['hexadecimal', '0x10'],
+		['exponent', '1e3'],
+		['explicitly signed', '+7'],
+		['integral but written as a decimal', '7.0'],
+		['beyond safe integer range', '9007199254740993']
 	])('rejects a %s value', (_label, raw) => {
 		expect(parseRowId(raw)).toBeUndefined();
 	});

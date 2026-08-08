@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { listAnnotationsForCook, logCook, type CookWithDiners } from '$lib/server/cooks';
 import { createProfile } from '$lib/server/profiles';
-import { createCategory, listCategoriesForRecipe } from '$lib/server/categories';
+import { createCategory, listCategories, listCategoriesForRecipe } from '$lib/server/categories';
 import { createCollection, listCollectionsForRecipe } from '$lib/server/collections';
 import { isFavorite } from '$lib/server/favorites';
 import { getDurationScalingFormulasByStepIds } from '$lib/server/scaling';
@@ -13,6 +13,7 @@ import {
 	getDefaultComposition,
 	getRecipe,
 	listRecipeVersions,
+	removeStepFromComposition,
 	revertToVersion
 } from '$lib/server/recipes';
 import { db } from '$lib/server/db';
@@ -302,6 +303,71 @@ describe('recipe page actions', () => {
 		expect(result?.status).toBe(400);
 		expect(result?.data?.scalingError).toBeTruthy();
 		expect(getDurationScalingFormulasByStepIds([step.id]).size).toBe(0);
+	});
+
+	// A well-formed id for a Recipe that isn't there is as reachable as a
+	// malformed one, and reached an insert that failed on the foreign key.
+	it('404s on a well-formed id for a recipe that does not exist', async () => {
+		await expect(
+			runAction('addCategory', { id: '999999', form: { categoryId: '1' } })
+		).rejects.toMatchObject({ status: 404 });
+	});
+
+	// `createCategory` created the Category and only then attached it, so the FK
+	// failure left the Category behind - and its name then blocked the next
+	// legitimate attempt with "That category already exists."
+	it('creates no orphan category when the recipe in the route does not exist', async () => {
+		const categoriesBefore = listCategories().length;
+
+		await expect(
+			runAction('createCategory', {
+				id: '999999',
+				form: { name: 'orphan-check', categoryGroup: 'meal-type' }
+			})
+		).rejects.toMatchObject({ status: 404 });
+
+		expect(listCategories()).toHaveLength(categoriesBefore);
+	});
+
+	// A Step really does go away underneath an open page: removing it from the
+	// last Composition referencing it drops it from the pool too. Both of these
+	// took a well-formed id past their handlers and 500ed.
+	it('rejects editing a step that no longer exists', async () => {
+		const recipe = createRecipe('Chilli con carne');
+		const composition = getDefaultComposition(recipe.id);
+		const { step, compositionStep } = addStep(composition.id, {
+			instruction: 'Brown the mince.'
+		});
+		removeStepFromComposition(compositionStep.id, []);
+
+		const result = await runAction('updateStepInstruction', {
+			id: String(recipe.id),
+			form: { stepId: String(step.id), instruction: 'Brown the mince well.' }
+		});
+
+		expect(result?.status).toBe(400);
+		expect(result?.data?.stepError).toBeTruthy();
+	});
+
+	it('rejects adding an ingredient usage to a step that no longer exists', async () => {
+		const recipe = createRecipe('Chilli con carne');
+		const composition = getDefaultComposition(recipe.id);
+		const { step, compositionStep } = addStep(composition.id, {
+			instruction: 'Brown the mince.'
+		});
+		removeStepFromComposition(compositionStep.id, []);
+
+		const result = await runAction('addIngredientUsage', {
+			id: String(recipe.id),
+			form: {
+				stepId: String(step.id),
+				ingredientId: String(makeIngredient('Mince').id),
+				quantityValue: '500'
+			}
+		});
+
+		expect(result?.status).toBe(400);
+		expect(result?.data?.usageError).toBeTruthy();
 	});
 
 	// Nothing posts to these: no form targets them, and the setters already

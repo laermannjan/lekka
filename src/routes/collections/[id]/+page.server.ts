@@ -6,7 +6,7 @@ import {
 	getCollectionDetail,
 	removeRecipeFromCollection
 } from '$lib/server/collections';
-import { listRecipes } from '$lib/server/recipes';
+import { getRecipeById, listRecipes } from '$lib/server/recipes';
 import { parseRowId } from '$lib/server/form';
 
 export const load: PageServerLoad = ({ params }) => {
@@ -36,6 +36,12 @@ export const actions: Actions = {
 		const recipeId = parseRowId(data.get('recipeId'));
 
 		if (recipeId === undefined) return fail(400, { recipeError: 'Pick a recipe.' });
+		// Unlike the Collection, `addRecipeToCollection` doesn't check the Recipe,
+		// so a well-formed id for one that has since been deleted would reach the
+		// insert and fail on the foreign key.
+		if (!getRecipeById(recipeId)) {
+			return fail(400, { recipeError: 'That recipe no longer exists.' });
+		}
 
 		try {
 			addRecipeToCollection(collectionId, recipeId);

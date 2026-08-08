@@ -58,6 +58,21 @@ describe('collection page actions', () => {
 		expect(getCollectionDetail(collection.id)?.recipes.map((r) => r.id)).toEqual([recipe.id]);
 	});
 
+	// `addRecipeToCollection` checks the Collection but not the Recipe, so this
+	// reached the insert and failed on the foreign key.
+	it('rejects adding a recipe that no longer exists', async () => {
+		const collection = makeCollection();
+
+		const result = await runAction('addRecipe', {
+			id: String(collection.id),
+			form: { recipeId: '999999' }
+		});
+
+		expect(result?.status).toBe(400);
+		expect(result?.data?.recipeError).toBeTruthy();
+		expect(getCollectionDetail(collection.id)?.recipes).toEqual([]);
+	});
+
 	it('404s under a non-numeric collection id', async () => {
 		const recipe = createRecipe('Chilli con carne');
 

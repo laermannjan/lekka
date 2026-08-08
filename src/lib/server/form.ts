@@ -7,10 +7,17 @@
 
 // A single route param or form field holding a row id. Anything that isn't a
 // positive integer - missing, blank, fractional, non-numeric - is `undefined`.
+// Matched as digits rather than handed to `Number`, which also accepts every
+// other JS numeric literal form: `0x10`, `1e3`, `+7` and `7.0` all name a row
+// nobody typed, and `Number.isInteger` waves each of them through.
+const ROW_ID = /^\d+$/;
+
 export function parseRowId(raw: unknown): number | undefined {
 	if (raw === null || raw === undefined) return undefined;
-	const value = Number(String(raw).trim());
-	if (!Number.isInteger(value) || value < 1) return undefined;
+	const text = String(raw).trim();
+	if (!ROW_ID.test(text)) return undefined;
+	const value = Number(text);
+	if (!Number.isSafeInteger(value) || value < 1) return undefined;
 	return value;
 }
 
