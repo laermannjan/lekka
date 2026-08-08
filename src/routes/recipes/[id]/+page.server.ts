@@ -57,7 +57,11 @@ import {
 } from '$lib/server/categories';
 import { isFavorite, listFavoriteProfiles, setFavorite } from '$lib/server/favorites';
 import { listProfiles } from '$lib/server/profiles';
-import { getAvoidTagIdsForProfiles, getFlaggedTagsByIngredientIds } from '$lib/server/dietary';
+import {
+	getAvoidTagIdsForProfiles,
+	getFlaggedTagsByIngredientIds,
+	getUsageIdsWithClearingAlternative
+} from '$lib/server/dietary';
 import {
 	BlankNameError as BlankCollectionNameError,
 	CollectionNotFoundError,
@@ -105,12 +109,18 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 	// Ingredient, not the Usage. A Recipe carrying a flagged Usage stays
 	// fully visible; only the offending Usage itself is marked.
 	const avoidTagIds = getAvoidTagIdsForProfiles(locals.dinerProfiles.map((profile) => profile.id));
-	const usageIngredientIds = recipe.composition.steps.flatMap((step) =>
-		step.usages.map((usage) => usage.ingredientId)
-	);
+	const usages = recipe.composition.steps.flatMap((step) => step.usages);
 	const flaggedTagsByIngredientId = Object.fromEntries(
-		getFlaggedTagsByIngredientIds(usageIngredientIds, avoidTagIds)
+		getFlaggedTagsByIngredientIds(
+			usages.map((usage) => usage.ingredientId),
+			avoidTagIds
+		)
 	);
+	// A declared Alternative is only offered as a suggested swap when it
+	// clears the flag itself - the flag stays on the Usage regardless.
+	const usageIdsWithClearingAlternative = [
+		...getUsageIdsWithClearingAlternative(usages, avoidTagIds)
+	];
 
 	const cooks = listCooksForRecipe(id);
 	const annotationsByCookId = Object.fromEntries(
@@ -131,6 +141,7 @@ export const load: PageServerLoad = ({ params, url, locals }) => {
 		versions,
 		diners: locals.dinerProfiles,
 		flaggedTagsByIngredientId,
+		usageIdsWithClearingAlternative,
 		cooks,
 		annotationsByCookId,
 		cookOutcomes: COOK_OUTCOMES,

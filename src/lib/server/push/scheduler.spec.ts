@@ -11,8 +11,13 @@ vi.mock('web-push', () => ({
 	}
 }));
 
-const { cancelTimerPush, initScheduler, scheduleTimerPush, _resetSchedulerForTests } =
-	await import('./scheduler');
+const {
+	cancelTimerPush,
+	initScheduler,
+	scheduleTimerPush,
+	MAX_TIMER_PUSH_DELAY_MS,
+	_resetSchedulerForTests
+} = await import('./scheduler');
 
 describe('timer push scheduler', () => {
 	beforeEach(() => {
@@ -104,6 +109,65 @@ describe('timer push scheduler', () => {
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(sendNotification).toHaveBeenCalledTimes(1);
+	});
+
+	it('rejects a fire time past the timer ceiling instead of firing it immediately', async () => {
+		const subscription = subscribe();
+
+		expect(() =>
+			scheduleTimerPush({
+				subscriptionId: subscription.id,
+				timerId: 'step-1',
+				title: 'Timer done',
+				body: 'Simmer sauce',
+				firesAt: Date.now() + MAX_TIMER_PUSH_DELAY_MS + 1
+			})
+		).toThrow(RangeError);
+
+		await vi.advanceTimersByTimeAsync(0);
+		expect(sendNotification).not.toHaveBeenCalled();
+		expect(db.select().from(scheduledPushes).all()).toHaveLength(0);
+	});
+
+	it('accepts a fire time exactly at the timer ceiling, and arms it', async () => {
+		const subscription = subscribe();
+
+		scheduleTimerPush({
+			subscriptionId: subscription.id,
+			timerId: 'step-1',
+			title: 'Timer done',
+			body: 'Simmer sauce',
+			firesAt: Date.now() + MAX_TIMER_PUSH_DELAY_MS
+		});
+
+		expect(db.select().from(scheduledPushes).all()).toHaveLength(1);
+
+		await vi.advanceTimersByTimeAsync(MAX_TIMER_PUSH_DELAY_MS - 1);
+		expect(sendNotification).not.toHaveBeenCalled();
+
+		await vi.advanceTimersByTimeAsync(1);
+		expect(sendNotification).toHaveBeenCalledTimes(1);
+	});
+
+	it('leaves an un-representable pending row un-armed on init rather than firing it', async () => {
+		const subscription = subscribe();
+		db.insert(scheduledPushes)
+			.values({
+				subscriptionId: subscription.id,
+				timerId: 'step-1',
+				title: 'Timer done',
+				body: 'Simmer sauce',
+				firesAt: Date.now() + MAX_TIMER_PUSH_DELAY_MS + 1
+			})
+			.run();
+
+		initScheduler();
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(sendNotification).not.toHaveBeenCalled();
+		// The row is the durable source of truth - it stays put rather than
+		// being destroyed over what may be a temporary clock skew.
+		expect(db.select().from(scheduledPushes).all()).toHaveLength(1);
 	});
 
 	it('removes the subscription on a 410 Gone response', async () => {

@@ -10,6 +10,8 @@
 // excluded - they're server-instance/device infrastructure (a VAPID keypair
 // bound to this server, a browser's push endpoint, in-flight scheduling
 // state), not household data a self-hoster would think of as "my recipes."
+import { getTableColumns } from 'drizzle-orm';
+import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { db } from './db';
 import {
 	profiles,
@@ -124,6 +126,29 @@ export function exportData(): DataExport {
 
 export class InvalidExportError extends Error {}
 
+// SQLite's compiled-in ceiling on bound parameters per statement
+// (SQLITE_MAX_VARIABLE_NUMBER). One insert carrying every row of a table binds
+// rows x columns parameters, so a 5-column table dies at 6554 rows - and
+// `recipe_versions` gains a row on every Recipe edit, so an ordinary
+// household's backup reaches that (#39).
+const SQLITE_MAX_BOUND_PARAMETERS = 32766;
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Inserts every row, split across as many statements as the parameter ceiling
+// demands. The chunk size is derived from the table's own column count rather
+// than a fixed row count, so a table that grows a column stays correct.
+function insertAll<T extends SQLiteTable>(tx: Transaction, table: T, rows: T['$inferInsert'][]) {
+	const columnCount = Object.keys(getTableColumns(table)).length;
+	const rowsPerStatement = Math.max(1, Math.floor(SQLITE_MAX_BOUND_PARAMETERS / columnCount));
+
+	for (let start = 0; start < rows.length; start += rowsPerStatement) {
+		tx.insert(table)
+			.values(rows.slice(start, start + rowsPerStatement))
+			.run();
+	}
+}
+
 // Full replace, not merge: every table in `DOMAIN_TABLES_CHILD_FIRST` is wiped
 // before anything is reinserted, deleted child-first and reinserted
 // parent-first so FK constraints hold throughout - no need to touch the
@@ -139,32 +164,26 @@ export function restoreData(raw: unknown): void {
 			tx.delete(table).run();
 		}
 
-		if (data.profiles.length) tx.insert(profiles).values(data.profiles).run();
-		if (data.ingredients.length) tx.insert(ingredients).values(data.ingredients).run();
-		if (data.tags.length) tx.insert(tags).values(data.tags).run();
-		if (data.categories.length) tx.insert(categories).values(data.categories).run();
-		if (data.recipes.length) tx.insert(recipes).values(data.recipes).run();
-		if (data.ingredientTags.length) tx.insert(ingredientTags).values(data.ingredientTags).run();
-		if (data.profileAvoidTags.length)
-			tx.insert(profileAvoidTags).values(data.profileAvoidTags).run();
-		if (data.collections.length) tx.insert(collections).values(data.collections).run();
-		if (data.collectionRecipes.length)
-			tx.insert(collectionRecipes).values(data.collectionRecipes).run();
-		if (data.recipeCategories.length)
-			tx.insert(recipeCategories).values(data.recipeCategories).run();
-		if (data.favorites.length) tx.insert(favorites).values(data.favorites).run();
-		if (data.compositions.length) tx.insert(compositions).values(data.compositions).run();
-		if (data.steps.length) tx.insert(steps).values(data.steps).run();
-		if (data.compositionSteps.length)
-			tx.insert(compositionSteps).values(data.compositionSteps).run();
-		if (data.recipeVersions.length) tx.insert(recipeVersions).values(data.recipeVersions).run();
-		if (data.ingredientUsages.length)
-			tx.insert(ingredientUsages).values(data.ingredientUsages).run();
-		if (data.scalingFormulas.length) tx.insert(scalingFormulas).values(data.scalingFormulas).run();
-		if (data.cooks.length) tx.insert(cooks).values(data.cooks).run();
-		if (data.cookDiners.length) tx.insert(cookDiners).values(data.cookDiners).run();
-		if (data.cookLogAnnotations.length)
-			tx.insert(cookLogAnnotations).values(data.cookLogAnnotations).run();
+		insertAll(tx, profiles, data.profiles);
+		insertAll(tx, ingredients, data.ingredients);
+		insertAll(tx, tags, data.tags);
+		insertAll(tx, categories, data.categories);
+		insertAll(tx, recipes, data.recipes);
+		insertAll(tx, ingredientTags, data.ingredientTags);
+		insertAll(tx, profileAvoidTags, data.profileAvoidTags);
+		insertAll(tx, collections, data.collections);
+		insertAll(tx, collectionRecipes, data.collectionRecipes);
+		insertAll(tx, recipeCategories, data.recipeCategories);
+		insertAll(tx, favorites, data.favorites);
+		insertAll(tx, compositions, data.compositions);
+		insertAll(tx, steps, data.steps);
+		insertAll(tx, compositionSteps, data.compositionSteps);
+		insertAll(tx, recipeVersions, data.recipeVersions);
+		insertAll(tx, ingredientUsages, data.ingredientUsages);
+		insertAll(tx, scalingFormulas, data.scalingFormulas);
+		insertAll(tx, cooks, data.cooks);
+		insertAll(tx, cookDiners, data.cookDiners);
+		insertAll(tx, cookLogAnnotations, data.cookLogAnnotations);
 	});
 }
 

@@ -9,7 +9,8 @@
 // A plain `setTimeout` is enough here - lekka's persistent Node server
 // (see docs/adr/0001-sveltekit-sqlite-docker-stack.md) is exactly the kind of long-running
 // process this needs, and cook timers are minutes/hours out, nowhere near
-// setTimeout's ~24.8 day overflow ceiling.
+// setTimeout's ~24.8 day overflow ceiling - which `MAX_TIMER_PUSH_DELAY_MS`
+// below enforces rather than assumes.
 import { and, eq, isNull } from 'drizzle-orm';
 import webpush from 'web-push';
 import { db } from '../db';
@@ -18,6 +19,20 @@ import { getVapidKeys, VAPID_SUBJECT } from './vapid';
 import { getSubscriptionById, removeSubscription } from './subscriptions';
 
 const timers = new Map<number, ReturnType<typeof setTimeout>>();
+
+// The furthest out a push can be scheduled: `setTimeout`'s delay is coerced
+// to a 32-bit signed int, so anything past this overflows and fires on the
+// next tick - i.e. a timer meant for next year would notify immediately.
+// Cook timers are minutes/hours out, so this bound only ever catches a
+// nonsense or hostile request; better a 400 than a surprise notification.
+export const MAX_TIMER_PUSH_DELAY_MS = 2_147_483_647;
+
+// The one place that decides whether a fire time is schedulable at all, so
+// the route handler validates against the same rule the scheduler enforces
+// rather than restating it.
+export function isWithinTimerCeiling(firesAt: number): boolean {
+	return firesAt - Date.now() <= MAX_TIMER_PUSH_DELAY_MS;
+}
 
 export type ScheduleInput = {
 	subscriptionId: number;
@@ -39,6 +54,11 @@ export function initScheduler(): void {
 }
 
 export function scheduleTimerPush(input: ScheduleInput): ScheduledPush {
+	if (!isWithinTimerCeiling(input.firesAt)) {
+		throw new RangeError(
+			`firesAt is more than ${MAX_TIMER_PUSH_DELAY_MS}ms in the future, which the timer cannot represent`
+		);
+	}
 	const row = db.insert(scheduledPushes).values(input).returning().get();
 	arm(row);
 	return row;
@@ -74,6 +94,19 @@ function arm(row: ScheduledPush): void {
 	const delay = row.firesAt - Date.now();
 	if (delay <= 0) {
 		void fire(row);
+		return;
+	}
+	// `scheduleTimerPush` refuses these, so a row can only get here by having
+	// been written directly into the DB, or by the host clock moving
+	// backwards. Arming it would overflow the delay and fire it now, which is
+	// the exact failure the bound exists to avoid. Leave it un-armed and
+	// pending: the row is the durable source of truth
+	// (docs/adr/0004-web-push-timer-notifications.md), so deleting it would
+	// destroy a legitimate push over what may be a temporary clock skew.
+	if (delay > MAX_TIMER_PUSH_DELAY_MS) {
+		console.error(
+			`Not arming scheduled push ${row.id}: fires_at is beyond the timer's ${MAX_TIMER_PUSH_DELAY_MS}ms ceiling`
+		);
 		return;
 	}
 	const handle = setTimeout(() => void fire(row), delay);
