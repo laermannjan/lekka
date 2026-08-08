@@ -1,0 +1,593 @@
+/*
+	PROTOTYPE (throwaway) - three app-wide visual languages, applied to the
+	plain semantic HTML every page already emits. No markup changes beyond a
+	handful of class hooks in +layout.svelte, which is the point: if a theme
+	needs the pages rewritten to look right, it is the wrong base layer.
+
+	Switch with the floating bar (PrototypeThemeSwitcher), which sets
+	`data-proto-theme` on <html> and remembers the choice.
+
+		a - Counter    warm paper, serif, hairline rules
+		b - Workbench  dark, dense, boxed panels, tabular figures
+		c - Cook       light, big rounded cards, large touch targets
+
+	Delete this file, the switcher, and the layout's class hooks once one has
+	won and a real design system replaces it.
+*/
+
+/* ---------------------------------------------------------------- tokens */
+
+:root {
+	--bg: #ffffff;
+	--surface: #ffffff;
+	--ink: #1a1a1a;
+	--dim: #666666;
+	--accent: #1a1a1a;
+	--accent-ink: #ffffff;
+	--edge: #dddddd;
+	--flag: #b3261e;
+
+	--font-body: ui-sans-serif, system-ui, -apple-system, sans-serif;
+	--font-display: var(--font-body);
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	--fs: 16px;
+	--shell: 60rem;
+	--radius: 6px;
+	--control-radius: 6px;
+	--control-pad: 0.45rem 0.7rem;
+	--gap: 1rem;
+	--section-gap: 2rem;
+	--shadow: none;
+	--surface-border: 1px solid var(--edge);
+}
+
+[data-proto-theme='a'] {
+	--bg: #fbf7f0;
+	--surface: #ffffff;
+	--ink: #23201c;
+	--dim: #6f675d;
+	--accent: #a2452b;
+	--accent-ink: #fbf7f0;
+	--edge: #e2d9cb;
+	--font-display: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+	--shell: 62rem;
+	--radius: 4px;
+	--control-radius: 999px;
+	--fs: 16px;
+	--section-gap: 2.6rem;
+	--surface-border: 1px solid var(--edge);
+}
+
+[data-proto-theme='b'] {
+	--bg: #14161a;
+	--surface: #1b1e24;
+	--ink: #d8dde5;
+	--dim: #8992a0;
+	--accent: #6fd08c;
+	--accent-ink: #10231a;
+	--edge: #2b3038;
+	--flag: #e2725b;
+	--shell: 78rem;
+	--radius: 4px;
+	--control-radius: 4px;
+	--control-pad: 0.25rem 0.5rem;
+	--fs: 13px;
+	--gap: 0.6rem;
+	--section-gap: 1rem;
+	--surface-border: 1px solid var(--edge);
+}
+
+[data-proto-theme='c'] {
+	--bg: #f4f1ec;
+	--surface: #ffffff;
+	--ink: #1a1a1a;
+	--dim: #6b6b6b;
+	--accent: #1f6f4a;
+	--accent-ink: #ffffff;
+	--edge: #e3ddd3;
+	--flag: #c0442b;
+	--shell: 36rem;
+	--radius: 18px;
+	--control-radius: 12px;
+	--control-pad: 0.8rem 1rem;
+	--fs: 17px;
+	--gap: 0.85rem;
+	--section-gap: 0.9rem;
+	--shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+	--surface-border: 1px solid var(--edge);
+}
+
+/* ------------------------------------------------------------------ base */
+
+html {
+	background: var(--bg);
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--ink);
+	font-family: var(--font-body);
+	font-size: var(--fs);
+	line-height: 1.55;
+	-webkit-text-size-adjust: 100%;
+}
+
+/* Layout shell -------------------------------------------------------- */
+
+.app-header {
+	background: var(--surface);
+	border-bottom: var(--surface-border);
+}
+
+.app-header-inner {
+	max-width: var(--shell);
+	margin: 0 auto;
+	padding: 0.7rem 1.1rem;
+	display: flex;
+	align-items: baseline;
+	gap: 1.2rem;
+	flex-wrap: wrap;
+}
+
+.app-brand {
+	font-family: var(--font-display);
+	font-weight: 700;
+	font-size: 1.15rem;
+	letter-spacing: -0.01em;
+	color: var(--ink);
+	text-decoration: none;
+}
+
+.app-nav {
+	display: flex;
+	align-items: baseline;
+	gap: 1rem;
+	flex: 1;
+	flex-wrap: wrap;
+	font-size: 0.9rem;
+}
+
+.app-nav a {
+	color: var(--dim);
+	text-decoration: none;
+	border-bottom: 2px solid transparent;
+	padding-bottom: 0.1rem;
+}
+
+.app-nav a:hover {
+	color: var(--ink);
+	border-bottom-color: var(--accent);
+}
+
+.app-who {
+	margin-left: auto;
+	color: var(--dim);
+	font-size: 0.82rem;
+	white-space: nowrap;
+}
+
+.app-main {
+	max-width: var(--shell);
+	margin: 0 auto;
+	padding: 1.6rem 1.1rem 5rem;
+}
+
+/* Typography ---------------------------------------------------------- */
+
+h1,
+h2,
+h3 {
+	font-family: var(--font-display);
+	line-height: 1.15;
+	margin: 0 0 0.6rem;
+	font-weight: 600;
+	letter-spacing: -0.015em;
+}
+
+h1 {
+	font-size: 2rem;
+	margin-bottom: 1rem;
+}
+h2 {
+	font-size: 1.25rem;
+}
+h3 {
+	font-size: 1rem;
+}
+
+p {
+	margin: 0 0 0.8rem;
+	max-width: 62ch;
+}
+
+em {
+	color: var(--dim);
+	font-style: italic;
+}
+
+a {
+	color: var(--accent);
+}
+
+strong {
+	font-weight: 700;
+}
+
+[role='alert'] {
+	background: color-mix(in srgb, var(--flag) 12%, transparent);
+	border-left: 3px solid var(--flag);
+	color: var(--flag);
+	padding: 0.5rem 0.8rem;
+	border-radius: var(--radius);
+	max-width: none;
+}
+
+hr {
+	border: 0;
+	border-top: var(--surface-border);
+	margin: var(--section-gap) 0;
+}
+
+/* Sections ------------------------------------------------------------ */
+
+section {
+	margin-bottom: var(--section-gap);
+}
+
+ul,
+ol {
+	margin: 0 0 0.9rem;
+	padding-left: 1.1rem;
+}
+
+li {
+	margin-bottom: 0.3rem;
+}
+
+/* Controls ------------------------------------------------------------ */
+
+form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 0.6rem;
+	margin: 0 0 0.9rem;
+}
+
+label {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	font-size: 0.82rem;
+	color: var(--dim);
+}
+
+label:has(input[type='checkbox']),
+label:has(input[type='radio']) {
+	flex-direction: row;
+	align-items: center;
+	gap: 0.4rem;
+	font-size: 0.92rem;
+	color: var(--ink);
+}
+
+input,
+select,
+textarea {
+	font: inherit;
+	font-size: 0.95rem;
+	color: var(--ink);
+	background: var(--surface);
+	border: var(--surface-border);
+	border-radius: var(--control-radius);
+	padding: var(--control-pad);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+	accent-color: var(--accent);
+	width: 1rem;
+	height: 1rem;
+	padding: 0;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+button {
+	font: inherit;
+	font-size: 0.88rem;
+	font-weight: 600;
+	color: var(--accent-ink);
+	background: var(--accent);
+	border: 1px solid var(--accent);
+	border-radius: var(--control-radius);
+	padding: var(--control-pad);
+	cursor: pointer;
+}
+
+button:hover {
+	filter: brightness(1.08);
+}
+
+/* Secondary weight for the buttons that sit *alongside* content in a list
+   row - a "Remove" next to a category name is never the point of the row.
+   A row whose entire content is one form is the opposite case: on the
+   profile picker the button IS the row, so it keeps primary weight.
+   That this needs inferring at all is the base layer's weak spot - the
+   pages carry no class saying which buttons matter. */
+li:not(:has(> form:only-child)) button,
+form[style*='inline'] button {
+	background: transparent;
+	color: var(--dim);
+	border-color: var(--edge);
+	font-weight: 400;
+	font-size: 0.78rem;
+	padding: 0.2rem 0.5rem;
+}
+
+li:not(:has(> form:only-child)) button:hover,
+form[style*='inline'] button:hover {
+	color: var(--flag);
+	border-color: var(--flag);
+	filter: none;
+}
+
+fieldset {
+	border: var(--surface-border);
+	border-radius: var(--radius);
+	padding: 0.7rem 0.9rem;
+	margin: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem 1.1rem;
+	background: var(--surface);
+	/* A fieldset is a group, not a field: it takes the whole form row rather
+	   than sitting beside the single inputs next to it. */
+	flex-basis: 100%;
+}
+
+legend {
+	font-size: 0.72rem;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--dim);
+	padding: 0 0.3rem;
+}
+
+details {
+	border: var(--surface-border);
+	border-radius: var(--radius);
+	background: var(--surface);
+	padding: 0.6rem 0.9rem;
+	margin-bottom: 0.9rem;
+}
+
+summary {
+	cursor: pointer;
+	font-weight: 600;
+	font-size: 0.9rem;
+}
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 0.9rem;
+}
+
+th {
+	text-align: left;
+	font-size: 0.72rem;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--dim);
+	font-weight: 500;
+	padding: 0.35rem 0.5rem;
+	border-bottom: var(--surface-border);
+}
+
+td {
+	padding: 0.4rem 0.5rem;
+	border-bottom: var(--surface-border);
+}
+
+/* ------------------------------------------------- a - Counter (paper) */
+
+[data-proto-theme='a'] .app-header {
+	background: transparent;
+	border-bottom-width: 2px;
+	border-bottom-color: var(--ink);
+}
+
+[data-proto-theme='a'] .app-brand {
+	font-size: 1.4rem;
+}
+
+[data-proto-theme='a'] h1 {
+	font-size: clamp(2.1rem, 5vw, 3rem);
+	font-weight: 600;
+}
+
+[data-proto-theme='a'] h2 {
+	border-bottom: 1px solid var(--edge);
+	padding-bottom: 0.3rem;
+}
+
+/* Rules, not boxes: the paper look leans on hairlines and whitespace. */
+[data-proto-theme='a'] section {
+	border-top: 1px solid var(--edge);
+	padding-top: 1.1rem;
+}
+
+[data-proto-theme='a'] section:first-of-type {
+	border-top: 0;
+	padding-top: 0;
+}
+
+[data-proto-theme='a'] ul,
+[data-proto-theme='a'] ol {
+	list-style: none;
+	padding-left: 0;
+}
+
+[data-proto-theme='a'] li {
+	padding: 0.35rem 0;
+	border-bottom: 1px dotted var(--edge);
+}
+
+[data-proto-theme='a'] button {
+	letter-spacing: 0.02em;
+}
+
+[data-proto-theme='a'] fieldset,
+[data-proto-theme='a'] details {
+	background: transparent;
+}
+
+/* ---------------------------------------------- b - Workbench (dense) */
+
+[data-proto-theme='b'] .app-header {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+}
+
+[data-proto-theme='b'] .app-header-inner {
+	padding: 0.35rem 0.8rem;
+}
+
+[data-proto-theme='b'] .app-main {
+	padding: 0.9rem 0.8rem 4rem;
+}
+
+[data-proto-theme='b'] h1 {
+	font-size: 1.3rem;
+	margin-bottom: 0.6rem;
+}
+
+[data-proto-theme='b'] h2 {
+	font-size: 0.72rem;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--dim);
+	font-weight: 500;
+}
+
+[data-proto-theme='b'] section {
+	background: var(--surface);
+	border: var(--surface-border);
+	border-radius: var(--radius);
+	padding: 0.7rem 0.8rem;
+}
+
+[data-proto-theme='b'] ul,
+[data-proto-theme='b'] ol {
+	list-style: none;
+	padding-left: 0;
+}
+
+[data-proto-theme='b'] li {
+	margin: 0;
+	padding: 0.25rem 0;
+	border-bottom: 1px solid var(--edge);
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+[data-proto-theme='b'] li:last-child {
+	border-bottom: 0;
+}
+
+/* Numbers line up in a dense view or the eye cannot scan the column. */
+[data-proto-theme='b'] td,
+[data-proto-theme='b'] li,
+[data-proto-theme='b'] input {
+	font-variant-numeric: tabular-nums;
+}
+
+[data-proto-theme='b'] p {
+	color: var(--dim);
+	font-size: 0.92rem;
+}
+
+/* ----------------------------------------------- c - Cook (big cards) */
+
+[data-proto-theme='c'] .app-header {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background: var(--bg);
+}
+
+[data-proto-theme='c'] h1 {
+	font-size: 1.7rem;
+}
+
+[data-proto-theme='c'] section,
+[data-proto-theme='c'] fieldset,
+[data-proto-theme='c'] details {
+	background: var(--surface);
+	border: var(--surface-border);
+	border-radius: var(--radius);
+	padding: 1rem 1.1rem;
+	box-shadow: var(--shadow);
+}
+
+/* Tap targets stay big, but the group still wraps as a row - stacking every
+   checkbox turns a nine-item filter into a full screen of scrolling. */
+[data-proto-theme='c'] fieldset {
+	gap: 0.1rem 1rem;
+}
+
+/* Every row is a tap target, so it gets card-sized padding of its own. */
+[data-proto-theme='c'] ul,
+[data-proto-theme='c'] ol {
+	list-style: none;
+	padding-left: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+[data-proto-theme='c'] li {
+	margin: 0;
+	background: var(--surface);
+	border: var(--surface-border);
+	border-radius: var(--control-radius);
+	padding: 0.75rem 0.9rem;
+	box-shadow: var(--shadow);
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+}
+
+[data-proto-theme='c'] section li,
+[data-proto-theme='c'] fieldset li {
+	box-shadow: none;
+}
+
+[data-proto-theme='c'] label:has(input[type='checkbox']) {
+	padding: 0.5rem 0;
+	font-size: 1rem;
+}
+
+[data-proto-theme='c'] input[type='checkbox'] {
+	width: 1.3rem;
+	height: 1.3rem;
+}
+
+[data-proto-theme='c'] button {
+	font-size: 1rem;
+}
