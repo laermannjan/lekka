@@ -34,6 +34,15 @@ export default defineConfig(
 		}
 	},
 	{
+		// PROTOTYPE (throwaway) - the `?variant=` UI variants navigate with
+		// query-only URLs (`?servings=8&variant=A`), which `resolve()` has no
+		// form for: it resolves route ids, not a search string on the current
+		// route. Scoped to the prototype files so the exemption disappears with
+		// them. Delete this block when the variants are deleted.
+		files: ['**/Prototype*.svelte'],
+		rules: { 'svelte/no-navigation-without-resolve': 'off' }
+	},
+	{
 		// Override or add rule settings here, such as:
 		// 'svelte/button-has-type': 'error'
 		rules: {}

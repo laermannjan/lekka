@@ -31,6 +31,9 @@ pnpm run db:generate  # generate a new migration after changing the schema
 pnpm run db:migrate   # apply pending migrations to the local database by hand
                       # (the app does this itself on boot - see ADR-0002)
 pnpm run db:studio    # Drizzle Studio, browse the local database
+pnpm run seed         # WIPES the local database and writes one demo household
+                      # (3 Profiles, 6 Recipes, a Variant, Scaling Formulas,
+                      #  cook history). Ids are stable across runs.
 ```
 
 ## Running via Docker
