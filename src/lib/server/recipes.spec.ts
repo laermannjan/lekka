@@ -10,6 +10,9 @@ import {
 	logCook
 } from './cooks';
 import { createProfile } from './profiles';
+import { addCategoryToRecipe, createCategory } from './categories';
+import { setFavorite } from './favorites';
+import { addRecipeToCollection, createCollection } from './collections';
 import type { RecipeSnapshot } from './recipe-versions';
 import {
 	BlankInstructionError,
@@ -187,6 +190,96 @@ describe('recipes', () => {
 			expect(listRecipes({ search: 'an' }).map((r) => r.title)).toEqual(['Banana bread']);
 			expect(listRecipes({ search: 'BREAD' }).map((r) => r.title)).toEqual(['Banana bread']);
 			expect(listRecipes({ search: 'zzz' })).toEqual([]);
+		});
+	});
+
+	describe('filtering', () => {
+		it('filters by a Category', () => {
+			const chilli = createRecipe('Chilli con carne');
+			createRecipe('Banana bread');
+			const dinner = createCategory('dinner', 'meal-type');
+			addCategoryToRecipe(chilli.id, dinner.id);
+
+			expect(listRecipes({ categoryIds: [dinner.id] }).map((r) => r.title)).toEqual([
+				'Chilli con carne'
+			]);
+		});
+
+		it('narrows to Recipes carrying every selected Category', () => {
+			const chilli = createRecipe('Chilli con carne');
+			const tacos = createRecipe('Tacos');
+			const dinner = createCategory('dinner', 'meal-type');
+			const mexican = createCategory('mexican', 'cuisine');
+			addCategoryToRecipe(chilli.id, dinner.id);
+			addCategoryToRecipe(tacos.id, dinner.id);
+			addCategoryToRecipe(tacos.id, mexican.id);
+
+			expect(listRecipes({ categoryIds: [dinner.id, mexican.id] }).map((r) => r.title)).toEqual([
+				'Tacos'
+			]);
+		});
+
+		it('filters to Favorites household-wide, whoever marked them', () => {
+			const chilli = createRecipe('Chilli con carne');
+			const banana = createRecipe('Banana bread');
+			createRecipe('Apple pie');
+			const jan = createProfile('Jan');
+			const alex = createProfile('Alex');
+			setFavorite(chilli.id, jan.id, true);
+			setFavorite(banana.id, alex.id, true);
+
+			expect(
+				listRecipes({ favoritesOnly: true, sort: 'alphabetical' }).map((r) => r.title)
+			).toEqual(['Banana bread', 'Chilli con carne']);
+		});
+
+		it("filters to a Collection's members", () => {
+			const chilli = createRecipe('Chilli con carne');
+			createRecipe('Banana bread');
+			const jan = createProfile('Jan');
+			const weeknights = createCollection(jan.id, 'Weeknight dinners');
+			addRecipeToCollection(weeknights.id, chilli.id);
+
+			expect(listRecipes({ collectionId: weeknights.id }).map((r) => r.title)).toEqual([
+				'Chilli con carne'
+			]);
+		});
+
+		it('composes filters with each other, with search and with sort', () => {
+			const chilli = createRecipe('Chilli con carne');
+			const chilliSin = createRecipe('Chilli sin carne');
+			const tacos = createRecipe('Tacos');
+			const banana = createRecipe('Banana bread');
+			const jan = createProfile('Jan');
+			const mexican = createCategory('mexican', 'cuisine');
+			const weeknights = createCollection(jan.id, 'Weeknight dinners');
+
+			for (const recipe of [chilli, chilliSin, tacos, banana]) {
+				addCategoryToRecipe(recipe.id, mexican.id);
+				addRecipeToCollection(weeknights.id, recipe.id);
+				setFavorite(recipe.id, jan.id, true);
+			}
+			setFavorite(chilliSin.id, jan.id, false);
+
+			expect(
+				listRecipes({
+					sort: 'alphabetical',
+					search: 'chilli',
+					categoryIds: [mexican.id],
+					favoritesOnly: true,
+					collectionId: weeknights.id
+				}).map((r) => r.title)
+			).toEqual(['Chilli con carne']);
+		});
+
+		it('filters nothing away when no filter is given', () => {
+			createRecipe('Chilli con carne');
+			createRecipe('Banana bread');
+
+			expect(listRecipes({ categoryIds: [] }).map((r) => r.title)).toEqual([
+				'Banana bread',
+				'Chilli con carne'
+			]);
 		});
 	});
 

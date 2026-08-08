@@ -41,6 +41,9 @@ import {
 	getQuantityScalingFormulasByUsageIds
 } from './scaling';
 import { recordVersion, type RecipeSnapshot } from './recipe-versions';
+import { listRecipeIdsWithAllCategories } from './categories';
+import { listFavoritedRecipeIds } from './favorites';
+import { listRecipeIdsInCollection } from './collections';
 
 // A second reference to `ingredients`, so a Usage's primary Ingredient and
 // its optional Alternative Ingredient (see CONTEXT.md) can both be
@@ -284,22 +287,45 @@ export type RecipeSort = (typeof RECIPE_SORTS)[number];
 export type ListRecipesOptions = {
 	sort?: RecipeSort;
 	search?: string;
+	categoryIds?: number[];
+	favoritesOnly?: boolean;
+	collectionId?: number;
 };
 
-// The Recipe browse view's household-wide sort/search (see CONTEXT.md's
+// The Recipe browse view's household-wide sort/search/filter (see CONTEXT.md's
 // Cook: "the basis for browsing a Recipe by last-cooked ... or
-// most-cooked ... alongside plain alphabetical and recently-added"). Every
-// sort is computed from existing rows, no new fields. `recently-added` uses
-// `min(recipeVersions.id)` rather than its text `createdAt` timestamp, since
-// id order tracks creation order exactly even when two Versions land in the
-// same second.
+// most-cooked ... alongside plain alphabetical and recently-added", and
+// Category: "A browsing classification for a whole Recipe"). Every sort and
+// every filter is computed from existing rows, no new fields.
+// `recently-added` uses `min(recipeVersions.id)` rather than its text
+// `createdAt` timestamp, since id order tracks creation order exactly even
+// when two Versions land in the same second.
+//
+// The filters narrow independently and compose with search and with each
+// other - each one only ever removes Recipes, so their order here doesn't
+// matter and sorting sees whatever survived. Every one of them is a
+// household-wide question, including Favorites: none reads the acting Profile
+// (see `listFavoritedRecipeIds`).
 export function listRecipes(options: ListRecipesOptions = {}): Recipe[] {
 	const sort = options.sort ?? 'recently-added';
 	const search = options.search?.trim().toLowerCase();
+	const categoryIds = options.categoryIds ?? [];
 
 	let rows = db.select().from(recipes).orderBy(asc(recipes.id)).all();
 	if (search) {
 		rows = rows.filter((recipe) => recipe.title.toLowerCase().includes(search));
+	}
+	if (categoryIds.length > 0) {
+		const matching = listRecipeIdsWithAllCategories(categoryIds);
+		rows = rows.filter((recipe) => matching.has(recipe.id));
+	}
+	if (options.favoritesOnly) {
+		const favorited = listFavoritedRecipeIds();
+		rows = rows.filter((recipe) => favorited.has(recipe.id));
+	}
+	if (options.collectionId !== undefined) {
+		const members = listRecipeIdsInCollection(options.collectionId);
+		rows = rows.filter((recipe) => members.has(recipe.id));
 	}
 
 	switch (sort) {

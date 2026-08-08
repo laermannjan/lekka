@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import type { PageProps } from './$types';
 	import ScalingFormulaEditor from '$lib/components/ScalingFormulaEditor.svelte';
+	import { CATEGORY_GROUP_LABELS } from '$lib/categories';
 	import { formatRemaining, parseDurationSeconds } from '$lib/duration';
 	import { TimerStore } from '$lib/timers.svelte';
 	import {
@@ -56,11 +57,6 @@
 		void cancelTimerPush(timerId);
 	}
 
-	const categoryGroupLabels: Record<string, string> = {
-		'meal-type': 'Meal type',
-		cuisine: 'Cuisine',
-		course: 'Course'
-	};
 	const attachedCategoryIds = $derived(new Set(data.recipeCategories.map((c) => c.id)));
 	const availableCategories = $derived(
 		data.categories.filter((c) => !attachedCategoryIds.has(c.id))
@@ -108,7 +104,7 @@
 		<ul>
 			{#each data.recipeCategories as category (category.id)}
 				<li>
-					{category.name} <em>({categoryGroupLabels[category.categoryGroup]})</em>
+					{category.name} <em>({CATEGORY_GROUP_LABELS[category.categoryGroup]})</em>
 					<form method="POST" action="?/removeCategory" style="display: inline">
 						<input type="hidden" name="categoryId" value={category.id} />
 						<button type="submit">Remove</button>
@@ -125,7 +121,7 @@
 			<label>
 				Attach an existing category
 				<select name="categoryId">
-					{#each Object.entries(categoryGroupLabels) as [group, label] (group)}
+					{#each Object.entries(CATEGORY_GROUP_LABELS) as [group, label] (group)}
 						{#each availableCategories.filter((c) => c.categoryGroup === group) as category (category.id)}
 							<option value={category.id}>{label}: {category.name}</option>
 						{/each}
@@ -152,7 +148,7 @@
 				Group
 				<select name="categoryGroup" required>
 					{#each data.categoryGroups as group (group)}
-						<option value={group}>{categoryGroupLabels[group]}</option>
+						<option value={group}>{CATEGORY_GROUP_LABELS[group]}</option>
 					{/each}
 				</select>
 			</label>

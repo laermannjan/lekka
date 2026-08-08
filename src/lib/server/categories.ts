@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, eq, inArray } from 'drizzle-orm';
 import { db } from './db';
 import {
 	categories,
@@ -83,6 +83,28 @@ export function listCategoriesForRecipe(recipeId: number): Category[] {
 		.where(eq(recipeCategories.recipeId, recipeId))
 		.all();
 	return rows.map((row) => row.category).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// The Recipes carrying *every* one of the given Categories - the browse
+// filter's narrowing semantics (see `listRecipes`): picking `dinner` and
+// `mexican` asks for dinners that are Mexican, not everything that is either.
+// An empty list matches nothing here; callers treat "no Category picked" as
+// "no Category filter" before reaching this.
+export function listRecipeIdsWithAllCategories(categoryIds: number[]): Set<number> {
+	if (categoryIds.length === 0) return new Set();
+
+	const rows = db
+		.select({ recipeId: recipeCategories.recipeId, matched: count() })
+		.from(recipeCategories)
+		.where(inArray(recipeCategories.categoryId, categoryIds))
+		.groupBy(recipeCategories.recipeId)
+		.all();
+
+	// `recipe_categories` is keyed on (recipeId, categoryId), so a Recipe can
+	// match a given Category at most once - matching as many rows as there are
+	// distinct Categories asked for means it carries all of them.
+	const wanted = new Set(categoryIds).size;
+	return new Set(rows.filter((row) => row.matched === wanted).map((row) => row.recipeId));
 }
 
 // Categories for many Recipes at once, keyed by recipeId - for list views
