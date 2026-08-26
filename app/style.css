@@ -109,7 +109,10 @@ body {
 }
 
 .grid > .rightmost,
-.grid > .free.open {
+.grid > .free.open,
+.grid > .amount,
+.grid > .unit,
+.grid > .words {
   border-right: 0;
 }
 
@@ -137,7 +140,12 @@ body {
 }
 
 .amount {
+  padding-right: 3px;
   text-align: right;
+}
+
+.unit {
+  padding-left: 3px;
 }
 
 .unit,
