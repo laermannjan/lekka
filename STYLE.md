@@ -60,8 +60,13 @@ tried and dropped: classifying cost more than it gave.
   colour. Card notes likewise but grey on white.
 - Column headers sit on the ground colour in grey upper case.
 
-Column widths: amount 58 px, unit 54 px, a step column at least 150 px. Rows are
-at least 21 px with 1 px of vertical padding. The card is at most 1140 px wide.
+Column widths: amount 58 px, unit 54 px, a step column between 150 and 240 px.
+Rows are at least 21 px with 1 px of vertical padding.
+
+The card is **as wide as it needs to be**, up to the width of the screen. A card
+that fits is drawn whole, however large the screen; only one that does not fit
+scrolls sideways. The cap on a step column is what stops a short card from
+stretching into a few enormous cells.
 
 ## Frame and bars
 

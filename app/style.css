@@ -28,7 +28,9 @@ body {
   background: var(--white);
   border: 2px solid var(--accent);
   margin: 0 auto;
-  max-width: 1140px;
+  max-width: 100%;
+  min-width: min(100%, 640px);
+  width: fit-content;
 }
 
 .head {
@@ -124,6 +126,17 @@ body {
   flex: 1;
 }
 
+.source {
+  border: 0;
+  border-top: 1px solid var(--line);
+  display: block;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  min-height: 60vh;
+  padding: 8px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
 .badge {
   background: var(--ground);
   color: var(--grey);
@@ -164,7 +177,7 @@ button.quiet:hover {
   display: grid;
   font-variant-numeric: tabular-nums;
   grid-auto-rows: minmax(21px, auto);
-  grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(150px, 1fr));
+  grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(150px, 240px));
 }
 
 .grid > * {

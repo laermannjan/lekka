@@ -15,6 +15,7 @@ const title = document.getElementById('title')
 const aside = document.getElementById('aside')
 const screen = document.getElementById('screen')
 
+const NEW = `# \n\n- \n  - : \n`
 const CARD = /^\/r\/([^/]+)(?:\/([^/]+))?/
 const COLLECTION = /^\/c\/([^/]+)(?:\/([^/]+))?/
 
@@ -28,6 +29,7 @@ async function start() {
   const found = COLLECTION.exec(path)
   if (found) return showCollection(found[1], found[2])
 
+  if (path === '/new') return showWriting()
   return showOverview()
 }
 
@@ -46,7 +48,7 @@ async function showOverview() {
   }
 
   show(
-    bar(label('Add'), picker(), label('Collection'), share(held)),
+    bar(writeLink(), label('Collection'), share(held)),
     note,
     renderOverview(await describe(list), { onRemove: (id) => remove(held, list, id) }),
   )
@@ -144,20 +146,39 @@ async function remove(held, list, id) {
   showOverview()
 }
 
-function picker() {
-  const input = element('input')
-  input.type = 'file'
-  input.accept = '.lekka,text/plain'
-  input.multiple = true
-  input.onchange = async () => {
-    const held = collection()
-    const next = [...rows()]
-    for (const file of input.files) next.push(await api.createCard(await file.text()))
-    await api.writeCollection(held.id, held.key, next)
-    setRows(next)
-    showOverview()
+function writeLink() {
+  const link = element('a', 'name', '+ New card')
+  link.href = '/new'
+  return link
+}
+
+function showWriting() {
+  const held = collection()
+  head('New card', held ? held.id : '')
+
+  const area = element('textarea', 'source')
+  area.value = NEW
+  area.spellcheck = false
+
+  const create = element('button', 'quiet', 'Create')
+  create.onclick = async () => {
+    try {
+      parseCard(area.value)
+    } catch (error) {
+      return show(bar(back(), create), band(`Line ${error.line}: ${error.message}`, 'warning'), area)
+    }
+
+    const made = await api.createCard(area.value)
+    if (held) {
+      const next = [...rows(), made]
+      await api.writeCollection(held.id, held.key, next)
+      setRows(next)
+    }
+    location.assign(`/r/${made.id}/${made.key}`)
   }
-  return input
+
+  show(bar(back(), create), area)
+  area.focus()
 }
 
 function welcome() {
