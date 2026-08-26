@@ -134,38 +134,42 @@ HTTPS the app runs but is neither offline-capable nor installable.
   three rounds were lost to a CSS rule that overrode `[hidden]`, where the
   property said "hidden" and the button was visible. Only a browser catches it.
 
-## Before it faces the internet
+## Threat model
 
-Unit tests say the code does what we meant. They say nothing about what else it
-does. **A deliberate penetration test is owed before the managed instance is
-public**, and a self-hoster on a NAS deserves the same care. It has not happened
-yet.
+**The server is meant for a network you already trust**: a LAN, or a VPN such as
+Tailscale or Wireguard. It is not meant to be reachable from the internet, and
+nothing in it is built for that. There is no admin interface, no rate limiting,
+no account and no login, and those absences are deliberate.
 
-Where to look, in rough order of how badly it would end:
+What follows from that:
+
+- Everyone who can reach the port can create cards. On a household network that
+  is the household. `CREATE_TOKEN` narrows it if you want, but it is an extra,
+  not a defence.
+- The link is still the only way to a card, because a link is how you hand a
+  recipe to someone, not because we expect the network to be hostile.
+- The operator has the data directory. That is the administration interface:
+  `ls`, `cat`, `rm`, and a backup. Building a second one over HTTP would only
+  add a way in.
+
+Still worth getting right on a trusted network, because these are bugs rather
+than attacks:
 
 - **Anything that becomes a path.** A card id is a file name, so every id, name
-  and slug that reaches the filesystem must be rebuilt from an allow-list, never
-  cleaned by removing what looks dangerous. Try `..%2f`, `..%252f`, `....//`,
-  backslashes, a trailing dot, a Unicode form that normalises into a slash after
-  the check, and an id that is only an extension.
-- **The key.** That it is compared in constant time, that it never reaches a log,
-  an error message, a referrer or a stack trace, and that a wrong key is
-  indistinguishable from a missing card, so the API is not an oracle for which
-  ids exist.
-- **The absence of a listing.** Fuzz the routes for anything that enumerates,
-  including error text that differs between a card that exists and one that does
-  not, and directory indexes served by mistake.
-- **Collections.** That a public read really does strip every key from the rows,
-  including from a row shape we did not anticipate.
-- **Limits.** Body size, header size, JSON depth, slow requests, and how many
-  cards one client can create. Without these the disk is the rate limit.
-- **Headers.** `Referrer-Policy: no-referrer`, a CSP that permits nothing
-  external, `X-Content-Type-Options`, and no cookies at all.
-- **The container.** Non-root, read-only filesystem, a volume only at the data
-  directory, no symlink escaping it, and file permissions that do not hand the
-  cards to every other process on the host.
-- **The service worker.** That a cached response cannot outlive a deletion, and
-  that it never caches a write.
+  and slug must be rebuilt from an allow-list, never cleaned by removing what
+  looks dangerous. A link you were sent is untrusted input even at home.
+- **Limits.** A body-size cap, so one bad request cannot fill the disk.
+- **Writes that cannot tear.** Temp file plus rename, so a power cut leaves the
+  old card or the new one.
+- **The key never in a log**, an error message or a referrer, since a link
+  shared inside the house is still a link that leaves it.
+
+**Before it is ever exposed to the internet**, this is not enough. It would then
+need at least: a deliberate penetration test, rate limiting on creation and on
+key guessing, a hard look at whether a wrong key and a missing card are truly
+indistinguishable, request and header size limits, a container review, and
+proof that no route enumerates anything. None of that has been done, and the
+software should not be put on a public address until it has.
 
 Having no dependencies means no supply chain to audit. It also means every one
 of these is our own bug to find.
