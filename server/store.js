@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/pro
 import { join } from 'node:path'
 
 import { newId } from '../app/id.js'
-import { newName } from './names.js'
+import { cardId, collectionId } from './names.js'
 
 const KEY_LENGTH = 22
 const DAY = 24 * 60 * 60 * 1000
@@ -11,8 +11,8 @@ const DAY = 24 * 60 * 60 * 1000
 /** Two shelves of the same kind. Get by id is the only way in; there is no listing. */
 export function openStore(directory) {
   return {
-    cards: shelf(join(directory, 'cards'), '.lekka', () => newId()),
-    collections: shelf(join(directory, 'collections'), '.json', newName),
+    cards: shelf(join(directory, 'cards'), '.lekka', cardId),
+    collections: shelf(join(directory, 'collections'), '.json', collectionId),
     async open() {
       await this.cards.open()
       await this.collections.open()
@@ -26,6 +26,7 @@ function shelf(directory, extension, nextId) {
   const envelope = (id) => join(directory, `${id}.meta.json`)
 
   const meta = async (id) => {
+    if (!/^[a-z0-9-]{1,64}$/.test(id ?? '')) return null
     try {
       return JSON.parse(await readFile(envelope(id), 'utf8'))
     } catch {
@@ -44,9 +45,9 @@ function shelf(directory, extension, nextId) {
       await mkdir(directory, { recursive: true })
     },
 
-    async create(text) {
-      let id = nextId()
-      while (await meta(id)) id = nextId()
+    async create(text, label) {
+      let id = nextId(label)
+      while (await meta(id)) id = nextId(label)
 
       const key = newId(KEY_LENGTH)
       const now = new Date().toISOString()

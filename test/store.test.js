@@ -18,9 +18,9 @@ async function store() {
 
 test('a card round-trips through the directory', async () => {
   const { cards } = await store()
-  const { id, key } = await cards.create(CARD)
+  const { id, key } = await cards.create(CARD, 'Dinkelquarkbrot')
 
-  assert.equal(id.length, 10)
+  assert.match(id, /^dinkelquarkbrot-[a-z0-9]{10}$/)
   assert.equal(key.length, 22)
   assert.equal(await cards.read(id), CARD)
   assert.equal(await cards.read('nothingxyz'), null)
@@ -35,7 +35,7 @@ test('a collection is the same shelf with a readable name', async () => {
   const rows = JSON.stringify([{ id: '7kmqR2xvbn' }])
   const { id, key } = await collections.create(rows)
 
-  assert.match(id, /^[a-z]+-[a-z]+-[^-]{4}$/)
+  assert.match(id, /^[a-z]+-[a-z]+-[a-z0-9]{4}$/)
   assert.equal(key.length, 22)
   assert.equal(await collections.read(id), rows)
 })
@@ -43,7 +43,7 @@ test('a collection is the same shelf with a readable name', async () => {
 test('cards and collections live in their own directories', async () => {
   const where = await directory()
   const store = await openStore(where).open()
-  const card = await store.cards.create(CARD)
+  const card = await store.cards.create(CARD, 'Dinkelquarkbrot')
   const collection = await store.collections.create('[]')
 
   assert.deepEqual((await readdir(where)).sort(), ['cards', 'collections'])
@@ -58,10 +58,20 @@ test('cards and collections live in their own directories', async () => {
   )
 })
 
+test('a title becomes a file name, and nothing else can', async () => {
+  const { cards } = await store()
+  assert.match((await cards.create(CARD, 'Süßer Hefezopf (2 Stück)')).id, /^suesser-hefezopf-2-stueck-[a-z0-9]{10}$/)
+  assert.match((await cards.create(CARD, '')).id, /^karte-[a-z0-9]{10}$/)
+  assert.match((await cards.create(CARD, '../../etc/passwd')).id, /^etc-passwd-[a-z0-9]{10}$/)
+
+  for (const id of ['../secret', 'a/b', 'A', '.', '', 'x'.repeat(65)])
+    assert.equal(await cards.read(id), null, id)
+})
+
 test('the key is never stored, only its hash', async () => {
   const where = await directory()
   const { cards } = await openStore(where).open()
-  const { id, key } = await cards.create(CARD)
+  const { id, key } = await cards.create(CARD, 'A')
 
   const envelope = await readFile(join(where, 'cards', `${id}.meta.json`), 'utf8')
   assert.equal(envelope.includes(key), false)

@@ -1,6 +1,6 @@
-const ALPHABET = '23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ'
+const ALPHABET = '23456789abcdefghijkmnpqrstuvwxyz'
 
-/** No look-alikes, every character equally likely. */
+/** Lower case so a case-blind filesystem cannot merge two ids. No look-alikes. */
 export function newId(length = 10) {
   const limit = Math.floor(256 / ALPHABET.length) * ALPHABET.length
   let id = ''
