@@ -126,6 +126,19 @@ body {
   flex: 1;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+.panel .bar {
+  border-top: 1px solid var(--line);
+}
+
+.panel .source {
+  border-top: 0;
+  min-height: 40vh;
+}
+
 .source {
   border: 0;
   border-top: 1px solid var(--line);

@@ -72,7 +72,7 @@ async function showCollection(id, key) {
   return showOverview()
 }
 
-async function showCard(id, key, scale = 1) {
+async function showCard(id, key, scale = 1, editing = false) {
   const text = await load(id)
   if (text === null) return fail('No card under this link.')
 
@@ -87,7 +87,51 @@ async function showCard(id, key, scale = 1) {
   head(card.title, [card.yields, ...card.notes].filter(Boolean).join(' · '))
   const scroll = element('div', 'scroll')
   scroll.append(renderCard(card, scale))
-  show(bar(back(), label('Scale'), scales(id, key, scale), keeper(id, key)), scroll)
+  show(
+    bar(back(), label('Scale'), scales(id, key, scale), keeper(id, key), source(id, key, scale, editing)),
+    scroll,
+    editing ? panel(id, key, text, scale) : null,
+  )
+}
+
+function source(id, key, scale, editing) {
+  if (!key) return null
+  const button = element('button', 'quiet', editing ? 'Close source' : 'Edit source')
+  button.onclick = () => showCard(id, key, scale, !editing)
+  return button
+}
+
+function panel(id, key, text, scale) {
+  const area = element('textarea', 'source')
+  area.value = text
+  area.spellcheck = false
+
+  const message = element('div', 'band warning')
+  message.hidden = true
+
+  const save = element('button', 'quiet', 'Save')
+  save.onclick = async () => {
+    try {
+      parseCard(area.value)
+    } catch (error) {
+      if (!(error instanceof ParseError)) throw error
+      message.textContent = `Line ${error.line}: ${error.message}`
+      message.hidden = false
+      return
+    }
+    await api.writeCard(id, key, area.value)
+    cache(id, area.value)
+    showCard(id, key, scale, true)
+  }
+
+  const discard = element('button', 'quiet', 'Discard')
+  discard.onclick = () => showCard(id, key, scale, true)
+
+  return element('div', 'panel', undefined, [
+    bar(label('Source'), save, discard),
+    message,
+    area,
+  ])
 }
 
 async function load(id) {
