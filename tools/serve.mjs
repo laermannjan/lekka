@@ -25,6 +25,9 @@ createServer(async (request, response) => {
     response.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' })
     response.end(body)
   } catch {
-    response.writeHead(404).end('not found')
+    if (extname(path)) return response.writeHead(404).end('not found')
+    const body = await readFile(join(root, 'app', 'index.html'))
+    response.writeHead(200, { 'content-type': TYPES['.html'] })
+    response.end(body)
   }
 }).listen(port, () => console.log(`http://localhost:${port}`))

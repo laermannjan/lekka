@@ -1,5 +1,7 @@
 import { parseCard, ParseError } from './card.js'
 import { renderCard } from './render.js'
+import { renderOverview } from './overview.js'
+import { newId, read, keep } from './store.js'
 
 const SCALES = [
   [0.5, '½×'],
@@ -10,45 +12,89 @@ const SCALES = [
 
 const title = document.getElementById('title')
 const aside = document.getElementById('aside')
-const scroll = document.getElementById('scroll')
+const screen = document.getElementById('screen')
 
-let card = null
-let scale = 1
+const route = location.pathname.match(/^\/r\/([^/]+)/)
+route ? showCard(route[1]) : showOverview()
 
-for (const [factor, text] of SCALES) {
-  const button = document.createElement('button')
-  button.textContent = text
-  button.onclick = () => {
-    scale = factor
-    show()
-  }
-  button.dataset.factor = factor
-  document.getElementById('scale').append(button)
+function showOverview() {
+  title.textContent = 'lekka'
+  aside.textContent = ''
+  screen.replaceChildren(bar(label('Add'), add()), renderOverview(showOverview))
 }
 
-document.getElementById('file').onchange = async (event) => {
-  const [file] = event.target.files
-  if (file) load(await file.text())
-}
+function showCard(id, scale = 1) {
+  const text = read(id)
+  if (text === null) return fail('No card under this link.')
 
-function load(text) {
+  let card
   try {
     card = parseCard(text)
-    show()
   } catch (error) {
     if (!(error instanceof ParseError)) throw error
-    scroll.replaceChildren(`Line ${error.line}: ${error.message}`)
+    return fail(`Line ${error.line}: ${error.message}`)
   }
-}
 
-function show() {
   title.textContent = card.title
   aside.textContent = [card.yields, ...card.notes].filter(Boolean).join(' · ')
-  scroll.replaceChildren(renderCard(card, scale))
-  for (const button of document.getElementById('scale').children)
-    button.setAttribute('aria-pressed', Number(button.dataset.factor) === scale)
+
+  const scroll = document.createElement('div')
+  scroll.className = 'scroll'
+  scroll.append(renderCard(card, scale))
+  screen.replaceChildren(bar(back(), label('Scale'), scales(id, scale)), scroll)
 }
 
-const name = new URLSearchParams(location.search).get('card') ?? 'barbecue-pork-ribs'
-const response = await fetch(`/rezepte/${name}.lekka`)
-if (response.ok) load(await response.text())
+function fail(message) {
+  title.textContent = 'lekka'
+  aside.textContent = ''
+  const band = document.createElement('div')
+  band.className = 'band warning'
+  band.textContent = message
+  screen.replaceChildren(bar(back()), band)
+}
+
+function bar(...parts) {
+  const element = document.createElement('div')
+  element.className = 'bar'
+  element.append(...parts)
+  return element
+}
+
+function label(text) {
+  const element = document.createElement('span')
+  element.className = 'label'
+  element.textContent = text
+  return element
+}
+
+function back() {
+  const link = document.createElement('a')
+  link.href = '/'
+  link.textContent = '← Cards'
+  return link
+}
+
+function scales(id, scale) {
+  const group = document.createElement('span')
+  group.className = 'switch'
+  for (const [factor, text] of SCALES) {
+    const button = document.createElement('button')
+    button.textContent = text
+    button.setAttribute('aria-pressed', factor === scale)
+    button.onclick = () => showCard(id, factor)
+    group.append(button)
+  }
+  return group
+}
+
+function add() {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.lekka,text/plain'
+  input.multiple = true
+  input.onchange = async () => {
+    for (const file of input.files) keep(newId(), await file.text())
+    showOverview()
+  }
+  return input
+}

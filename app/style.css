@@ -95,6 +95,58 @@ body {
   overflow-x: auto;
 }
 
+.bar a {
+  color: var(--accent);
+}
+
+.list {
+  padding: 4px 12px;
+}
+
+.row {
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row .name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.row .aside {
+  flex: 1;
+}
+
+.band {
+  background: var(--preparation);
+  border-bottom: 1px solid var(--line);
+  padding: 6px 12px;
+}
+
+.band.warning {
+  background: var(--warning-ground);
+  color: var(--warning);
+}
+
+button.quiet {
+  background: none;
+  border: 0;
+  color: var(--grey);
+  cursor: pointer;
+  font: inherit;
+}
+
+button.quiet:hover {
+  color: var(--accent);
+}
+
 .grid {
   display: grid;
   font-variant-numeric: tabular-nums;
