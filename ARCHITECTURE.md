@@ -134,6 +134,42 @@ HTTPS the app runs but is neither offline-capable nor installable.
   three rounds were lost to a CSS rule that overrode `[hidden]`, where the
   property said "hidden" and the button was visible. Only a browser catches it.
 
+## Before it faces the internet
+
+Unit tests say the code does what we meant. They say nothing about what else it
+does. **A deliberate penetration test is owed before the managed instance is
+public**, and a self-hoster on a NAS deserves the same care. It has not happened
+yet.
+
+Where to look, in rough order of how badly it would end:
+
+- **Anything that becomes a path.** A card id is a file name, so every id, name
+  and slug that reaches the filesystem must be rebuilt from an allow-list, never
+  cleaned by removing what looks dangerous. Try `..%2f`, `..%252f`, `....//`,
+  backslashes, a trailing dot, a Unicode form that normalises into a slash after
+  the check, and an id that is only an extension.
+- **The key.** That it is compared in constant time, that it never reaches a log,
+  an error message, a referrer or a stack trace, and that a wrong key is
+  indistinguishable from a missing card, so the API is not an oracle for which
+  ids exist.
+- **The absence of a listing.** Fuzz the routes for anything that enumerates,
+  including error text that differs between a card that exists and one that does
+  not, and directory indexes served by mistake.
+- **Collections.** That a public read really does strip every key from the rows,
+  including from a row shape we did not anticipate.
+- **Limits.** Body size, header size, JSON depth, slow requests, and how many
+  cards one client can create. Without these the disk is the rate limit.
+- **Headers.** `Referrer-Policy: no-referrer`, a CSP that permits nothing
+  external, `X-Content-Type-Options`, and no cookies at all.
+- **The container.** Non-root, read-only filesystem, a volume only at the data
+  directory, no symlink escaping it, and file permissions that do not hand the
+  cards to every other process on the host.
+- **The service worker.** That a cached response cannot outlive a deletion, and
+  that it never caches a write.
+
+Having no dependencies means no supply chain to audit. It also means every one
+of these is our own bug to find.
+
 ## What we are not building again
 
 | Dropped | Why |
