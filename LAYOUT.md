@@ -68,11 +68,14 @@ Cells cover only part of the grid. What is left over is merged into rectangles:
 1. Start at the top-left free field.
 2. Grow **right** while the fields in this row are free.
 3. Grow **down** while the free run in the next row is **exactly the same
-   width**. A run that gets wider or narrower starts a new rectangle.
+   width** and runs into **the same step**. A run that gets wider or narrower,
+   or that ends at a different step, starts a new rectangle.
 
-Rule 3 matters: a rectangle grown across a change in width would swallow a row
-separator that is visible to its left and right, and the line would stop in the
-middle of the card.
+Rule 3 matters twice. A rectangle grown across a change in width would swallow a
+row separator that is visible to its left and right, and the line would stop in
+the middle of the card. A rectangle grown across a change of step would be the
+entrance to two steps at once, and neither the separator between them nor the
+one in the ingredient column beside it could be drawn.
 
 ## Lines
 
@@ -80,9 +83,9 @@ Lines separate, they do not frame. Every boundary between two neighbouring
 fields carries exactly one line, and the grid is closed on the outside.
 
 One exception, and it matters: **a free rectangle has no line towards the step
-on its right, if that step covers all of the rectangle's rows.** The free area
-is then the entrance of that step and is not separated from it. If the step
-beside it covers only some of those rows, the line stays.
+on its right.** Every rectangle runs into exactly one step, by rule 3 above, so
+it is that step's entrance and is not separated from it. The step's own edge is
+therefore drawn only along the rows it does not take its input from.
 
 Free areas are not filled with a lattice of empty fields; where a strand ends,
 the grid is simply blank.

@@ -51,9 +51,10 @@ test('a short strand is pushed right, leaving a free area in front of it', () =>
     b: { column: 2, row: 0, rowSpan: 1 },
     a: { column: 1, row: 0, rowSpan: 1 },
   })
-  assert.deepEqual(grid.frees, [
-    { row: 1, column: 1, rowSpan: 1, columnSpan: 2, openRight: true },
-  ])
+  assert.deepEqual(
+    grid.frees.map(({ into, ...free }) => ({ ...free, into: into.node.verb })),
+    [{ row: 1, column: 1, rowSpan: 1, columnSpan: 2, into: 'c' }],
+  )
 })
 
 test('a strand shorter than its sibling is pushed right, with its subtree', () => {
@@ -104,6 +105,28 @@ test('preparations sit over the step they precede, packed into band rows', () =>
         ['Grill indirekt heizen', 1, 1],
         ['Grill direkt heizen', 2, 1],
       ],
+    ],
+  )
+})
+
+test('a free area is split where the step beside it changes', () => {
+  const { frees } = buildGrid(
+    parseCard(`# A
+
+- smoke
+  - rub
+    - remove
+      - Ribs: 1
+    - Rub: 1
+  - soak
+    - Chips: 1
+`),
+  )
+  assert.deepEqual(
+    frees.map(({ into, ...free }) => ({ ...free, into: into.node.verb })),
+    [
+      { row: 1, column: 1, rowSpan: 1, columnSpan: 1, into: 'rub' },
+      { row: 2, column: 1, rowSpan: 1, columnSpan: 1, into: 'soak' },
     ],
   )
 })

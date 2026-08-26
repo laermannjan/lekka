@@ -38,7 +38,7 @@ function draw(card, grid, scale) {
   for (const free of frees)
     box(sheet, free.column, free.columnSpan, head + 1 + free.row, free.rowSpan, '', 'left')
 
-  for (const free of frees.filter((free) => free.openRight))
+  for (const free of frees.filter((free) => free.into))
     open(sheet, free.column + free.columnSpan - 1, head + 1 + free.row, free.rowSpan)
 
   return [title(card), '', paint(sheet)].join('\n')

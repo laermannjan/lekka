@@ -73,28 +73,28 @@ function occupy(rows, cells, columns) {
   return fields
 }
 
-function findFrees(fields) {
-  const columns = fields[0]?.length ?? 0
+function findFrees(cells) {
+  const columns = cells[0]?.length ?? 0
+  const used = cells.map((row) => row.map(Boolean))
   const frees = []
 
-  for (let row = 0; row < fields.length; row++) {
+  for (let row = 0; row < used.length; row++) {
     for (let column = 0; column < columns; column++) {
-      if (fields[row][column]) continue
+      if (used[row][column]) continue
 
-      const columnSpan = runFrom(fields[row], column)
+      const columnSpan = runFrom(used[row], column)
+      const into = cells[row][column + columnSpan] ?? null
       let rowSpan = 1
       while (
-        row + rowSpan < fields.length &&
-        runFrom(fields[row + rowSpan], column) === columnSpan
+        row + rowSpan < used.length &&
+        runFrom(used[row + rowSpan], column) === columnSpan &&
+        (cells[row + rowSpan][column + columnSpan] ?? null) === into
       )
         rowSpan++
 
-      const free = { row, column: column + 1, rowSpan, columnSpan }
-      free.openRight = opensRight(fields, free)
-      frees.push(free)
-
+      frees.push({ row, column: column + 1, rowSpan, columnSpan, into })
       for (let r = row; r < row + rowSpan; r++)
-        for (let c = column; c < column + columnSpan; c++) fields[r][c] = free
+        for (let c = column; c < column + columnSpan; c++) used[r][c] = true
       column += columnSpan - 1
     }
   }
@@ -105,13 +105,4 @@ function runFrom(row, column) {
   let width = 0
   while (column + width < row.length && !row[column + width]) width++
   return width
-}
-
-function opensRight(fields, { row, column, rowSpan, columnSpan }) {
-  const right = column - 1 + columnSpan
-  if (right >= fields[row].length) return false
-  const neighbour = fields[row][right]
-  if (!neighbour) return false
-  for (let r = row; r < row + rowSpan; r++) if (fields[r][right] !== neighbour) return false
-  return true
 }
