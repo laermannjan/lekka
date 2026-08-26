@@ -3,8 +3,8 @@
 Tabellarische Rezeptkarten. Ein Node-Prozess ohne Laufzeit-Abhängigkeiten,
 eine Karte je Datei, offline lesbar.
 
-- [FORMAT.md](FORMAT.md) definiert das Dateiformat: die Listenform, die
-  Zutaten- und Schrittzeile, das JSON darunter.
+- [FORMAT.md](FORMAT.md) erklärt das Kartenformat `.lekka`: wie eine Karte
+  geschrieben und gelesen wird.
 - [NOTATION.md](NOTATION.md) definiert, wie daraus eine Karte wird: Zeilen,
   Spalten, Linien, und die Regeln für Verben und Zutatennamen.
 

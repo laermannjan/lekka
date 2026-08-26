@@ -1,114 +1,76 @@
-# Recipe card format
+# The .lekka card format
 
-One card is one UTF-8 text file.
+A recipe is a flow: ingredients go into a step, its result goes into the next
+step. A card writes that flow down, and it is drawn as a table where **rows are
+ingredients and columns are time**.
 
-## Lines
-
-| Start | Line is | Count |
-|---|---|---|
-| `# ` | title, optionally `\| yield` | exactly 1 |
-| `> ` | note about the card | 0..n |
-| `* ` | preparation | 0..n |
-| `- ` | node of the tree | 1..n |
-| empty | ignored | anywhere |
-
-Header lines (`#`, `>`, `*`) come before the first `-` line, in any order.
-Leading and trailing whitespace of a line's content is stripped.
-
-## Tree
-
-Nodes are indented by two spaces per level.
-
-- A node indented under another node is an **input** of it.
-- A node **with** children is a **step**, a node **without** children is an
-  **ingredient**. There is no other marker.
-- Exactly one node sits at the outermost level, and it must be a step. It is the
-  last step of the recipe.
+## A whole card
 
 ```
-# Dinkelquarkbrot | 1 Kastenbrot
-* Kastenform 30 cm einfetten
+# Pfannkuchen (12 Stück)
 
-- backen 200 °C Heißluft 60 min | ohne Vorheizen
-  - in Form geben
-    - vermengen | von Hand
-      - Dinkelmehl: 300 g
-      - Wasser (lauwarm): ½ l
-    - ausstreuen
-      - Haferflocken (grob)
+- braten (2 min je Seite)
+  - verrühren
+    - Mehl: 250 g
+    - Milch: ½ l
+    - Eier: 2
+  - schmelzen
+    - Butter: 30 g
 ```
 
-## Step line
+is drawn as
 
 ```
-verb | note
+250 g  Mehl   ┐
+½ l    Milch  ├ verrühren ┐
+2      Eier   ┘           │
+                          ├ braten
+30 g   Butter ─ schmelzen ┘        (2 min je Seite)
 ```
 
-`note` is optional. A parenthesised group at the end of `verb` is a note too, so
-`reifen lassen 12 h (bei 20 °C)` equals `reifen lassen 12 h | bei 20 °C`. A
-writer emits the `|` form.
+Two strands, joined by `braten`. You can see in the file what you see in the
+table: `verrühren` and `schmelzen` are indented under `braten`, so both flow
+into it.
 
-## Ingredient line
+## Reading it
 
-```
-name (qualifier): amount unit
-```
+**Indented under a line means: flows into that line.**
 
-`(qualifier)` and `: amount unit` are optional. Splitting rules, in order:
+From that one rule everything follows:
 
-1. Split at the **first** `:`. Left is name and qualifier, right is the quantity.
-   No colon means no quantity.
-2. On the left, a parenthesised group at the **end** is the qualifier. Nested
-   parentheses are not parsed.
-3. On the right, if the first word is a number or a range, it is the amount and
-   the remainder is the unit. Otherwise the whole right side is the amount, as
-   text, and there is no unit.
+- A line **with** indented lines under it is a **step**. A line **without** is an
+  **ingredient**.
+- A step's column is one further right than its inputs. Its height covers all
+  the ingredients that reach it.
+- The outermost line is the last step, so the file reads bottom-up. The table
+  reads left to right.
 
-| Line | amount | unit | name | qualifier |
-|---|---|---|---|---|
-| `Dinkelmehl: 300 g` | 300 | g | Dinkelmehl | |
-| `Hefe (frisch): 1 Würfel` | 1 | Würfel | Hefe | frisch |
-| `Wasser (lauwarm): ½ l` | 0.5 | l | Wasser | lauwarm |
-| `Wasser: 40-60 g` | 40 to 60 | g | Wasser | |
-| `Eier: 2` | 2 | | Eier | |
-| `Salz: Prise` | text `Prise` | | Salz | |
-| `Haferflocken (grob)` | none | | Haferflocken | grob |
+## Writing it
 
-**Numbers.** Digits with `,` or `.` as decimal separator (`2,5`), the fractions
-`½ ⅓ ⅔ ¼ ¾ ⅕ ⅜ ⅛`, or an integer followed by a fraction (`1½`).
+| Line | Meaning |
+|---|---|
+| `# Pfannkuchen (12 Stück)` | title, and in brackets what it yields. Exactly one |
+| `> made this for Ida's birthday` | a note about the whole card. Any number |
+| `* Ofen auf 200 °C vorheizen` | something you do that flows nowhere |
+| `- verrühren (von Hand)` | a step: verb first, remark in brackets |
+| `- Mehl (Type 550): 250 g` | an ingredient: name, remark, then the amount |
 
-**Ranges.** Two numbers separated by `-` or `–`. Both ends must be numbers,
-otherwise the value is text.
+Indent by two spaces per level. Blank lines mean nothing.
 
-**Amounts** are stored unscaled. A number and a range scale; a text does not.
+**Brackets always hold the same kind of thing:** the aside. What it yields, how
+to do it, which sort of flour.
 
-## Grammar
+**The amount** is everything after the colon: a number and a unit (`250 g`), a
+range (`40-60 g`), a count (`2`), or words (`nach Geschmack`). Whatever unit you
+write is the unit - `3 Zweige` works like `300 g`. Leave the colon off if there
+is no amount.
 
-```
-card       = header* node
-header     = "# " title [ "|" yield ] | "> " text | "* " text
-node       = indent "- " content newline child*
-child      = node indented by two more spaces
-content    = step | ingredient
-step       = verb [ "|" note ]
-ingredient = name [ "(" qualifier ")" ] [ ":" [ amount ] [ unit ] ]
-amount     = number | number ("-" | "–") number | text
-number     = digits [ ("," | ".") digits ] | fraction | digits fraction
-```
+## Rules a reader follows
 
-## Rejected
-
-A reader rejects and names the line; it never guesses.
-
-- no `#` line, or more than one
-- no `-` line
-- a non-empty line starting with none of `#`, `>`, `*`, `-`
-- more than one node at the outermost level
-- the outermost node has no children
-- indentation deeper than the previous node's level plus one
-
-Anything else is content and is taken as written.
-
----
-
-`NOTATION.md` defines how a card is laid out as a table.
+1. Split an ingredient at the **first** colon; a bracket at the end of the part
+   before it is the remark.
+2. After the colon: a leading number or range is the amount, the rest is the
+   unit. No leading number means the whole of it is the amount, as words.
+3. Numbers may be `2`, `2,5`, `½`, `1½`. Ranges are `40-60`.
+4. Anything not matching a `#`, `>`, `*` or `-` line is an error, as is a second
+   title, a second outermost line, or indentation that skips a level.

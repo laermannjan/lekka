@@ -84,7 +84,7 @@ describe("Fehler benennen ihre Zeile", () => {
 });
 
 describe("Kopfzeilen", () => {
-  const text = "# Brot | 1 Laib\n> zwei Tage\n> 88 % Hydration\n* Ofen vorheizen\n\n- backen\n  - 1 g Salz\n";
+  const text = "# Brot (1 Laib)\n> zwei Tage\n> 88 % Hydration\n* Ofen vorheizen\n\n- backen\n  - 1 g Salz\n";
   it("liest Titel und Ertrag", () => {
     expect(lies(text)).toMatchObject({ title: "Brot", yield: "1 Laib" });
   });

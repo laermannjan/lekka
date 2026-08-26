@@ -3,19 +3,19 @@
 // eingerückten Punkten darunter ist ein Schritt, ein Punkt ohne ist eine
 // Zutat - mehr unterscheidet die beiden nicht.
 //
-//   # Titel | Ertrag
+//   # Titel (Ertrag)
 //   > Anmerkung
 //   * Vorbereitung
-//   - backen 200 °C | ohne Vorheizen
+//   - backen 200 °C (ohne Vorheizen)
 //     - vermengen
-//       - 300 g Mehl
+//       - Mehl: 300 g
 //
 // Die Wurzel steht oben, also der letzte Schritt zuerst. Das ist die Ordnung
 // des Baums; chronologisch liest man die Ansicht „Ablauf" oder die Karte.
 
 const istSchritt = k => typeof k === "object" && k !== null && "do" in k;
 const einzug = z => z.length - z.trimStart().length;
-const kopf = k => k.do + (k.note ? ` | ${k.note}` : "");
+const kopf = k => k.do + (k.note ? ` (${k.note})` : "");
 
 // Objektzutaten haben Felder, die eine Textzeile nicht trägt. Solche Karten
 // bleiben beim JSON, statt sie beim Speichern still umzuschreiben.
@@ -28,7 +28,7 @@ export function verlustfrei(karte) {
 
 export function schreibe(karte) {
   const aus = [];
-  aus.push(`# ${karte.title}${karte.yield ? ` | ${karte.yield}` : ""}`);
+  aus.push(`# ${karte.title}${karte.yield ? ` (${karte.yield})` : ""}`);
   for (const m of karte.meta ?? []) aus.push(`> ${m}`);
   for (const p of karte.prep ?? []) aus.push(`* ${p}`);
   if (aus.length > 1) aus.push("");
@@ -41,9 +41,11 @@ export function schreibe(karte) {
   return aus.join("\n") + "\n";
 }
 
+// Eine Klammergruppe am Ende ist die Beifügung: der Ertrag am Titel, der
+// Hinweis am Schritt, der Zusatz an der Zutat. Eine Regel für alle drei.
 const trenne = text => {
-  const [, links, rechts] = /^([^|]*?)(?:\s*\|\s*(.*))?$/.exec(text.trim());
-  return { links, rechts };
+  const k = /^(.*?)\s*\(([^()]*)\)\s*$/.exec(text.trim());
+  return k ? { links: k[1].trim(), rechts: k[2].trim() } : { links: text.trim(), rechts: undefined };
 };
 
 export function lies(text) {

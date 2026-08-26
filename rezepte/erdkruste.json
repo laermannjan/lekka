@@ -25,7 +25,7 @@
                         "note": "Flexi-Rührer",
                         "in": [
                           {
-                            "do": "reifen lassen 12 h (bei 20 °C)",
+                            "do": "reifen lassen 12 h",
                             "in": [
                               {
                                 "do": "verrühren",
@@ -41,7 +41,8 @@
                                   "Salz: 5 g"
                                 ]
                               }
-                            ]
+                            ],
+                            "note": "bei 20 °C"
                           },
                           "Wasser (ca. 70 °C): 250 g",
                           "Roggenvollkornmehl: 355 g",
