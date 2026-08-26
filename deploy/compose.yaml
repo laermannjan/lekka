@@ -1,0 +1,22 @@
+services:
+  lekka:
+    build: ..
+    image: lekka
+    restart: unless-stopped
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    environment:
+      PORT: 8080
+      DATA_DIR: /data
+      # CREATE_TOKEN: set this to keep anyone on the network from adding cards
+      # TTL_DAYS: set this to delete cards nobody has opened for that long
+    ports:
+      - "8380:8080"
+    volumes:
+      - lekka-data:/data
+
+volumes:
+  lekka-data:

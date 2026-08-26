@@ -3,32 +3,19 @@ node = "22"
 
 [env]
 PORT = "8080"
+DATA_DIR = "./data"
 
-[tasks.install]
-description = "Abhängigkeiten installieren"
-run = "npm ci"
-sources = ["package-lock.json"]
-outputs = ["node_modules/.package-lock.json"]
-
-[tasks.dev]
+[tasks.serve]
 description = "App und API auf $PORT, ohne Build"
-depends = ["install"]
-run = "node server/index.mjs"
+run = "node server/main.js"
 
 [tasks.test]
 description = "Tests einmal laufen lassen"
-depends = ["install"]
-run = "npm test"
+run = "node --test"
 
-[tasks.e2e]
-description = "Rechte im echten Browser prüfen (Chromium)"
-depends = ["install"]
-run = "npx playwright test"
-
-[tasks.watch]
-description = "Tests im Watch-Modus"
-depends = ["install"]
-run = "npx vitest"
+[tasks.show]
+description = "Eine Karte im Terminal zeichnen"
+run = "node tools/show.mjs"
 
 [tasks.up]
 description = "Container bauen und starten (http://localhost:8380)"

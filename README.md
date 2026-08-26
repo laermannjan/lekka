@@ -1,0 +1,91 @@
+# lekka
+
+Recipe cards as tables, after the notation on Cooking for Engineers. A recipe is
+a flow: ingredients go into a step, its result goes into the next. The card
+writes that flow down and draws it as a table, where rows are ingredients and
+columns are time.
+
+```
+# Pfannkuchen (12 Stück)
+
+- braten (2 min je Seite)
+  - verrühren
+    - Mehl: 250 g
+    - Milch: 500 ml
+    - Eier: 2
+  - schmelzen
+    - Butter: 30 g
+```
+
+```
+250 g  Mehl   ┐
+500 ml Milch  ├ verrühren ┐
+2      Eier   ┘           │
+                          ├ braten
+30 g   Butter ─ schmelzen ┘        (2 min je Seite)
+```
+
+The documents that define it: [FORMAT.md](FORMAT.md) for the file,
+[LAYOUT.md](LAYOUT.md) for the table, [STYLE.md](STYLE.md) for how it looks,
+[CONVERTING.md](CONVERTING.md) for turning an ordinary recipe into a card, and
+[ARCHITECTURE.md](ARCHITECTURE.md) for how the software works.
+
+## Running it
+
+Node 22 or newer. No dependencies, no build step.
+
+```
+npm run serve        # http://localhost:8080
+npm test
+npm run show rezepte/erdkruste.lekka 2      # draw a card in the terminal, doubled
+```
+
+## Deploying it
+
+```
+cd deploy && docker compose up -d --build   # http://localhost:8380
+```
+
+One container, no database. **Read [the threat model](ARCHITECTURE.md#threat-model)
+first**: this is built for a network you already trust, a LAN or a VPN, and it is
+not hardened for the open internet.
+
+| variable | default | |
+|---|---|---|
+| `PORT` | 8080 | |
+| `DATA_DIR` | `./data` | the only thing to back up |
+| `CREATE_TOKEN` | unset | when set, creating a card needs `Authorization: Bearer <token>` |
+| `MAX_CARD_BYTES` | 65536 | largest card accepted |
+| `TTL_DAYS` | unset | delete what nobody has opened for this long; unset means never |
+
+The container runs as uid 1000 with a read-only filesystem, no capabilities and a
+volume at `/data`. A named volume inherits the right ownership from the image; a
+host directory mounted instead must be made writable by uid 1000 yourself.
+
+## Links are the rights
+
+There are no accounts. A link is what grants access, so treat one like a key.
+
+| | |
+|---|---|
+| `/r/<id>` | read a card |
+| `/r/<id>/<key>` | read and edit it |
+| `/c/<name>` | read a collection, with every edit key stripped out |
+| `/c/<name>/<key>` | read and change it; opening this adopts the collection on the device |
+
+A collection is a list of card links, and that is all it is. Cards do not belong
+to it.
+
+## The data directory
+
+```
+data/cards/dinkelquarkbrot-7kmq2rxvbn.lekka        the card
+data/cards/dinkelquarkbrot-7kmq2rxvbn.meta.json    key hash and timestamps
+data/collections/purely-mellow-rhubarb-cypk.json
+```
+
+The file name is the link. A `.lekka` file copied in by hand is served straight
+away at its own name, so seeding an instance is `cp`. Such a file has no key, so
+it can be read through the app and changed only with a text editor on the server.
+
+Back this directory up. It is the only copy.
