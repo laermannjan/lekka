@@ -16,6 +16,7 @@ const SHELL = [
   '/id.js',
   '/manifest.webmanifest',
   '/icon.svg',
+  '/fonts/plex.woff2',
 ]
 
 self.addEventListener('install', (event) => {

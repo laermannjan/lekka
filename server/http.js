@@ -14,6 +14,8 @@ const TYPES = {
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.webmanifest': 'application/manifest+json',
+  '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8',
 }
 
 const HEADERS = {
@@ -194,11 +196,18 @@ async function worker(app, response) {
 
 async function version(app) {
   const digest = createHash('sha256')
-  for (const name of (await readdir(app)).sort()) {
-    digest.update(name)
-    digest.update(await readFile(join(app, name)))
-  }
+  await walk(app, '', digest)
   return digest.digest('hex').slice(0, 12)
+}
+
+async function walk(root, inside, digest) {
+  const entries = await readdir(join(root, inside), { withFileTypes: true })
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    const path = join(inside, entry.name)
+    digest.update(path)
+    if (entry.isDirectory()) await walk(root, path, digest)
+    else digest.update(await readFile(join(root, path)))
+  }
 }
 
 async function statics(app, path, response) {
