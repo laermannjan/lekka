@@ -58,19 +58,21 @@ not hardened for the open internet.
 | `MAX_CARD_BYTES` | 65536 | largest card accepted |
 | `TTL_DAYS` | unset | delete what nobody has opened for this long; unset means never |
 
-The container runs as uid 1000 with a read-only filesystem, no capabilities and a
-named volume at `/data`, which needs no setup.
+The container has a read-only filesystem, no capabilities, and a named volume at
+`/data`. That needs no setup.
 
-To keep the cards in a directory of your own instead, mount it:
+To keep the cards in a directory of your own instead, uncomment the bind mount in
+`compose.yaml` and tell the container who you are:
 
-```yaml
-volumes:
-  - ./data:/data
+```
+cd deploy
+cp .env.example .env
+printf 'PUID=%s\nPGID=%s\n' "$(id -u)" "$(id -g)" > .env
+docker compose up -d --build
 ```
 
-On Docker Desktop that is all. On Linux the mount is real, so the directory must
-belong to the user the container runs as: either `sudo chown -R 1000:1000 ./data`,
-or add `user: "${UID}:${GID}"` to the service and keep it yours.
+The server then runs as you, so a directory you created is already writable and
+nothing needs `chown`. The container never runs as root, not even to start.
 
 ## Links are the rights
 

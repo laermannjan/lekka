@@ -3,7 +3,9 @@ services:
     build: ..
     image: lekka
     restart: unless-stopped
-    user: "1000:1000"
+    # Who the server runs as. Set PUID and PGID in .env to your own `id -u` and
+    # `id -g` when you mount a directory of your own, and nothing needs chowning.
+    user: "${PUID:-1000}:${PGID:-1000}"
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -17,9 +19,8 @@ services:
       - "8380:8080"
     volumes:
       - lekka-data:/data
-      # Or keep the cards in a directory of your own instead of the volume:
+      # Or keep the cards in a directory of your own, and set PUID/PGID above:
       # - ./data:/data
-      # On Linux that directory must belong to the user above.
 
 volumes:
   lekka-data:
