@@ -59,8 +59,18 @@ not hardened for the open internet.
 | `TTL_DAYS` | unset | delete what nobody has opened for this long; unset means never |
 
 The container runs as uid 1000 with a read-only filesystem, no capabilities and a
-volume at `/data`. A named volume inherits the right ownership from the image; a
-host directory mounted instead must be made writable by uid 1000 yourself.
+named volume at `/data`, which needs no setup.
+
+To keep the cards in a directory of your own instead, mount it:
+
+```yaml
+volumes:
+  - ./data:/data
+```
+
+On Docker Desktop that is all. On Linux the mount is real, so the directory must
+belong to the user the container runs as: either `sudo chown -R 1000:1000 ./data`,
+or add `user: "${UID}:${GID}"` to the service and keep it yours.
 
 ## Links are the rights
 
