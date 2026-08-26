@@ -2,10 +2,11 @@
 // gültig sein und ein sauberes Raster ergeben - sonst fällt es erst im Browser auf.
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
+import { lies } from "../app/notation.js";
 import { prüfeKarte } from "../app/validate.js";
 import { layout } from "../app/layout.js";
 
-const dateien = readdirSync("rezepte").filter(d => d.endsWith(".json")).sort();
+const dateien = readdirSync("rezepte").filter(d => d.endsWith(".lekka")).sort();
 
 describe("Karten in rezepte/", () => {
   it("es gibt welche", () => {
@@ -13,7 +14,7 @@ describe("Karten in rezepte/", () => {
   });
 
   for (const datei of dateien) {
-    const karte = JSON.parse(readFileSync(`rezepte/${datei}`, "utf8"));
+    const karte = lies(readFileSync(`rezepte/${datei}`, "utf8"));
 
     describe(datei, () => {
       it("ist gültig", () => {
@@ -22,7 +23,7 @@ describe("Karten in rezepte/", () => {
       it("heißt wie ihre Datei", () => {
         const erwartet = karte.title.toLowerCase()
           .replace(/ä/g, "a").replace(/ö/g, "o").replace(/ü/g, "u").replace(/ß/g, "ss");
-        expect(datei).toBe(`${erwartet}.json`);
+        expect(datei).toBe(`${erwartet}.lekka`);
       });
       it("ergibt ein Raster ohne Überlappung", () => {
         const { rows, cells } = layout(karte);

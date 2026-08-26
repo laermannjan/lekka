@@ -11,6 +11,7 @@
   --akzent-blass: #A9C6B6;
   --vorbereitung: #E6EFE9;
   --warnung: #8C2F1E;
+  --warnung-grund: #F6E3DF;
   --groesse: 14px;
   --menge: 58px;
   --einheit: 54px;
@@ -70,7 +71,7 @@ button.still:hover, a.still:hover { background: transparent; color: var(--ink); 
 :focus-visible { outline: 2px solid var(--akzent); outline-offset: 1px; }
 
 .hinweisfeld { padding: 6px 13px; background: var(--vorbereitung); border-bottom: 1px solid var(--linie); }
-.hinweisfeld.schlecht { background: #F6E3DF; color: var(--warnung); }
+.hinweisfeld.schlecht { background: var(--warnung-grund); color: var(--warnung); }
 .hinweisfeld:empty { display: none; }
 
 .rumpf { padding: 9px 11px 11px; }

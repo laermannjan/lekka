@@ -12,8 +12,8 @@ const ordne = w => Array.isArray(w) ? w.map(ordne)
     ? Object.fromEntries(Object.keys(w).sort().map(s => [s, ordne(w[s])])) : w;
 
 describe("Karten im Repo", () => {
-  for (const datei of readdirSync("rezepte").filter(d => d.endsWith(".json"))) {
-    const karte = JSON.parse(readFileSync(`rezepte/${datei}`, "utf8"));
+  for (const datei of readdirSync("rezepte").filter(d => d.endsWith(".lekka"))) {
+    const karte = lies(readFileSync(`rezepte/${datei}`, "utf8"));
 
     describe(karte.title, () => {
       it("kommt unverändert zurück", () => {

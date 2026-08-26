@@ -2,74 +2,109 @@
 
 Colours, type and placement. What is drawn where is in `LAYOUT.md`.
 
-## Tokens
+## Colours
 
 | Name | Value | Used for |
 |---|---|---|
 | ink | `#1B1B19` | body text |
-| grey | `#7A7A72` | qualifiers, notes, labels, anything secondary |
-| accent | `#1E6B4C` | header bar, card frame, active controls |
-| accent pale | `#A9C6B6` | text on the accent bar that is not the title |
-| line | `#4E9067` | every rule in the grid |
-| ground | `#F2F1EC` | page and toolbar background |
-| white | `#FFFFFF` | cells and ingredient rows |
-| preparation | `#E6EFE9` | the preparation band |
-| warning | `#8C2F1E` | error messages |
+| grey | `#7A7A72` | qualifiers, notes, labels, secondary buttons, anything secondary |
+| accent | `#1E6B4C` | header bar, card frame, active switch, links, focus |
+| accent pale | `#A9C6B6` | text on the accent bar that is not the title, disabled borders |
+| line | `#4E9067` | every rule: grid, toolbar, list separators, button outlines |
+| ground | `#F2F1EC` | page, toolbar, separators inside the step and shopping views |
+| white | `#FFFFFF` | cells, ingredient rows, free areas, controls |
+| preparation | `#E6EFE9` | preparation band, message band, "editable" badge |
+| warning | `#8C2F1E` | error text |
+| warning ground | `#F6E3DF` | background of an error message |
 
-| Name | Value |
+## Type
+
+| | |
 |---|---|
-| type | IBM Plex Sans, self-hosted |
-| size | 14 px, **one size for everything**, buttons included |
-| weights | 450 body, 600 verbs and preparation, 700 title |
-| line height | 1.3, notes 1.25 |
-| row height | at least 21 px, 1 px vertical padding |
-| amount column | 58 px, unit column 54 px, step column at least 150 px |
-| card width | at most 1140 px |
+| face | IBM Plex Sans, self-hosted, antialiased |
+| size | 14 px everywhere, buttons and inputs included |
+| weights | 450 body, 600 verbs, preparation, card titles in lists, 700 the page title |
+| line height | 1.3, notes 1.25, the structure editor 1.5 |
+| upper case | page title and the small labels in the toolbar, both letter-spaced 0.06 em |
+| figures | tabular in every column that holds numbers |
+
+Two deliberate exceptions to the single size:
+
+- the **structure editor** is 13 px monospace, because it shows a file, not a card
+- the **role badge** in the overview is 12 px
 
 ## Hierarchy without size
 
-There is one type size. Rank is expressed by three means only:
+Rank comes from three means only:
 
 1. **weight** - a verb is 600, its note 450
-2. **colour** - the name is ink, its qualifier is grey
-3. **position** - the verb above, the note below it
+2. **colour** - a name is ink, its qualifier grey
+3. **position** - the verb above, the note below
 
-No second size, no italics, no underlines outside links.
+No second size in the card, no italics, no underline outside links.
 
 **Colour does not encode content.** Steps are not coloured by kind. That was
-tried and dropped: the effort of classifying was out of proportion to the gain.
+tried and dropped: classifying cost more than it gave.
 
-## Placement in the card
+## Inside the card
 
 - Ingredients left aligned, steps **centred**. Centring is what makes a merge
   visible: a cell spanning four rows sits at their middle.
-- Amounts right aligned with tabular figures, so digits line up down the column.
-- A unit sits between amount and name, in grey.
-- An amount without a number (`nach Geschmack`) takes both columns and is grey.
+- Amounts right aligned, unit grey between amount and name, qualifier grey after
+  the name.
+- An amount without a number (`nach Geschmack`) is grey, left aligned, and takes
+  the amount and unit columns together.
 - Notes sit under their verb, centred, grey, balanced across lines.
-- Nothing wraps in the ingredient column; the table scrolls sideways instead.
+- Nothing wraps in the ingredient column; the grid scrolls sideways instead.
+- Preparation lines span the full width, centred, weight 600, on the preparation
+  colour. Card notes likewise but grey on white.
+- Column headers sit on the ground colour in grey upper case.
 
-## The frame
+Column widths: amount 58 px, unit 54 px, a step column at least 150 px. Rows are
+at least 21 px with 1 px of vertical padding. The card is at most 1140 px wide.
+
+## Frame and bars
 
 - The page is one card on the ground colour, bordered 2 px in the accent.
-- **Header bar** in the accent: title upper case, weight 700, letter-spaced
-  0.06 em; yield and card notes on the right in accent pale.
-- **Toolbar** below it on the ground colour, separated by a line: scale on the
-  left, views in the middle, actions on the right. Each group carries a small
-  grey upper-case label.
-- **Switches** are segmented: buttons sharing one border, the active one filled
-  with the accent, white on it.
-- **Buttons** are outlined in the line colour on white; secondary ones drop the
-  border until hovered.
+- **Header bar** in the accent, no rule below it: title upper case 700 on the
+  left; yield and card notes on the right in accent pale.
+- **Toolbar** below it on the ground colour, closed by a 1 px line: scale left,
+  views middle, actions right, each group with a small grey upper-case label.
+- **Switches** are segmented: buttons sharing one outline, separated by 1 px
+  lines, the active one filled with the accent and white on it.
+- **Buttons** are outlined in the line colour on white and invert to accent on
+  hover. Secondary ones drop the outline until hovered and are grey. Disabled
+  ones are grey with a pale accent outline.
+- **Message band** under the toolbar, on the preparation colour, closed by a
+  line; an error swaps it for the warning ground and warning text. Empty, it
+  disappears entirely.
+
+## The other screens
+
+**Overview.** A list, separated above and below each row by 1 px lines. The card
+name is weight 600 and links to reading; a badge follows it, 12 px 600, in
+accent on preparation when this device can edit, grey on ground when it cannot.
+The actions sit right aligned in the same row.
+
+**Step and shopping views.** At most 70 characters wide. Rows separated by 1 px
+in the **ground** colour, not the line colour: these are lists, not a grid. A
+step shows its number in a 24 px grey tabular column, the verb 600, ingredients
+and note grey. A shopping line shows the amount in a 96 px column, right
+aligned, weight 600.
 
 ## Editing
 
-- An editable field shows a 1 px accent outline when focused, nothing before.
-- Empty fields show a placeholder only in edit mode and only on hover: `–` for
-  amount and unit, `…` for a qualifier, the word for note.
-- The change counter sits in the toolbar, in the accent colour.
+- Editable fields get a 2 px radius and, on focus, a 1 px accent ring drawn as a
+  shadow instead of an outline, so it hugs the text.
+- Everything else - buttons, links, the textarea - shows the ordinary focus
+  ring: a 2 px accent outline, offset 1 px.
+- In edit mode, an empty amount, unit or qualifier shows a faint placeholder
+  (`–`, `–`, `…`) permanently, so an empty field can be found and hit.
+- An empty note is invisible until the cell is hovered or focused, then it
+  appears with the word "Hinweis". Notes are rare; placeholders on every cell
+  would be noise.
 
 ## Print
 
 Drop the toolbar and every editing affordance, thin the card frame to 1 px, and
-let the table stand without a scroll container.
+let the grid stand without its scroll container.
