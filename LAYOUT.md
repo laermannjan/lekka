@@ -15,6 +15,13 @@ An ingredient used twice has two rows. A tool has no row, because nothing flows
 from it. A step that merges nothing is still a cell; it spans whatever came out
 of the step before.
 
+A **row** holds amount, unit, name and qualifier, in four fields. A **cell**
+holds a verb and a note. Both come from one line of the card, split by the rules
+in `FORMAT.md`; the grid holds them apart because the columns need them apart.
+
+Amounts in the grid are the ones written in the card. Scaling multiplies them on
+the way to the screen, never in the grid.
+
 ## Rows
 
 Walk the tree depth-first, children in order. Every ingredient appends one row.
@@ -24,6 +31,17 @@ always a contiguous block of rows.** No sorting, no collision handling.
 
 A step spans from the first to the last row of its own subtree.
 
+## The ingredient column
+
+Column 0 is not one column but three: amount, unit, then name with its
+qualifier. They are narrow and fixed, so that names line up down the card.
+
+The amount and unit fields exist even when empty, otherwise the name slides left
+into their place and the column stops lining up. One exception: an amount that
+is words rather than a number takes the amount **and** unit fields together, and
+then the unit field is not laid out at all - an empty field beside a spanning
+one collides and pushes the name onto a second line.
+
 ## Columns
 
 ```
@@ -31,7 +49,9 @@ column(ingredient) = 0
 column(step)       = max(column(input) for input in step) + 1
 ```
 
-Column 0 is the ingredient column; steps start at 1.
+Column 0 is the ingredient column; steps start at 1. A step occupies exactly one
+column and never spans two - only free rectangles are ever wider than one
+column.
 
 **Right alignment.** When several strands merge, the longest one decides the
 merging step's column. The shorter ones move right until they sit directly in
@@ -56,24 +76,33 @@ middle of the card.
 
 ## Lines
 
-Lines separate, they do not frame.
+Lines separate, they do not frame. Every boundary between two neighbouring
+fields carries exactly one line, and the grid is closed on the outside.
 
-- Every cell draws its right and its bottom edge; the card frame draws the outer
-  top and left. Each line is drawn exactly once.
-- A free area draws its bottom edge but **not** its right one: it belongs to the
-  entrance of the step beside it and is not separated from it.
-- Where a strand ends, the grid ends. Free areas are not filled with a lattice
-  of empty fields.
+One exception, and it matters: **a free rectangle has no line towards the step
+on its right, if that step covers all of the rectangle's rows.** The free area
+is then the entrance of that step and is not separated from it. If the step
+beside it covers only some of those rows, the line stays.
+
+Free areas are not filled with a lattice of empty fields; where a strand ends,
+the grid is simply blank.
 
 ## Around the grid
 
-Above the ingredient rows, in this order, each spanning the full width:
+Above the ingredient rows, in this order:
 
-1. notes about the card,
-2. preparations,
-3. a header row: the word for ingredients, then the column numbers.
+1. one row per **preparation**, each spanning the full width of the grid so it
+   travels along when the grid is scrolled sideways,
+2. a **header row**: a label over the ingredient column, then the columns
+   numbered from `01`.
 
-The whole grid scrolls sideways as one; the ingredient column scrolls with it.
+Notes about the card do **not** go into the grid. They belong to the card's
+header, next to the title, because they describe the whole recipe rather than a
+point in it.
+
+Step columns share the remaining width equally and never fall below a minimum;
+the ingredient column takes what its content needs. The whole grid scrolls
+sideways as one.
 
 ## Example
 
