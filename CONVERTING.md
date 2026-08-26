@@ -51,11 +51,15 @@ Rule of thumb: whatever you would not read out in a shop goes in the bracket.
 - **Parameters straight after the verb**, temperature before time:
   `backen 200 °C Heißluft 60 min`.
 - **One step, one verb.** Two verbs mean two steps, unless they are inseparable
-  on the same object: `einfetten, ausstreuen`.
+  on the same object.
+- **One word wherever the craft has one.** Drop `lassen`: `reifen`, `ruhen`,
+  `auskühlen`. Where the trade has a settled name for a step, that name is the
+  step, noun or not: `Stockgare` for the rise in the bowl, `Stückgare` for the
+  rise in the tin. It is shorter than a verb and says which of the two it is.
 - **Three to five words**, not counting numbers. Longer belongs in the bracket.
 
-Reuse verbs so that cards sound alike: `vermengen · verkneten · falten ·
-reifen lassen · gehen lassen · formen · in Form geben · einschneiden · backen ·
+Reuse names so that cards sound alike: `vermengen · verkneten · falten · reifen ·
+ruhen · Stockgare · Stückgare · formen · in Form geben · einschneiden · backen ·
 stürzen · auskühlen`.
 
 ## What goes in the bracket of a step
@@ -80,11 +84,11 @@ Card:
 
 ```
 # Kastenbrot (1 Laib)
-* Kastenform einfetten
 
 - backen 220 °C 40 min
   - in Form geben
-    - gehen lassen 1 h (zugedeckt)
+    * Kastenform einfetten
+    - Stockgare 1 h (zugedeckt)
       - kneten 10 min
         - mischen
           - Mehl: 500 g
@@ -94,9 +98,11 @@ Card:
 ```
 
 Note what happened: greasing the tin does not flow anywhere, so it became a
-preparation line. "Zugedeckt" is a condition, not an action, so it went into the
-bracket. The water joins at `kneten`, not at `mischen`, because the text says it
-is added afterwards - and that is exactly what the card will show.
+preparation line, and it hangs under the step that needs the tin rather than at
+the top of the card. "Zugedeckt" is a condition, not an action, so it went into
+the bracket. "Gehen lassen" is the rise in the bowl, so it is `Stockgare`. The
+water joins at `kneten`, not at `mischen`, because the text says it is added
+afterwards - and that is exactly what the card will show.
 
 ## Checks before you finish
 
