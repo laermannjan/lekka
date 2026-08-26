@@ -50,5 +50,5 @@ function show() {
 }
 
 const name = new URLSearchParams(location.search).get('card') ?? 'barbecue-pork-ribs'
-const response = await fetch(`../rezepte/${name}.lekka`)
+const response = await fetch(`/rezepte/${name}.lekka`)
 if (response.ok) load(await response.text())

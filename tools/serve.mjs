@@ -14,8 +14,10 @@ const root = process.cwd()
 const port = Number(process.env.PORT ?? 8080)
 
 createServer(async (request, response) => {
-  const path = decodeURIComponent(new URL(request.url, 'http://localhost').pathname)
-  const file = join(root, normalize(path === '/' ? '/app/index.html' : path))
+  const path = normalize(decodeURIComponent(new URL(request.url, 'http://localhost').pathname))
+  const file = path.startsWith('/rezepte/')
+    ? join(root, path)
+    : join(root, 'app', path === '/' ? 'index.html' : path)
 
   if (!file.startsWith(root)) return response.writeHead(403).end()
   try {
