@@ -2,6 +2,7 @@ import { parseCard, ParseError } from './card.js'
 import { renderCard } from './render.js'
 import { renderOverview } from './overview.js'
 import * as api from './api.js'
+import { editable, wrapInStep } from './source.js'
 import { cache, cached, collection, rows, setRows, useCollection } from './library.js'
 
 const SCALES = [
@@ -101,8 +102,14 @@ function source(id, key, scale, editing) {
   return button
 }
 
+function wrapper(area) {
+  const button = element('button', 'quiet', 'Wrap in step')
+  button.onclick = () => wrapInStep(area)
+  return button
+}
+
 function panel(id, key, text, scale) {
-  const area = element('textarea', 'source')
+  const area = editable(element('textarea', 'source'))
   area.value = text
   area.spellcheck = false
 
@@ -128,7 +135,7 @@ function panel(id, key, text, scale) {
   discard.onclick = () => showCard(id, key, scale, true)
 
   return element('div', 'panel', undefined, [
-    bar(label('Source'), save, discard),
+    bar(label('Source'), save, discard, wrapper(area)),
     message,
     area,
   ])
@@ -200,7 +207,7 @@ function showWriting() {
   const held = collection()
   head('New card', held ? held.id : '')
 
-  const area = element('textarea', 'source')
+  const area = editable(element('textarea', 'source'))
   area.value = NEW
   area.spellcheck = false
 
@@ -209,7 +216,11 @@ function showWriting() {
     try {
       parseCard(area.value)
     } catch (error) {
-      return show(bar(back(), create), band(`Line ${error.line}: ${error.message}`, 'warning'), area)
+      return show(
+        bar(back(), create, wrapper(area)),
+        band(`Line ${error.line}: ${error.message}`, 'warning'),
+        area,
+      )
     }
 
     const made = await api.createCard(area.value)
@@ -221,7 +232,7 @@ function showWriting() {
     location.assign(`/r/${made.id}/${made.key}`)
   }
 
-  show(bar(back(), create), area)
+  show(bar(back(), create, wrapper(area)), area)
   area.focus()
 }
 
