@@ -1,164 +1,158 @@
-# Tabellarische Rezeptnotation — Spezifikation v0.3
+# Tabular recipe notation - specification v0.4
 
-Arbeitsstand aus der Dinkelquarkbrot-Karte. Gilt als Referenz für weitere Karten
-und als Grundlage für das Datenmodell der App.
+How a recipe card reads, and how it is derived from a card file. The file itself
+is defined in `FORMAT.md`.
 
 ---
 
-## 1. Grundprinzip
+## 1. Principle
 
-Die Karte ist ein Datenflussgraph, kein Text.
+The card is a dataflow graph, not text.
 
-| Element | Bedeutung |
+| Element | Meaning |
 |---|---|
-| **Zeile** | eine *Verwendung* einer Zutat — nicht die Zutat selbst |
-| **Spalte** | ein Zeitpunkt im Ablauf, links früher, rechts später |
-| **Zelle** | ein Schritt; ihre Höhe sagt, welche Zeilen dabei zusammenfließen |
-| **Vorbereitung** | steht als Zeile über der Tabelle, fließt nirgends ein |
+| **row** | one *use* of an ingredient, not the ingredient itself |
+| **column** | a point in time, earlier on the left, later on the right |
+| **cell** | one step; its height says which rows flow together there |
+| **preparation** | stands above the table and flows nowhere |
 
-Daraus folgt alles Weitere. Eine Zutat, die an zwei Stellen einfließt, hat zwei
-Zeilen. Ein Utensil hat keine Zeile, weil es nicht einfließt. Ein Schritt ohne
-Zusammenführung ist trotzdem eine Zelle, sie spannt dann eben nur über das,
-was aus dem vorherigen Schritt kommt.
+Everything else follows. An ingredient used at two places has two rows. A tool
+has no row because it does not flow anywhere. A step that merges nothing is
+still a cell; it simply spans whatever came out of the previous step.
 
-**Prüffrage für jede Zeile:** kommt das in den Topf? Wenn nein → Vorbereitung.
-**Prüffrage für jede Zelle:** was genau führt sie zusammen? Wenn nichts und der
-Schritt nichts verändert → sie ist überflüssig.
+**Test for every row:** does this go into the pot? If not, it is preparation.
+**Test for every cell:** what exactly does it bring together? If nothing, and
+the step changes nothing, the cell is superfluous.
 
----
+## 2. Naming ingredients
 
-## 2. Zutaten benennen
+Two fields, visually separated (name in text colour, qualifier in grey):
 
-Zwei Felder, visuell getrennt (Name in Textfarbe, Zusatz in Grau):
+- **name** - what you would put on a shopping list. A noun, no attributes:
+  `Wasser`, `Magerquark`, `Körner`, `Haferflocken`.
+- **qualifier** - state, choice or alternative: `lauwarm`, `oder Naturjoghurt`,
+  `z. B. Sonnenblumen`, `grob`, `frisch`.
 
-- **`name`** — was auf dem Einkaufszettel steht. Ein Substantiv, keine Attribute.
-  `Wasser`, `Magerquark`, `Körner`, `Haferflocken`
-- **`qual`** — alles, was den Zustand, die Auswahl oder die Alternative angibt.
-  `lauwarm`, `oder Naturjoghurt`, `z. B. Sonnenblumen`, `grob`, `frisch`
+Rule of thumb: whatever you would not read out in a shop belongs in the
+qualifier.
 
-Merkregel: Wenn du es im Laden nicht vorlesen würdest, gehört es in `qual`.
+An amount is a number, a range or a text; a row without an amount leaves the
+column empty. Never write "some" - that is not an amount.
 
-Wie eine Zutatenzeile geschrieben wird, steht in [FORMAT.md §3](FORMAT.md).
+## 3. Phrasing steps
 
----
+After Chu's `mix / bake / cool`:
 
-## 3. Duktus der Schritte
+- **Infinitive, lower case.** `vermengen`, `in Form geben`, `backen`.
+- **Verb first.** No article, no subject.
+- **Parameters directly on the verb**, temperature before time:
+  `backen 200 °C Heißluft 60 min`, `reifen lassen 12 h bei 24 °C`.
+- **One step, one verb.** Two verbs mean two cells, unless they are inseparable
+  (`einfetten, ausstreuen` on the same tin).
+- **Three to five words**, not counting numbers. Anything longer belongs in the
+  note.
 
-Nach Chus `mix / bake / cool`, ins Deutsche übertragen:
+Recurring verbs, so that cards sound alike: `vermengen · verkneten · falten ·
+reifen lassen · gehen lassen · formen · in Form geben · einschneiden · backen ·
+stürzen · auskühlen`.
 
-- **Infinitiv, klein geschrieben.** `vermengen`, `in Form geben`, `backen`
-- **Verb zuerst.** Kein „Den Teig …“, kein Artikel, kein Subjekt.
-- **Parameter direkt am Verb**, in fester Reihenfolge *Temperatur → Zeit*:
-  `backen 200 °C Heißluft 60 min`, `reifen lassen 12 h bei 24 °C`
-- **Ein Schritt, ein Verb.** Zwei Verben heißen zwei Zellen — es sei denn, sie
-  sind untrennbar (`einfetten, ausstreuen` an derselben Form).
-- **Drei bis fünf Wörter**, Zahlen zählen nicht mit. Wird es länger, gehört
-  der Rest in den Hinweis.
+**Notes** sit in grey under the verb. They carry what you must know but do not
+do: conditions (`ohne Vorheizen, unterste Schiene`), target state (`bis sich das
+Volumen verdoppelt`), interventions during a long step (`nach 10 min längs
+einschneiden`). Separate with ordinary punctuation, never with `·` or `|`.
 
-Wiederkehrende Verben, damit Karten untereinander gleich klingen:
-`vermengen · verkneten · falten · reifen lassen · gehen lassen · formen ·
-in Form geben · einschneiden · backen · stürzen · auskühlen`
+## 4. From tree to grid
 
-### Hinweise
+The layout is a pure function of the tree. Two passes over it, no search, no
+collision handling.
 
-Grau unter dem Verb. Sie tragen, was man wissen muss, aber nicht tut:
+**Rows.** Depth-first traversal, children in order; every leaf appends one row.
+A subtree therefore always occupies a contiguous block of rows, which is what
+makes the rest work.
 
-- Bedingungen (`ohne Vorheizen, unterste Schiene`)
-- Zielzustand (`Teig bleibt weich`, `bis sich das Volumen verdoppelt`)
-- Eingriffe während eines langen Schritts (`nach 10 min längs einschneiden`)
+**Row span.** A step spans from the first to the last row of its subtree.
 
-Trennung durch normale Interpunktion. Komma für Aufzählungen, Punkt, wenn zwei
-verschiedene Dinge gemeint sind. Keine Trennzeichen wie `·` oder `|`.
+**Columns.** A step sits one column to the right of its deepest input:
 
----
+```
+column(step) = max(column(child) for child in inputs) + 1
+column(ingredient) = 0
+```
 
-## 4. Styling-Tokens
+**Right alignment.** When several strands merge into one step, the longest
+strand decides that step's column; the shorter ones move right until they sit
+directly in front of the merge. The whole subtree moves, and since each strand
+owns its own rows, nothing can collide.
 
-| Token | Wert | Rolle |
+A column therefore says *when* something is done, not when it could earliest be
+done: you grease the tin before filling it, not at the start.
+
+**Free areas.** Cells cover only part of the grid. What remains is merged into
+rectangles: a rectangle grows to the right as far as the row is free, then
+downwards as long as the free run stays exactly the same width. A run that gets
+wider or narrower starts a new rectangle, which keeps the row separator visible
+across the whole card.
+
+## 5. Lines
+
+Lines separate; they do not frame.
+
+- Every cell draws its right and its bottom line, the card frame draws the rest.
+  Each line is therefore drawn exactly once.
+- A free area does **not** draw its right line: it belongs to the entrance of
+  the step next to it and is not separated from it.
+- Where a strand ends, the grid ends. Free areas are not filled with a grid of
+  empty fields.
+
+## 6. Styling tokens
+
+| Token | Value | Role |
 |---|---|---|
-| Schrift | IBM Plex Sans, **eine** Größe (14 px) | Hierarchie nur über Gewicht |
-| Gewichte | 450 Fließtext · 600 Verben und Vorbereitung · 700 Titel | |
-| Akzent | `#1E6B4C` | Kopfzeile, Raster, aktive Bedienelemente, Änderungen |
-| Vorbereitung | `#E6EFE9` | Akzent stark aufgehellt |
-| Grau | `#7A7A72` | Qualifier und Hinweise — dieselbe Abstufung für beide |
-| Zeilenhöhe | min. 21 px, 1 px Innenabstand | Dichte wie im Original |
-| Ausrichtung | Zutaten links, Schritte zentriert | Zentrierung zeigt den Zusammenfluss |
+| Type | IBM Plex Sans, **one** size (14 px) | hierarchy through weight only |
+| Weights | 450 body · 600 verbs and preparation · 700 title | |
+| Accent | `#1E6B4C` | header, rules, active controls |
+| Preparation | `#E6EFE9` | accent, heavily lightened |
+| Grey | `#7A7A72` | qualifiers and notes, same shade for both |
+| Row height | min. 21 px, 1 px padding | density as in the original |
+| Alignment | ingredients left, steps centred | centring shows the merge |
 
-Linien trennen, sie umranden nicht. Jede Zelle zieht ihre rechte und ihre
-untere Linie, der Rahmen der Karte den Rest; so wird jede Linie genau einmal
-gezeichnet. Eine Fläche ohne Schritt zieht ihre rechte Linie nicht: sie gehört
-zum Eingang des Schritts rechts daneben und ist von ihm nicht getrennt. Solche
-Flächen werden zu möglichst großen Rechtecken zusammengefasst, sonst stünde
-dort ein Gitter aus lauter leeren Feldern.
+Colour does **not** encode the content of a step. That was tried and dropped:
+the effort of classifying was out of proportion to the gain.
 
-Farbe kodiert **nicht** den Inhalt der Schritte. Das war ein Versuch und ist
-verworfen: der Aufwand der Einordnung stand nicht im Verhältnis zum Ertrag.
+## 7. Converting a recipe
 
----
+1. **List ingredients as uses.** Every mention in the prose is a row, even if
+   the same ingredient appears more than once.
+2. **Sort rows by where they merge.** Whatever goes into one bowl must be
+   adjacent. This, not the order in the original, decides the sequence.
+3. **Pull out tools and oven conditions** into preparation or notes.
+4. **Condense the verbs.** Each sentence of the original becomes one verb plus
+   parameters; the rest moves into the note or is dropped.
+5. **Assign columns** by the rule in §4.
+6. **Check the side strands.** A preferment is its own block of rows with its
+   own columns, merging into the main strand later.
+7. **Read it back as a sequence.** If the generated step list reads like a
+   recipe, the table is right.
 
-## 5. Datenmodell
-
-Eine Karte ist ein Baum: der letzte Schritt ist die Wurzel, die Zutaten sind die
-Blätter, und das Raster entsteht daraus. Felder, Typen und die Textform stehen
-in [FORMAT.md](FORMAT.md) und werden dort von Tests festgehalten - dieses
-Dokument beschreibt die Notation, jenes die Datei.
-
----
-
-## 6. Ein Rezept überführen — Arbeitsablauf
-
-1. **Zutaten als Verwendungen auflisten.** Jede Nennung im Fließtext ist eine
-   Zeile, auch wenn dieselbe Zutat mehrfach vorkommt.
-2. **Zeilen nach Zusammenfluss sortieren.** Was gemeinsam in eine Schüssel
-   geht, muss benachbart stehen. Das bestimmt die Reihenfolge, nicht die
-   Reihenfolge im Original.
-3. **Utensilien und Ofenbedingungen herausziehen** → Vorbereitung oder Hinweis.
-4. **Verben verdichten.** Jeder Satz des Originals wird zu einem Verb plus
-   Parametern; der Rest wandert in den Hinweis oder fällt weg.
-5. **Spalten zuweisen.** Ein Schritt steht eine Spalte rechts von dem Schritt,
-   auf dessen Ergebnis er wartet. Münden mehrere Stränge in einen Schritt, gibt
-   der längste die Spalte vor; die kürzeren rücken nach rechts, bis sie direkt
-   vor der Zusammenführung stehen. Eine Spalte sagt damit, wann man etwas tut,
-   und nicht, wann man es frühestens könnte: die Form fettet man vor dem
-   Einfüllen, nicht zu Beginn.
-6. **Nebenstränge prüfen.** Ein Vorteig ist ein eigener Block von Zeilen mit
-   eigenen Spalten, der später in den Hauptstrang mündet.
-7. **Gegenlesen im Ablauf.** Wenn die generierte Schrittliste sich wie ein
-   Rezept liest, stimmt die Tabelle.
-
----
-
-## 7. Beispiel: Sauerteigbrot mit zwei Strängen
-
-Struktur der Erdkruste, wie sie in die Karte fällt — Mengen und Zeiten aus
-deiner angepassten Variante fehlen noch:
+## 8. Example: sourdough with two strands
 
 ```
-Vorbereitung   Gärkorb bemehlen
-Vorbereitung   Ofen mit Topf auf 250 °C vorheizen
+Preparation    Gärkorb bemehlen
+Preparation    Ofen mit Topf auf 250 °C vorheizen
 
-Sauerteig      50 g  Anstellgut       ┐
-               ..    Mehl             ├ verrühren ─ reifen lassen ..h ┐
-               ..    Wasser  lauwarm  ┘                               │
-                                                                      ├ verkneten ─ …
-Hauptteig      ..    Mehl             ┐                               │
-               ..    Wasser           ├─────────── autolysieren ..min ┘
-               ..    Salz             ┘
+Sauerteig      50 g  Anstellgut          ┐
+               ..    Mehl                ├ verrühren ─ reifen lassen ..h ┐
+               ..    Wasser  lauwarm     ┘                               │
+                                                                         ├ verkneten ─ …
+Hauptteig      ..    Mehl                ┐                               │
+               ..    Wasser              ├───────────── autolysieren ..min ┘
+               ..    Salz                ┘
 ```
 
-Der Sauerteigstrang belegt Spalten 1 und 2 und gibt damit vor, wo die
-Zusammenführung liegt: in Spalte 3. Der Hauptteigstrang braucht nur einen
-Schritt. Er steht trotzdem nicht in Spalte 1, sondern rückt nach rechts bis
-direkt vor das Verkneten, in Spalte 2. Die Autolyse beginnt ja auch nicht am
-Vorabend, sondern kurz bevor der Sauerteig reif ist.
+The sourdough strand occupies columns 1 and 2 and thereby decides where the
+merge sits: column 3. The main dough strand needs only one step. It still does
+not sit in column 1 but moves right until it is directly in front of the
+kneading, into column 2 - the autolyse does not start the evening before either.
 
-Genau dafür ist die Notation gemacht, und genau das sieht man in Marcel Paas
-Fließtext nicht.
-
-Die Fläche, die dabei frei bleibt (Spalte 1 auf Höhe des Hauptteigs), bleibt
-auch beim Zeichnen frei: kein Rahmen, keine Linie. Wo ein Strang endet, hört
-das Raster auf.
-
-Was ich von dir brauche, um das auszufüllen: die Mengen deiner 50-g-Variante,
-die Reifezeit des Sauerteigs, ob du mit Autolyse arbeitest, die Stock- und
-Stückgarezeiten und dein Backprogramm (Temperatur fallend? mit Dampf? Topf?).
+The area that stays free (column 1 next to the main dough) stays free when
+drawn: no frame, no line.

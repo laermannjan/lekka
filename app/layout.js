@@ -1,5 +1,5 @@
 // Aus dem Rezeptbaum wird ein Raster: Zeilen sind Zutatenverwendungen,
-// Spalten sind Zeitpunkte. Siehe NOTATION.md.
+// Spalten sind Zeitpunkte.
 import { parseMenge } from "./menge.js";
 
 const KLAMMER = /^(.*?)\s*\(([^()]*)\)\s*$/;

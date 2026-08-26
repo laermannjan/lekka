@@ -3,10 +3,10 @@
 Tabellarische Rezeptkarten. Ein Node-Prozess ohne Laufzeit-Abhängigkeiten,
 eine Karte je Datei, offline lesbar.
 
-- [FORMAT.md](FORMAT.md) beschreibt das Dateiformat: wie man eine Karte
-  schreibt und wie sie gespeichert wird. Jedes Beispiel darin wird getestet.
-- [NOTATION.md](NOTATION.md) beschreibt die Notation dahinter: warum eine Karte
-  ein Datenflussgraph ist, wie Schritte formuliert werden und wie sie aussieht.
+- [FORMAT.md](FORMAT.md) definiert das Dateiformat: die Listenform, die
+  Zutaten- und Schrittzeile, das JSON darunter.
+- [NOTATION.md](NOTATION.md) definiert, wie daraus eine Karte wird: Zeilen,
+  Spalten, Linien, und die Regeln für Verben und Zutatennamen.
 
 ## Rechte hängen am Link
 
