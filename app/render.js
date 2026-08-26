@@ -2,6 +2,7 @@ import { buildGrid } from './grid.js'
 import { formatAmount, scaleAmount } from './amount.js'
 
 const NAME_COLUMN = 3
+const UNIT = /(\d)\s+(?=[^\s\d]{1,3}(?:[\s,]|$))/g
 
 /** A card as a table. Column 0 of the grid is the three ingredient columns. */
 export function renderCard(card, scale = 1) {
@@ -15,7 +16,7 @@ export function renderCard(card, scale = 1) {
   grid.band.forEach((entries, index) => {
     const ends = new Set(entries.map((entry) => entry.column + entry.columnSpan - 1))
     for (const entry of entries) {
-      const box = element('div', 'preparation', entry.node.text)
+      const box = element('div', 'preparation', bind(entry.node.text))
       if (ends.has(entry.column - 1)) box.classList.add('joined')
       if (entry.column === 0) {
         box.style.gridColumn = '1 / -1'
@@ -81,8 +82,8 @@ function ingredientFields(node, scale) {
 
 function stepField(node) {
   const cell = element('div', 'step')
-  cell.append(element('div', 'verb', node.verb))
-  if (node.aside) cell.append(element('div', 'note', node.aside))
+  cell.append(element('div', 'verb', bind(node.verb)))
+  if (node.aside) cell.append(element('div', 'note', bind(node.aside)))
   return cell
 }
 
@@ -95,6 +96,10 @@ function place(node, grid, { column, columnSpan, row, rowSpan, last }) {
 
 function area(node, column, columnSpan, row, rowSpan) {
   node.style.gridArea = `${row} / ${column} / span ${rowSpan} / span ${columnSpan}`
+}
+
+function bind(text) {
+  return text.replace(UNIT, '$1\u00a0')
 }
 
 function element(tag, className, text) {

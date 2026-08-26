@@ -171,6 +171,7 @@ body {
 
 .verb {
   font-weight: 600;
+  text-wrap: balance;
 }
 
 .note {
