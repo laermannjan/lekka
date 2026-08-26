@@ -3,16 +3,29 @@ import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/pro
 import { join } from 'node:path'
 
 import { newId } from '../app/id.js'
+import { newName } from './names.js'
 
 const KEY_LENGTH = 22
 const DAY = 24 * 60 * 60 * 1000
 
-/** The data directory. Get by id is the only way in; there is no listing. */
+/** Two shelves of the same kind. Get by id is the only way in; there is no listing. */
 export function openStore(directory) {
-  const card = (id) => join(directory, `${id}.lekka`)
-  const envelope = (id) => join(directory, `${id}.json`)
+  return {
+    cards: shelf(join(directory, 'cards'), '.lekka', () => newId()),
+    collections: shelf(join(directory, 'collections'), '.json', newName),
+    async open() {
+      await this.cards.open()
+      await this.collections.open()
+      return this
+    },
+  }
+}
 
-  const readEnvelope = async (id) => {
+function shelf(directory, extension, nextId) {
+  const body = (id) => join(directory, id + extension)
+  const envelope = (id) => join(directory, `${id}.meta.json`)
+
+  const meta = async (id) => {
     try {
       return JSON.parse(await readFile(envelope(id), 'utf8'))
     } catch {
@@ -29,60 +42,59 @@ export function openStore(directory) {
   return {
     async open() {
       await mkdir(directory, { recursive: true })
-      return this
     },
 
     async create(text) {
-      const id = newId()
+      let id = nextId()
+      while (await meta(id)) id = nextId()
+
       const key = newId(KEY_LENGTH)
       const now = new Date().toISOString()
-      await put(card(id), text)
+      await put(body(id), text)
       await put(envelope(id), JSON.stringify({ key: hash(key), created: now, updated: now, touched: now }))
       return { id, key }
     },
 
     async read(id) {
-      const meta = await readEnvelope(id)
-      if (!meta) return null
-      const text = await readFile(card(id), 'utf8').catch(() => null)
-      return text === null ? null : { text, meta }
+      if (!(await meta(id))) return null
+      return readFile(body(id), 'utf8').catch(() => null)
     },
 
     async write(id, text) {
-      const meta = await readEnvelope(id)
-      if (!meta) return false
-      await put(card(id), text)
+      const found = await meta(id)
+      if (!found) return false
       const now = new Date().toISOString()
-      await put(envelope(id), JSON.stringify({ ...meta, updated: now, touched: now }))
+      await put(body(id), text)
+      await put(envelope(id), JSON.stringify({ ...found, updated: now, touched: now }))
       return true
     },
 
     async remove(id) {
-      await unlink(card(id)).catch(() => {})
+      await unlink(body(id)).catch(() => {})
       await unlink(envelope(id)).catch(() => {})
     },
 
     async verify(id, key) {
-      const meta = await readEnvelope(id)
-      return meta ? same(meta.key, hash(key ?? '')) : false
+      const found = await meta(id)
+      return found ? same(found.key, hash(key ?? '')) : false
     },
 
-    /** Reads keep a card alive, but at most one write a day. */
+    /** Reads keep a record alive, but at most one write a day. */
     async touch(id) {
-      const meta = await readEnvelope(id)
-      if (!meta) return
+      const found = await meta(id)
+      if (!found) return
       const now = new Date()
-      if (now - new Date(meta.touched) < DAY) return
-      await put(envelope(id), JSON.stringify({ ...meta, touched: now.toISOString() }))
+      if (now - new Date(found.touched) < DAY) return
+      await put(envelope(id), JSON.stringify({ ...found, touched: now.toISOString() }))
     },
 
     async sweep(days) {
       const limit = Date.now() - days * DAY
-      const names = await readdir(directory)
-      for (const name of names.filter((name) => name.endsWith('.json'))) {
-        const id = name.slice(0, -'.json'.length)
-        const meta = await readEnvelope(id)
-        if (meta && new Date(meta.touched).getTime() < limit) await this.remove(id)
+      for (const name of await readdir(directory)) {
+        if (!name.endsWith('.meta.json')) continue
+        const id = name.slice(0, -'.meta.json'.length)
+        const found = await meta(id)
+        if (found && new Date(found.touched).getTime() < limit) await this.remove(id)
       }
     },
   }
