@@ -1,0 +1,170 @@
+@import url("/schrift/plex.css");
+
+/* Tokens aus NOTATION.md §4. Eine Schriftgröße, Hierarchie nur über Gewicht. */
+:root {
+  --ink: #1B1B19;
+  --grau: #7A7A72;
+  --linie: #4E9067;
+  --grund: #F2F1EC;
+  --weiss: #FFFFFF;
+  --akzent: #1E6B4C;
+  --akzent-blass: #A9C6B6;
+  --vorbereitung: #E6EFE9;
+  --warnung: #8C2F1E;
+  --groesse: 14px;
+  --menge: 58px;
+  --einheit: 54px;
+  --schritt-min: 150px;
+}
+
+* { box-sizing: border-box; }
+/* Muss vor allen eigenen display-Regeln stehen: die UA-Regel für [hidden]
+   verliert gegen jede Autorenregel, und dann sind versteckte Knöpfe sichtbar. */
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--grund); color: var(--ink);
+  font: 450 var(--groesse)/1.3 "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  padding: 12px 10px 34px;
+}
+h1, p, button, input, div, span { font-size: var(--groesse); }
+a { color: var(--akzent); }
+.grau { color: var(--grau); }
+
+.karte { max-width: 1140px; margin: 0 auto; background: var(--weiss); border: 2px solid var(--akzent); }
+
+.kopf {
+  display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline;
+  justify-content: space-between; padding: 9px 13px;
+  background: var(--akzent); color: var(--weiss);
+}
+.kopf h1 { margin: 0; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.kopf .angaben { color: var(--akzent-blass); display: flex; gap: 14px; flex-wrap: wrap; }
+
+.leiste {
+  display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center;
+  justify-content: space-between; padding: 6px 13px;
+  border-bottom: 1px solid var(--linie); background: var(--grund);
+}
+.gruppe { display: flex; align-items: center; gap: 6px; }
+.marke { color: var(--grau); letter-spacing: .06em; text-transform: uppercase; }
+
+.schalter { display: flex; border: 1px solid var(--linie); background: var(--weiss); }
+.schalter button {
+  appearance: none; border: 0; background: transparent; padding: 2px 9px;
+  cursor: pointer; color: var(--ink); font: inherit;
+}
+.schalter button + button { border-left: 1px solid var(--linie); }
+.schalter button[aria-pressed="true"] { background: var(--akzent); color: var(--weiss); }
+
+button.knopf, a.knopf {
+  appearance: none; border: 1px solid var(--linie); background: var(--weiss);
+  padding: 2px 9px; cursor: pointer; color: var(--ink); font: inherit;
+  text-decoration: none; display: inline-block;
+}
+button.knopf:hover, a.knopf:hover { background: var(--akzent); color: var(--weiss); border-color: var(--akzent); }
+button.knopf:disabled { color: var(--grau); border-color: var(--akzent-blass); background: var(--weiss); cursor: not-allowed; }
+button.still, a.still { border-color: transparent; color: var(--grau); }
+button.still:hover, a.still:hover { background: transparent; color: var(--ink); border-color: var(--linie); }
+:focus-visible { outline: 2px solid var(--akzent); outline-offset: 1px; }
+
+.hinweisfeld { padding: 6px 13px; background: var(--vorbereitung); border-bottom: 1px solid var(--linie); }
+.hinweisfeld.schlecht { background: #F6E3DF; color: var(--warnung); }
+.hinweisfeld:empty { display: none; }
+
+.rumpf { padding: 9px 11px 11px; }
+.rahmen { overflow-x: auto; }
+
+/* Die Linien des Rasters sind der Untergrund, der durch die Fugen scheint.
+   Eine Fuge, eine Linie, ohne doppelte Striche und ohne Rahmenrechnerei. */
+.raster {
+  display: grid;
+  grid-template-columns: max-content repeat(var(--spalten), minmax(var(--schritt-min), 1fr));
+  gap: 1px; background: var(--linie); border: 1px solid var(--linie);
+  min-width: min-content;
+}
+.prep { background: var(--vorbereitung); font-weight: 600; text-align: center; padding: 1px 7px; }
+.spaltenkopf {
+  background: var(--grund); color: var(--grau); grid-row: 1;
+  letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px;
+}
+
+.zutat {
+  background: var(--weiss); grid-column: 1; min-height: 21px; padding: 1px 6px;
+  display: grid; grid-template-columns: var(--menge) var(--einheit) 1fr;
+  align-items: center; gap: 6px;
+}
+.zutat .menge { grid-column: 1; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Eine Menge ohne Zahl braucht Platz und ist keine Zahl: über beide Spalten. */
+.zutat .menge.text { grid-column: 1 / 3; text-align: left; color: var(--grau); font-variant-numeric: normal; }
+.zutat .einheit { grid-column: 2; color: var(--grau); }
+.zutat .benennung { grid-column: 3; display: flex; flex-wrap: nowrap; align-items: baseline; gap: 0 5px; white-space: nowrap; }
+.zutat .qual { color: var(--grau); }
+
+.zelle {
+  background: var(--weiss); min-height: 21px; padding: 1px 7px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; font-weight: 600;
+}
+.zelle .hinweis { color: var(--grau); font-weight: 450; line-height: 1.25; text-wrap: balance; }
+
+/* Eine freie Fläche gehört zum Eingang des Schritts rechts daneben. Der
+   negative Rand schluckt die Fuge, damit dort keine Linie steht. */
+.leer { background: var(--weiss); }
+.leer.fliesst { margin-right: -1px; }
+
+@media print {
+  body { background: #fff; padding: 0; }
+  .leiste, .werkzeuge { display: none !important; }
+  .karte { border: 1px solid var(--linie); }
+  .rahmen { overflow: visible; }
+}
+
+/* Ablauf und Einkauf: dieselbe Karte, anders gelesen. */
+#ablauf, #einkauf { max-width: 70ch; padding: 4px 2px; }
+.schritt { display: grid; grid-template-columns: 24px 1fr; gap: 10px; padding: 5px 0; border-top: 1px solid var(--grund); }
+.schritt:first-child { border-top: 0; }
+.schritt .nummer { color: var(--grau); font-variant-numeric: tabular-nums; }
+.schritt .verb { font-weight: 600; }
+.schritt .zutaten, .schritt .hinweis { color: var(--grau); }
+.posten { display: grid; grid-template-columns: 96px 1fr; gap: 10px; padding: 4px 0; border-top: 1px solid var(--grund); }
+.posten:first-child { border-top: 0; }
+.posten .menge { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.posten .teile, .posten .qual { color: var(--grau); }
+
+textarea {
+  font: 450 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  width: 100%; min-height: 340px; padding: 8px; margin-top: 6px;
+  border: 1px solid var(--linie); background: var(--weiss);
+}
+#editor .gruppe { margin-top: 6px; }
+
+/* Übersicht */
+.karten { list-style: none; padding: 0; margin: 8px 0 0; border-top: 1px solid var(--linie); }
+.karten li {
+  display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  padding: 6px 0; border-bottom: 1px solid var(--linie);
+}
+.karten .titel { font-weight: 600; }
+.karten .wachse { flex: 1; }
+.rolle {
+  font-size: 12px; font-weight: 600; padding: 0 6px;
+  background: var(--vorbereitung); color: var(--akzent);
+}
+.rolle.nurlesen { background: var(--grund); color: var(--grau); }
+
+/* Bearbeiten */
+.zaehler { color: var(--akzent); font-weight: 600; }
+[contenteditable="plaintext-only"] { border-radius: 2px; }
+[contenteditable="plaintext-only"]:focus { outline: 0; box-shadow: 0 0 0 1px var(--akzent); }
+.zutat [contenteditable] { min-width: 1ch; }
+.bearbeitet .menge:empty::before, .bearbeitet .einheit:empty::before { content: "–"; opacity: .35; }
+.bearbeitet .qual:empty::before { content: "…"; opacity: .35; }
+.hinweis:empty { display: none; }
+.bearbeitet .zelle:hover .hinweis:empty, .bearbeitet .zelle:focus-within .hinweis:empty {
+  display: block; min-width: 5ch;
+}
+.bearbeitet .hinweis:empty::before { content: "Hinweis"; opacity: .5; }
+#struktur { margin-top: 10px; border-top: 1px solid var(--linie); padding-top: 8px; }
+#struktur summary { cursor: pointer; }

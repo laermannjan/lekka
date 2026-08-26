@@ -1,0 +1,40 @@
+{
+  "schema": "rezeptkarte/1",
+  "title": "Dinkelquarkbrot",
+  "yield": "1 Kastenbrot",
+  "prep": [
+    "Kastenform 30 cm einfetten"
+  ],
+  "step": {
+    "do": "backen 200 °C Heißluft 60 min",
+    "note": "ohne Vorheizen, unterste Schiene",
+    "in": [
+      {
+        "do": "in Form geben",
+        "in": [
+          {
+            "do": "vermengen",
+            "note": "von Hand, Teig bleibt weich",
+            "in": [
+              "Dinkelmehl: 300 g",
+              "Dinkelschrot: 300 g",
+              "Körner (z. B. Sonnenblumen): 100 g",
+              "Salz: 2 TL",
+              "Honig: 1 TL",
+              "Hefe (frisch): 1 Würfel",
+              "Magerquark (oder Naturjoghurt): 75 g",
+              "Wasser (lauwarm): ½ l"
+            ]
+          },
+          {
+            "do": "ausstreuen",
+            "note": "in die gefettete Form",
+            "in": [
+              "Haferflocken (grob)"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,46 @@
+[tools]
+node = "22"
+
+[env]
+PORT = "8080"
+
+[tasks.install]
+description = "Abhängigkeiten installieren"
+run = "npm ci"
+sources = ["package-lock.json"]
+outputs = ["node_modules/.package-lock.json"]
+
+[tasks.dev]
+description = "App und API auf $PORT, ohne Build"
+depends = ["install"]
+run = "node server/index.mjs"
+
+[tasks.test]
+description = "Tests einmal laufen lassen"
+depends = ["install"]
+run = "npm test"
+
+[tasks.e2e]
+description = "Rechte im echten Browser prüfen (Chromium)"
+depends = ["install"]
+run = "npx playwright test"
+
+[tasks.watch]
+description = "Tests im Watch-Modus"
+depends = ["install"]
+run = "npx vitest"
+
+[tasks.up]
+description = "Container bauen und starten (http://localhost:8380)"
+dir = "deploy"
+run = "docker compose up -d --build"
+
+[tasks.down]
+description = "Container stoppen"
+dir = "deploy"
+run = "docker compose down"
+
+[tasks.logs]
+description = "Container-Logs verfolgen"
+dir = "deploy"
+run = "docker compose logs -f"

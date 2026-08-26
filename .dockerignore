@@ -1,8 +1,0 @@
-node_modules
-.svelte-kit
-build
-.git
-.env
-*.db
-test-results
-docs

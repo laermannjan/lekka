@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lekka</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<link rel="stylesheet" href="/stil.css">
+<meta name="theme-color" content="#1E6B4C">
+
+<div class="karte">
+  <div class="kopf">
+    <h1 id="titel" data-feld="titel">…</h1>
+    <div class="angaben" id="angaben"></div>
+  </div>
+
+  <div class="leiste werkzeuge">
+    <div class="gruppe">
+      <span class="marke">Menge</span>
+      <div class="schalter" id="menge">
+        <button data-faktor="0.5">½×</button>
+        <button data-faktor="1" aria-pressed="true">1×</button>
+        <button data-faktor="1.5">1½×</button>
+        <button data-faktor="2">2×</button>
+      </div>
+    </div>
+    <div class="gruppe">
+      <span class="marke">Ansicht</span>
+      <div class="schalter" id="ansicht">
+        <button data-ansicht="tabelle" aria-pressed="true">Tabelle</button>
+        <button data-ansicht="ablauf">Ablauf</button>
+        <button data-ansicht="einkauf">Einkauf</button>
+      </div>
+    </div>
+    <div class="gruppe">
+      <span class="zaehler" id="zaehler"></span>
+      <button class="knopf" id="speichern" hidden disabled>Speichern</button>
+      <button class="knopf still" id="verwerfen" hidden>Verwerfen</button>
+      <button class="knopf" id="umschalten" hidden>Bearbeiten</button>
+      <a href="/" class="knopf still">Übersicht</a>
+      <button class="knopf still" id="drucken">Drucken</button>
+      <button class="knopf still" id="ausgeben">Sichern</button>
+      <button class="knopf still" id="entfernen" hidden>Löschen</button>
+    </div>
+  </div>
+
+  <div class="hinweisfeld" id="meldung" role="status"></div>
+
+  <div class="rumpf">
+    <div class="rahmen" id="tabelle"></div>
+    <div id="ablauf" hidden></div>
+    <div id="einkauf" hidden></div>
+
+    <details id="struktur" hidden>
+      <summary class="marke">Struktur als Liste</summary>
+      <p class="grau" id="strukturform">Zutaten und Schritte ändert man in der Karte.
+        Hier hängt man sie um: eine eingerückte Zeile ist ein Eingang des Punktes
+        darüber. Der letzte Schritt steht oben.</p>
+      <textarea id="quelle" spellcheck="false"></textarea>
+      <div class="gruppe">
+        <button type="button" class="knopf" id="uebernehmen">Übernehmen</button>
+        <span class="grau" id="strukturmeldung"></span>
+      </div>
+    </details>
+  </div>
+</div>
+
+<script type="module" src="/karte.js"></script>
+</html>

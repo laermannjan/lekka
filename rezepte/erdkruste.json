@@ -1,0 +1,61 @@
+{
+  "schema": "rezeptkarte/1",
+  "title": "Erdkruste",
+  "yield": "1 Laib",
+  "meta": [
+    "Sauerteig am Vorabend"
+  ],
+  "step": {
+    "do": "auskühlen lassen",
+    "in": [
+      {
+        "do": "backen 210 °C 70–75 min",
+        "in": [
+          {
+            "do": "gehen lassen 100–120 min",
+            "in": [
+              {
+                "do": "rund wirken",
+                "in": [
+                  {
+                    "do": "ruhen lassen 30 min",
+                    "in": [
+                      {
+                        "do": "verrühren",
+                        "note": "Flexi-Rührer",
+                        "in": [
+                          {
+                            "do": "reifen lassen 12 h (bei 20 °C)",
+                            "in": [
+                              {
+                                "do": "verrühren",
+                                "in": [
+                                  {
+                                    "do": "aufschlämmen",
+                                    "in": [
+                                      "Anstellgut (reif): 50 g",
+                                      "Wasser (ca. 50 °C): 285 g"
+                                    ]
+                                  },
+                                  "Roggenvollkornmehl: 250 g",
+                                  "Salz: 5 g"
+                                ]
+                              }
+                            ]
+                          },
+                          "Wasser (ca. 70 °C): 250 g",
+                          "Roggenvollkornmehl: 355 g",
+                          "Salz: 8 g"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

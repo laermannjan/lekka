@@ -1,0 +1,21 @@
+# Betrieb: mise run up
+# Der Build-Kontext ist das Repo-Wurzelverzeichnis, weil das Image app/ und
+# server/ hineinkopiert, deshalb context: ..
+services:
+  lekka:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: lekka:0.1.0
+    container_name: lekka
+    ports:
+      - "8380:8080"
+    volumes:
+      - karten:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+
+volumes:
+  karten:
