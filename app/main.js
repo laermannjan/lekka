@@ -1,7 +1,8 @@
 import { parseCard, ParseError } from './card.js'
 import { renderCard } from './render.js'
 import { renderOverview } from './overview.js'
-import { newId, read, keep } from './store.js'
+import { read, keep } from './library.js'
+import { newId } from './id.js'
 
 const SCALES = [
   [0.5, '½×'],

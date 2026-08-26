@@ -1,5 +1,5 @@
 import { parseCard } from './card.js'
-import { ids, read, drop } from './store.js'
+import { ids, read, drop } from './library.js'
 
 /** The cards this browser holds. Calls back when one is removed. */
 export function renderOverview(onChange) {
