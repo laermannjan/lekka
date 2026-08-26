@@ -16,10 +16,13 @@ async function serve(options = {}) {
   await new Promise((done) => server.once('listening', done))
   const base = `http://localhost:${server.address().port}`
 
-  const call = (path, { key, ...rest } = {}) =>
+  const call = (path, { key, version, ...rest } = {}) =>
     fetch(base + path, {
       ...rest,
-      headers: key ? { authorization: `Bearer ${key}` } : {},
+      headers: {
+        ...(key ? { authorization: `Bearer ${key}` } : {}),
+        ...(version ? { 'if-match': version } : {}),
+      },
     })
 
   return { call, store, close: () => server.close() }
@@ -96,6 +99,42 @@ test('a public read of a collection strips every key', async (t) => {
 
   const held = await call(`/api/collections/${id}`, { key })
   assert.deepEqual(await held.json(), rows)
+})
+
+test('a write must name the version it grew from', async (t) => {
+  const { call, close } = await serve()
+  t.after(close)
+
+  const { id, key } = await (
+    await call('/api/collections', { method: 'POST', body: '[]' })
+  ).json()
+
+  const read = await call(`/api/collections/${id}`, { key })
+  const version = read.headers.get('etag')
+  assert.match(version, /^"[0-9a-f]{16}"$/)
+  assert.equal((await call(`/api/collections/${id}`)).headers.get('etag'), null)
+
+  const one = [{ id: 'brot-aaaaaaaaaa' }]
+  const blind = await call(`/api/collections/${id}`, { method: 'PUT', body: JSON.stringify(one), key })
+  assert.equal(blind.status, 428)
+
+  const written = await call(`/api/collections/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(one),
+    key,
+    version,
+  })
+  assert.equal(written.status, 204)
+  assert.notEqual(written.headers.get('etag'), version)
+
+  const stale = await call(`/api/collections/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify([{ id: 'salz-bbbbbbbbbb' }]),
+    key,
+    version,
+  })
+  assert.equal(stale.status, 412)
+  assert.deepEqual(await (await call(`/api/collections/${id}`, { key })).json(), one)
 })
 
 test('a collection holds links and nothing else', async (t) => {

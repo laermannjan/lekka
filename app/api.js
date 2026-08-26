@@ -21,21 +21,36 @@ export async function createCollection(rows = []) {
   return send('POST', '/api/collections', { body: JSON.stringify(rows) })
 }
 
+/** Comes back with the version tag a later write has to name. */
 export async function readCollection(id, key) {
-  return send('GET', `/api/collections/${id}`, { key })
+  const response = await call('GET', `/api/collections/${id}`, { key })
+  return { rows: await response.json(), version: response.headers.get('etag') }
 }
 
-export async function writeCollection(id, key, rows) {
-  return send('PUT', `/api/collections/${id}`, { key, body: JSON.stringify(rows) })
+export async function writeCollection(id, key, rows, version) {
+  const response = await call('PUT', `/api/collections/${id}`, {
+    key,
+    body: JSON.stringify(rows),
+    version,
+  })
+  return response.headers.get('etag')
 }
 
-async function send(method, path, { key, body, text } = {}) {
+async function send(method, path, options) {
+  const response = await call(method, path, options)
+  if (response.status === 204) return null
+  return options?.text ? response.text() : response.json()
+}
+
+async function call(method, path, { key, body, version } = {}) {
   const response = await fetch(path, {
     method,
     body,
-    headers: key ? { authorization: `Bearer ${key}` } : {},
+    headers: {
+      ...(key ? { authorization: `Bearer ${key}` } : {}),
+      ...(version ? { 'if-match': version } : {}),
+    },
   })
   if (!response.ok) throw new ApiError(response.status, await response.text())
-  if (response.status === 204) return null
-  return text ? response.text() : response.json()
+  return response
 }

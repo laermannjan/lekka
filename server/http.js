@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
@@ -91,23 +92,38 @@ async function cardRoute(store, options, request, response, id, key) {
 
 async function collectionRoute(store, options, request, response, id, key) {
   const { collections } = store
+  const held = await collections.verify(id, key)
+
   if (request.method === 'GET') {
     const text = await collections.read(id)
     if (text === null) throw missing()
     await collections.touch(id)
-    const held = await collections.verify(id, key)
-    return json(response, 200, held ? JSON.parse(text) : strip(JSON.parse(text)))
+    const list = JSON.parse(text)
+    return json(response, 200, held ? list : strip(list), held ? { etag: tag(text) } : {})
   }
 
-  if (!(await collections.verify(id, key))) throw missing()
+  if (!held) throw missing()
   if (request.method === 'DELETE') {
     await collections.remove(id)
     return send(response, 204)
   }
   if (request.method !== 'PUT') throw new Refusal(405, 'method not allowed')
 
-  await collections.write(id, rows(await body(request, options)).text)
-  return send(response, 204)
+  agrees(request, tag(await collections.read(id)))
+  const { text } = rows(await body(request, options))
+  await collections.write(id, text)
+  return send(response, 204, null, '', { etag: tag(text) })
+}
+
+/** A collection is changed from two devices, so a write must name the version it grew from. */
+function agrees(request, current) {
+  const sent = request.headers['if-match']
+  if (!sent) throw new Refusal(428, 'if-match required')
+  if (sent !== '*' && sent !== current) throw new Refusal(412, 'the collection has changed')
+}
+
+function tag(text) {
+  return `"${createHash('sha256').update(text ?? '').digest('hex').slice(0, 16)}"`
 }
 
 async function create(shelf, response, { text, label }) {
@@ -178,11 +194,15 @@ async function statics(app, path, response) {
   }
 }
 
-function json(response, status, value) {
-  send(response, status, 'application/json; charset=utf-8', JSON.stringify(value))
+function json(response, status, value, extra) {
+  send(response, status, 'application/json; charset=utf-8', JSON.stringify(value), extra)
 }
 
-function send(response, status, type, body = '') {
-  response.writeHead(status, type ? { ...HEADERS, 'content-type': type } : HEADERS)
+function send(response, status, type, body = '', extra = {}) {
+  response.writeHead(status, {
+    ...HEADERS,
+    ...(type ? { 'content-type': type } : {}),
+    ...extra,
+  })
   response.end(body)
 }

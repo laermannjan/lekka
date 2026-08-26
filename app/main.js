@@ -42,7 +42,7 @@ async function showOverview() {
   let list = rows()
   let note = null
   try {
-    list = await api.readCollection(held.id, held.key)
+    list = (await api.readCollection(held.id, held.key)).rows
     setRows(list)
   } catch {
     note = band('Offline. Showing the cards this device remembers.')
@@ -57,8 +57,9 @@ async function showOverview() {
 
 async function showCollection(id, key) {
   head('lekka', id)
-  const list = await api.readCollection(id, key).catch(() => null)
-  if (!list) return fail('No collection under this link.')
+  const found = await api.readCollection(id, key).catch(() => null)
+  if (!found) return fail('No collection under this link.')
+  const list = found.rows
 
   if (!key)
     return show(
@@ -182,19 +183,34 @@ function keeper(id, key) {
 
   const save = element('button', 'quiet', found ? 'Keep the edit link' : 'Save to collection')
   save.onclick = async () => {
-    const next = [...list.filter((row) => row.id !== id), { id, ...(key ? { key } : {}) }]
-    await api.writeCollection(held.id, held.key, next)
-    setRows(next)
+    await change(held, (current) => [
+      ...current.filter((row) => row.id !== id),
+      { id, ...(key ? { key } : {}) },
+    ])
     showCard(id, key)
   }
   return save
 }
 
 async function remove(held, list, id) {
-  const next = list.filter((row) => row.id !== id)
-  await api.writeCollection(held.id, held.key, next)
-  setRows(next)
+  await change(held, (current) => current.filter((row) => row.id !== id))
   showOverview()
+}
+
+/** Read, change, write, and start again if another device wrote in between. */
+async function change(held, edit) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { rows: current, version } = await api.readCollection(held.id, held.key)
+    const next = edit(current)
+    try {
+      await api.writeCollection(held.id, held.key, next, version)
+      setRows(next)
+      return next
+    } catch (error) {
+      if (error.status !== 412) throw error
+    }
+  }
+  throw new Error('the collection kept changing')
 }
 
 function writeLink() {
@@ -224,11 +240,7 @@ function showWriting() {
     }
 
     const made = await api.createCard(area.value)
-    if (held) {
-      const next = [...rows(), made]
-      await api.writeCollection(held.id, held.key, next)
-      setRows(next)
-    }
+    if (held) await change(held, (current) => [...current, made])
     location.assign(`/r/${made.id}/${made.key}`)
   }
 
