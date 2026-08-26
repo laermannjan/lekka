@@ -6,28 +6,28 @@ PORT = "8080"
 DATA_DIR = "./data"
 
 [tasks.serve]
-description = "App und API auf $PORT, ohne Build"
+description = "App and API on $PORT, no build"
 run = "node server/main.js"
 
 [tasks.test]
-description = "Tests einmal laufen lassen"
+description = "Run the tests once"
 run = "node --test"
 
 [tasks.show]
-description = "Eine Karte im Terminal zeichnen"
+description = "Draw a card in the terminal"
 run = "node tools/show.mjs"
 
 [tasks.up]
-description = "Container bauen und starten (http://localhost:8380)"
+description = "Build and start the container (http://localhost:8380)"
 dir = "deploy"
 run = "docker compose up -d --build"
 
 [tasks.down]
-description = "Container stoppen"
+description = "Stop the container"
 dir = "deploy"
 run = "docker compose down"
 
 [tasks.logs]
-description = "Container-Logs verfolgen"
+description = "Follow the container logs"
 dir = "deploy"
 run = "docker compose logs -f"
