@@ -1,6 +1,6 @@
 @import url("/schrift/plex.css");
 
-/* Tokens aus NOTATION.md §4. Eine Schriftgröße, Hierarchie nur über Gewicht. */
+/* Eine Schriftgröße, Hierarchie nur über Gewicht, Farbe und Position. */
 :root {
   --ink: #1B1B19;
   --grau: #7A7A72;

@@ -1,7 +1,15 @@
 # How the app works
 
-Enough to rebuild it. The card format is in `FORMAT.md`, the look and the
-tree-to-table rules are in `NOTATION.md`. Both stay exactly as they are.
+Enough to rebuild it. What the other documents cover:
+
+| | |
+|---|---|
+| `FORMAT.md` | the card file |
+| `LAYOUT.md` | how a card becomes a table |
+| `STYLE.md` | colours, type, placement |
+| `CONVERTING.md` | turning an ordinary recipe into a card |
+
+All four stay exactly as they are.
 
 ## What it is
 
@@ -70,22 +78,6 @@ remove. Remove drops the link, not the card.
 
 **Card at `/r/…`.** Header with title, yield and notes. Below it a bar with
 scale (½× 1× 1½× 2×), views, and the actions. Then the card.
-
-## Look
-
-The card itself is specified in `NOTATION.md`. Around it:
-
-- **One frame.** The whole page is a single card on a paper-coloured ground,
-  bordered 2 px in the accent colour, at most about 1140 px wide.
-- **A header bar** in the accent colour: the title upper case and letter-spaced
-  on the left, yield and notes in a lighter tint on the right.
-- **A bar below it** on the page colour: scale on the left, views in the middle,
-  actions on the right, each group labelled in small grey capitals. Switches are
-  segmented buttons sharing one border, the active one filled with the accent.
-- **One type size everywhere**, including buttons. Hierarchy comes from weight
-  and colour only.
-- **The table scrolls sideways** inside the frame, the header stays.
-- **Printing** drops the bars and leaves the card.
 
 ## Editing
 

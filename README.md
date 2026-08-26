@@ -3,12 +3,15 @@
 Tabellarische Rezeptkarten. Ein Node-Prozess ohne Laufzeit-Abhängigkeiten,
 eine Karte je Datei, offline lesbar.
 
-- [FORMAT.md](FORMAT.md) erklärt das Kartenformat `.lekka`: wie eine Karte
+- [FORMAT.md](FORMAT.md) - das Kartenformat `.lekka`: wie eine Karte
   geschrieben und gelesen wird.
-- [ARCHITECTURE.md](ARCHITECTURE.md) beschreibt, wie die App funktioniert:
-  Teilen über Links, Ablage, Bearbeiten, Offline, und was bewusst fehlt.
-- [NOTATION.md](NOTATION.md) definiert, wie daraus eine Karte wird: Zeilen,
-  Spalten, Linien, und die Regeln für Verben und Zutatennamen.
+- [LAYOUT.md](LAYOUT.md) - wie aus einer Karte eine Tabelle wird: Zeilen,
+  Spalten, Zellhöhen, freie Flächen, Linien.
+- [STYLE.md](STYLE.md) - Farben, Schrift, Platzierung.
+- [CONVERTING.md](CONVERTING.md) - ein beliebiges Rezept in eine Karte
+  überführen.
+- [ARCHITECTURE.md](ARCHITECTURE.md) - wie die App funktioniert: Teilen über
+  Links, Ablage, Bearbeiten, Offline, und was bewusst fehlt.
 
 ## Rechte hängen am Link
 
@@ -93,7 +96,7 @@ Karten unter `$DATA_DIR`, in der Entwicklung in `data/` neben dem Quelltext.
 
 ```
 app/      alles, was der Browser bekommt
-  layout.js    Rezeptbaum → Raster (der Kern, siehe NOTATION.md)
+  layout.js    Rezeptbaum → Raster
   validate.js  Prüfung gegen rezeptkarte/1, läuft auch im Server
   liste.js     die Links dieses Geräts
 server/   HTTP und Ablage, eine Karte je Datei
