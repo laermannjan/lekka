@@ -5,6 +5,8 @@ eine Karte je Datei, offline lesbar.
 
 - [FORMAT.md](FORMAT.md) erklärt das Kartenformat `.lekka`: wie eine Karte
   geschrieben und gelesen wird.
+- [ARCHITECTURE.md](ARCHITECTURE.md) beschreibt, wie die App funktioniert:
+  Teilen über Links, Ablage, Bearbeiten, Offline, und was bewusst fehlt.
 - [NOTATION.md](NOTATION.md) definiert, wie daraus eine Karte wird: Zeilen,
   Spalten, Linien, und die Regeln für Verben und Zutatennamen.
 
