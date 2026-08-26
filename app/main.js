@@ -51,7 +51,10 @@ async function showOverview() {
   show(
     bar(writeLink(), label('Collection'), share(held)),
     note,
-    renderOverview(await describe(list), { onRemove: (id) => remove(held, list, id) }),
+    renderOverview(await describe(list), {
+      onRemove: (id) => remove(held, id),
+      onDelete: (id, key, card) => erase(held, id, key, card),
+    }),
   )
 }
 
@@ -192,9 +195,17 @@ function keeper(id, key) {
   return save
 }
 
-async function remove(held, list, id) {
+async function remove(held, id) {
   await change(held, (current) => current.filter((row) => row.id !== id))
   showOverview()
+}
+
+/** Removing drops the link. Deleting drops the card, for everyone holding one. */
+async function erase(held, id, key, card) {
+  const name = card ? card.title : id
+  if (!confirm(`Delete ${name} for everyone who has its link?`)) return
+  await api.deleteCard(id, key)
+  await remove(held, id)
 }
 
 /** Read, change, write, and start again if another device wrote in between. */

@@ -1,12 +1,12 @@
 /** One row per card link the collection holds. */
-export function renderOverview(entries, { onRemove } = {}) {
+export function renderOverview(entries, actions = {}) {
   const list = element('div', 'list')
   if (entries.length === 0) list.append(element('div', 'row', 'No cards yet.'))
-  for (const entry of entries) list.append(row(entry, onRemove))
+  for (const entry of entries) list.append(row(entry, actions))
   return list
 }
 
-function row({ id, key, card }, onRemove) {
+function row({ id, key, card }, { onRemove, onDelete }) {
   const line = element('div', 'row')
 
   const link = element('a', 'name', card ? card.title : id)
@@ -20,6 +20,11 @@ function row({ id, key, card }, onRemove) {
     const remove = element('button', 'quiet', 'Remove')
     remove.onclick = () => onRemove(id)
     line.append(remove)
+  }
+  if (onDelete && key) {
+    const erase = element('button', 'quiet', 'Delete')
+    erase.onclick = () => onDelete(id, key, card)
+    line.append(erase)
   }
   return line
 }

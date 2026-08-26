@@ -56,9 +56,8 @@ function shelf(directory, extension, nextId) {
       return { id, key }
     },
 
-    /** A file put here by hand has no envelope, and is served all the same. */
     async read(id) {
-      if (!/^[a-z0-9-]{1,64}$/.test(id ?? '')) return null
+      if (!(await meta(id))) return null
       return readFile(body(id), 'utf8').catch(() => null)
     },
 

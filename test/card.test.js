@@ -119,8 +119,8 @@ test('writing round-trips', () => {
 })
 
 test('the sample cards round-trip', () => {
-  for (const name of readdirSync('rezepte')) {
-    const text = readFileSync(`rezepte/${name}`, 'utf8')
+  for (const name of readdirSync('test/cards')) {
+    const text = readFileSync(`test/cards/${name}`, 'utf8')
     const card = parseCard(text)
     assert.deepEqual(parseCard(formatCard(card)), card, name)
     assert.equal(formatCard(parseCard(formatCard(card))), formatCard(card), name)

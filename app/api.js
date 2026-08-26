@@ -17,6 +17,10 @@ export async function writeCard(id, key, text) {
   return send('PUT', `/api/cards/${id}`, { key, body: text })
 }
 
+export async function deleteCard(id, key) {
+  return send('DELETE', `/api/cards/${id}`, { key })
+}
+
 export async function createCollection(rows = []) {
   return send('POST', '/api/collections', { body: JSON.stringify(rows) })
 }

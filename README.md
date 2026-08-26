@@ -37,7 +37,7 @@ Node 22 or newer. No dependencies, no build step.
 ```
 npm run serve        # http://localhost:8080
 npm test
-npm run show rezepte/erdkruste.lekka 2      # draw a card in the terminal, doubled
+npm run show test/cards/erdkruste.lekka 2   # draw a card in the terminal, doubled
 ```
 
 ## Deploying it
@@ -98,8 +98,9 @@ data/cards/dinkelquarkbrot-7kmq2rxvbn.meta.json    key hash and timestamps
 data/collections/purely-mellow-rhubarb-cypk.json
 ```
 
-The file name is the link. A `.lekka` file copied in by hand is served straight
-away at its own name, so seeding an instance is `cp`. Such a file has no key, so
-it can be read through the app and changed only with a text editor on the server.
+The file name is the link, so the directory can be read by eye. A card is the
+`.lekka` file and the `.meta.json` beside it; a server started against an
+existing directory needs nothing else, because there is no state anywhere but
+here.
 
 Back this directory up. It is the only copy.

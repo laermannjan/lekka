@@ -68,14 +68,13 @@ test('a title becomes a file name, and nothing else can', async () => {
     assert.equal(await cards.read(id), null, id)
 })
 
-test('a card put in the directory by hand is served at its name', async () => {
+test('a card is its file and the envelope beside it, both or neither', async () => {
   const where = await directory()
   const { cards } = await openStore(where).open()
   await writeFile(join(where, 'cards', 'erdkruste.lekka'), CARD)
 
-  assert.equal(await cards.read('erdkruste'), CARD)
+  assert.equal(await cards.read('erdkruste'), null)
   assert.equal(await cards.verify('erdkruste', ''), false)
-  assert.equal(await cards.write('erdkruste', '# B\n'), false)
 })
 
 test('the key is never stored, only its hash', async () => {

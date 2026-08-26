@@ -269,3 +269,46 @@ button.quiet:hover {
   line-height: 1.25;
   text-wrap: balance;
 }
+
+@media print {
+  body {
+    background: var(--white);
+    padding: 0;
+  }
+
+  .card {
+    border-width: 1px;
+    max-width: none;
+    min-width: 0;
+    width: auto;
+  }
+
+  .bar,
+  .panel,
+  .badge,
+  button {
+    display: none;
+  }
+
+  .head {
+    background: var(--white);
+    color: var(--ink);
+    padding: 0 0 8px;
+  }
+
+  .head p {
+    color: var(--grey);
+  }
+
+  .scroll {
+    overflow-x: visible;
+  }
+
+  .grid {
+    grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(0, 1fr));
+  }
+
+  .row {
+    break-inside: avoid;
+  }
+}

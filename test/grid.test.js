@@ -132,8 +132,8 @@ test('a free area is split where the step beside it changes', () => {
 })
 
 test('the invariants hold for the sample cards and for random trees', () => {
-  const cards = readdirSync('rezepte').map((name) =>
-    parseCard(readFileSync(`rezepte/${name}`, 'utf8')),
+  const cards = readdirSync('test/cards').map((name) =>
+    parseCard(readFileSync(`test/cards/${name}`, 'utf8')),
   )
   for (let seed = 0; seed < 200; seed++) {
     const root = randomNode(random(seed), 0)
