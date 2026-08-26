@@ -10,6 +10,7 @@ export class ParseError extends Error {
 
 const INDENT = 2
 
+/** .lekka text to a card. Throws ParseError on the first bad line. */
 export function parseCard(text) {
   const card = { title: null, yields: null, notes: [], preparations: [], root: null }
   const stack = []
@@ -94,6 +95,7 @@ function splitAside(text) {
   return match ? { text: match[1], aside: match[2] } : { text: text.trim(), aside: null }
 }
 
+/** A card to canonical .lekka text. Inverse of parseCard. */
 export function formatCard(card) {
   const lines = [withAside(`# ${card.title}`, card.yields)]
   for (const note of card.notes) lines.push(`> ${note}`)

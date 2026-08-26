@@ -2,6 +2,7 @@ const NUMBER = '\\d+(?:[.,]\\d+)?'
 const DASH = '-'
 const AMOUNT = new RegExp(`^(${NUMBER})(?:\\s*${DASH}\\s*(${NUMBER}))?(?:\\s+(.*))?$`)
 
+/** Text after the colon. null when the line had no colon at all. */
 export function parseAmount(text) {
   const trimmed = text.trim()
   if (trimmed === '') return null
@@ -25,6 +26,7 @@ export function formatAmount(amount) {
   return amount.unit ? `${number} ${amount.unit}` : number
 }
 
+/** Multiplies. Ranges scale from both ends, words never scale. */
 export function scaleAmount(amount, factor) {
   if (!amount || amount.kind === 'words') return amount
   if (amount.kind === 'range')
