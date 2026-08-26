@@ -26,17 +26,33 @@ Two parts, no build step:
 
 ## Rights hang on the link
 
-A card has two secrets, both generated when it is created:
+Two kinds of thing are stored, and both are addressed the same way:
 
 | Link | May |
 |---|---|
-| `/r/<id>` | read |
-| `/r/<id>/<key>` | read and write |
+| `/r/<id>` | read a card |
+| `/r/<id>/<key>` | read and write it |
+| `/c/<name>` | read a collection, with every key in it stripped out |
+| `/c/<name>/<key>` | read and write it; opening this adopts it on the device |
 
-`id` is 10 characters, `key` is 22, from an alphabet without look-alikes
-(no `0/O`, no `1/l/I`), drawn by rejection sampling so no character is more
-likely than another. The server stores **only a SHA-256 of the key** and
-compares in constant time.
+A **collection is a list of card links and nothing else.** Cards do not belong to
+it, so there is one permission rule for the whole system: do you hold the key for
+the thing you are touching. A row that carries a key is editable and says so;
+one without it is read-only.
+
+A card's `id` is its title as a slug, then 10 random characters. A collection's
+`name` is three words, then four. The slug and the words are for a human reading
+a directory listing or picking a bookmark out of a list; the random part is what
+makes the link unguessable. Both are lower case, because a case-blind filesystem
+would otherwise merge two ids into one file.
+
+The `key` is 22 characters. Everything random is drawn by rejection sampling from
+an alphabet without look-alikes, so no character is more likely than another. The
+server stores **only a SHA-256 of the key** and compares in constant time.
+
+A collection is written from more than one device, so a read returns an `ETag`
+and a write must name it with `If-Match`. A write built on a version somebody
+else has replaced is refused rather than silently overwriting them.
 
 There is no login, no session, no cookie. Consequences to keep:
 
@@ -50,9 +66,27 @@ There is no login, no session, no cookie. Consequences to keep:
 ## Storage
 
 One card is one file, named by its id. Get-by-id is the only access pattern, so
-a directory is the database. Next to the card the file keeps its envelope: id,
-key hash, created and updated timestamps. The envelope is not part of the card
-format.
+a directory is the database. Next to the card lies its envelope: the key hash,
+and when it was created, changed and last read. The envelope is not part of the
+card format.
+
+```
+data/cards/dinkelquarkbrot-7kmq2rxvbn.lekka
+data/cards/dinkelquarkbrot-7kmq2rxvbn.meta.json
+data/collections/purely-mellow-rhubarb-cypk.json
+```
+
+Collections are the same shelf with a different extension, so key hashing,
+atomic writes and expiry are written once and serve both.
+
+Every write goes to a temporary file and is renamed into place, which is atomic:
+a power cut leaves the old card or the new one, never half of either. Reading a
+record refreshes its `touched` stamp, at most once a day, so that an optional
+`TTL_DAYS` sweep can delete what nobody has opened without ever deleting what is
+in use. Unset, nothing is ever swept.
+
+There is no state anywhere else. A server started against an existing data
+directory is immediately serving every link in it.
 
 The directory is the only copy. It must be a volume, and it must be backed up.
 
@@ -71,28 +105,47 @@ editor changes a cell on screen and has to write it into the right node.
 
 ## Screens
 
-**Overview at `/`.** The list of links this browser knows, kept in
-`localStorage`. It is not a list of cards on the server, because there cannot be
-one. Each entry: the name links to reading, a separate link edits, plus copy and
-remove. Remove drops the link, not the card.
+**Overview at `/`.** The collection this browser holds, which it remembers in
+`localStorage` as a link, not as a list. The rows come from the server, because a
+collection is a thing on the server; what is local is only which collection you
+are using and a copy of what was in it, so the list still opens with no network.
+
+It is not a list of cards on the server, because there cannot be one. Each row:
+the name links to reading, a badge says whether you can edit it, `Remove` drops
+the link, `Delete` drops the card for everyone who holds one.
+
+Holding no collection, the overview offers to make one. Opening `/c/<name>`
+without its key shows somebody else's list and does **not** adopt it, since a
+device that cannot write to a collection has no business calling it its own.
+
+**Writing at `/new`.** A textarea holding a card as text. It parses before it
+sends, so a card that cannot be drawn is never stored.
 
 **Card at `/r/…`.** Header with title, yield and notes. Below it a bar with
-scale (½× 1× 1½× 2×), views, and the actions. Then the card.
+scale (½× 1× 1½× 2×), the actions, and `Save to collection` when the card is not
+in yours yet. Then the card.
 
 ## Editing
 
-Only with a key in the path. Then every field in the card becomes editable in
-place: title, preparation, verb, note, amount, unit, name, qualifier.
-
-Changes are collected, not sent. A counter shows how many fields differ from the
-saved card, one button saves, one discards. Live-saving every keystroke would
-publish half-typed words to everyone holding the read link.
+Only with a key in the path.
 
 Structure - inserting a step, moving a strand - is edited as `.lekka` text in a
-panel below the card. Value editing in the card, structure in the text: rewiring
-is rare, typos are frequent.
+panel below the card, which is what exists today. It parses before it saves, and
+the card above redraws while the panel stays open. Because indenting a strand by
+hand is the tedious part, the panel knows three things: tab and shift-tab move
+the selected lines, enter keeps the current indentation, and **wrap in step**
+takes the line under the cursor together with everything indented below it,
+which is exactly one subtree, and hangs it under a new step.
 
-Two rules learned the hard way:
+**Still to build:** every field editable in place - title, preparation, verb,
+note, amount, unit, name, qualifier. Value editing in the card, structure in the
+text: rewiring is rare, typos are frequent.
+
+Changes will be collected, not sent. A dirty flag decides whether saving does
+anything. Live-saving every keystroke would publish half-typed words to everyone
+holding the read link.
+
+Two rules learned the hard way, which apply when that lands:
 
 - After leaving a field, refresh **only that field** from the model. Redrawing
   the card replaces the element being clicked next, and the following keystroke
@@ -110,16 +163,35 @@ Its cache version is a hash of the app directory, computed by the server when it
 serves the worker. Changed file, new version; unchanged file, same version and
 the cache survives. Never a hand-maintained number.
 
-Offline you can read every card you have opened. Writing is refused with a clear
-message. The server stays the single source, so two devices on the same edit
-link cannot diverge.
+Offline you can read every card you have opened, because each one is kept in
+`localStorage` as it is fetched. Writing fails, and the overview says so. The
+server stays the single source, so two devices on the same edit link cannot
+diverge.
+
+Collection responses are never cached by the worker: the same URL answers
+differently depending on whether a key was sent, and a cached public copy with
+the keys stripped must never be handed back to a device that holds them.
 
 ## Deployment
 
-One container, `node:22-alpine`, non-root, read-only filesystem with a volume at
-the data directory. It serves the app and the API on one port. TLS belongs to a
-reverse proxy in front - a service worker needs a secure context, so without
-HTTPS the app runs but is neither offline-capable nor installable.
+One container, `node:22-alpine`, read-only filesystem with a volume at the data
+directory. It serves the app and the API on one port, and there is nothing else
+to run.
+
+The entrypoint is root only long enough to hand the data directory to the user
+the server will run as, `PUID`/`PGID`, and skips even that when the directory
+already belongs to them. Then it drops privileges and `exec`s the server, which
+is therefore PID 1 and shuts down cleanly on `SIGTERM`. This is what lets any
+mount work with no setup while the server itself never runs as root.
+
+The app never knows its own address: every request it makes is a root-relative
+path on its own origin. Put it behind any proxy under any name and nothing needs
+configuring.
+
+TLS belongs to that proxy - a service worker needs a secure context, so over
+plain HTTP the app runs but is neither offline-capable nor installable. On a
+private network a VPN with real certificates, such as Tailscale, is the least
+work.
 
 ## Testing
 
@@ -183,7 +255,11 @@ of these is our own bug to find.
 | Ingredients as objects with extra fields | A text line cannot carry them, so they could never be edited as text. One representation. |
 | Backup bundles of all cards including keys | Export one card as its file. The overview is a list of links; if it is lost, the links are lost, and that is what a backup of the data directory is for. |
 | A change counter with per-field diffing | A dirty flag is enough to decide whether "save" does anything. |
-| Recipes shipped inside the app | Cards are data, not code. |
+| Recipes shipped inside the app | Cards are data, not code. The sample cards live in the tests, where they are fixtures. |
+| Accounts, sessions, cookies | A collection link does what an account would, with nothing to reset and nothing to forget. |
+| An admin interface over the cards | The operator has the data directory; `ls`, `cat` and `rm` need no code and cannot be reached from the network. Reading other people's recipes is not a feature. |
+| A card belonging to a collection | Ownership would mean the server must know who holds what. A collection holds links, so the only question is ever whether you hold a key. |
+| A database | Get by id is the only access pattern, and rename is already atomic. A directory of text files can be grepped, diffed, rsynced and restored by hand. |
 
 ## What is worth adding, in this order
 
