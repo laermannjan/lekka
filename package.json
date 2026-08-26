@@ -7,6 +7,6 @@
   "scripts": {
     "test": "node --test",
     "show": "node tools/show.mjs",
-    "serve": "node tools/serve.mjs"
+    "serve": "node server/main.js"
   }
 }
