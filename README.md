@@ -42,9 +42,28 @@ npm run show test/cards/erdkruste.lekka 2   # draw a card in the terminal, doubl
 
 ## Deploying it
 
+Without cloning anything. Save this as `compose.yaml` and run
+`docker compose up -d`:
+
+```yaml
+services:
+  lekka:
+    image: ghcr.io/laermannjan/lekka:latest
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    ports: ["8380:8080"]
+    volumes: [lekka-data:/data]
+
+volumes:
+  lekka-data:
 ```
-cd deploy && docker compose up -d --build   # http://localhost:8380
-```
+
+From a checkout, `cd deploy && docker compose up -d` does the same, and
+uncommenting `build: ..` there builds the image yourself.
 
 One container, no database. **Read [the threat model](ARCHITECTURE.md#threat-model)
 first**: this is built for a network you already trust, a LAN or a VPN, and it is

@@ -1,7 +1,8 @@
 services:
   lekka:
-    build: ..
-    image: lekka
+    image: ghcr.io/laermannjan/lekka:latest
+    # To run your own build of the checkout instead, uncomment:
+    # build: ..
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]
