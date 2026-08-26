@@ -81,3 +81,5 @@ is no amount.
    title, a second outermost line, or indentation that skips a level.
 5. A preparation has nothing indented under it, and a step has at least one
    ingredient somewhere below it. Both are errors otherwise.
+6. Every line carries text of its own: a step needs a verb, an ingredient a
+   name, a preparation something to do. An empty one is an error.

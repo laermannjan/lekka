@@ -101,6 +101,12 @@ test('a preparation can hang under the step it precedes', () => {
   assert.deepEqual(parseCard(formatCard(card)), card)
 })
 
+test('every line needs its own text', () => {
+  assert.throws(() => parseCard('# A\n-\n  - c: 1\n'), ParseError)
+  assert.throws(() => parseCard('# A\n- a\n  - : 1\n'), ParseError)
+  assert.throws(() => parseCard('# A\n- a\n  *\n  - c: 1\n'), ParseError)
+})
+
 test('a preparation has no inputs, a step has an ingredient', () => {
   assert.throws(() => parseCard('# A\n- a\n  * b\n    - c: 1\n'), ParseError)
   assert.throws(() => parseCard('# A\n- a\n  * b\n'), ParseError)

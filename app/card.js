@@ -77,11 +77,14 @@ function parseHeadLine(card, marker, rest, number) {
 function toNode(raw) {
   if (raw.marker === '*') {
     if (raw.children.length > 0) throw new ParseError('A preparation has no inputs', raw.line)
-    return { kind: 'preparation', ...splitAside(raw.text) }
+    const { text, aside } = splitAside(raw.text)
+    if (text === '') throw new ParseError('A preparation needs a text', raw.line)
+    return { kind: 'preparation', text, aside }
   }
 
   if (raw.children.length > 0) {
     const { text, aside } = splitAside(raw.text)
+    if (text === '') throw new ParseError('A step needs a verb', raw.line)
     const children = raw.children.map(toNode)
     if (children.every((child) => child.kind === 'preparation'))
       throw new ParseError('A step needs an ingredient', raw.line)
@@ -91,6 +94,7 @@ function toNode(raw) {
   const colon = raw.text.indexOf(':')
   const head = colon === -1 ? raw.text : raw.text.slice(0, colon)
   const { text, aside } = splitAside(head)
+  if (text === '') throw new ParseError('An ingredient needs a name', raw.line)
   return {
     kind: 'ingredient',
     name: text,
