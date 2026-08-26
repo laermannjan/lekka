@@ -1,4 +1,4 @@
-import { parseAmount } from './amount.js'
+import { parseAmount, formatAmount } from './amount.js'
 
 export class ParseError extends Error {
   constructor(message, line) {
@@ -18,7 +18,7 @@ export function parseCard(text) {
   for (const { number, indent, body } of contentLines(text)) {
     if (body[0] !== '-') {
       if (indent > 0) throw new ParseError('Only steps and ingredients are indented', number)
-      readCardLine(card, body, number)
+      parseHeadLine(card, body, number)
       continue
     }
 
@@ -53,7 +53,7 @@ function* contentLines(text) {
   }
 }
 
-function readCardLine(card, body, number) {
+function parseHeadLine(card, body, number) {
   const rest = body.slice(1).trim()
   switch (body[0]) {
     case '#': {
@@ -92,4 +92,27 @@ function toNode(raw) {
 function splitAside(text) {
   const match = /^(.*?)\s*\(([^()]*)\)$/.exec(text.trim())
   return match ? { text: match[1], aside: match[2] } : { text: text.trim(), aside: null }
+}
+
+export function formatCard(card) {
+  const lines = [withAside(`# ${card.title}`, card.yields)]
+  for (const note of card.notes) lines.push(`> ${note}`)
+  for (const prep of card.preparations) lines.push(withAside(`* ${prep.text}`, prep.aside))
+  if (card.root) lines.push('', ...formatNode(card.root, 0))
+  return lines.join('\n') + '\n'
+}
+
+function* formatNode(node, level) {
+  const indent = '  '.repeat(level)
+  if (node.kind === 'step') {
+    yield withAside(`${indent}- ${node.verb}`, node.aside)
+    for (const child of node.children) yield* formatNode(child, level + 1)
+    return
+  }
+  const amount = formatAmount(node.amount)
+  yield withAside(`${indent}- ${node.name}`, node.aside) + (amount ? `: ${amount}` : '')
+}
+
+function withAside(text, aside) {
+  return aside === null || aside === undefined ? text : `${text} (${aside})`
 }

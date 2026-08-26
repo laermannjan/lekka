@@ -2,9 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 
-import { parseCard, ParseError } from '../app/core/parse.js'
-import { writeCard } from '../app/core/write.js'
-import { parseAmount, formatAmount, scaleAmount } from '../app/core/amount.js'
+import { parseCard, formatCard, ParseError } from '../app/card.js'
+import { parseAmount, formatAmount, scaleAmount } from '../app/amount.js'
 
 const PANCAKES = `# Pfannkuchen (12 Stück)
 > für Ida
@@ -85,15 +84,15 @@ test('errors carry the line', () => {
 
 test('writing round-trips', () => {
   const card = parseCard(PANCAKES)
-  assert.equal(writeCard(card), PANCAKES)
-  assert.deepEqual(parseCard(writeCard(card)), card)
+  assert.equal(formatCard(card), PANCAKES)
+  assert.deepEqual(parseCard(formatCard(card)), card)
 })
 
 test('the sample cards round-trip', () => {
   for (const name of readdirSync('rezepte')) {
     const text = readFileSync(`rezepte/${name}`, 'utf8')
     const card = parseCard(text)
-    assert.deepEqual(parseCard(writeCard(card)), card, name)
-    assert.equal(writeCard(parseCard(writeCard(card))), writeCard(card), name)
+    assert.deepEqual(parseCard(formatCard(card)), card, name)
+    assert.equal(formatCard(parseCard(formatCard(card))), formatCard(card), name)
   }
 })
