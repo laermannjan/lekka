@@ -38,25 +38,7 @@ Zwei Felder, visuell getrennt (Name in Textfarbe, Zusatz in Grau):
 
 Merkregel: Wenn du es im Laden nicht vorlesen würdest, gehört es in `qual`.
 
-**Eine Zutat schreibt sich `Name (Zusatz): Menge Einheit`.** Vor dem ersten
-Doppelpunkt steht, was sie ist, danach, wieviel:
-
-```
-Dinkelmehl: 300 g
-Hefe (frisch): 1 Würfel
-Rosmarin: 3 Zweige
-Pfeffer: nach Geschmack
-Haferflocken (grob)
-```
-
-Rechts ist die führende Zahl die Menge und alles Weitere die Einheit. Steht dort
-keine Zahl, ist alles zusammen die Menge - deshalb braucht es keine Liste
-bekannter Einheiten, und `3 Zweige` funktioniert wie `300 g`. Fehlt die Menge,
-fällt der Doppelpunkt weg.
-
-Eine Menge ist eine Zahl (`300`), eine Spanne (`40-60`), ein Text
-(`nach Geschmack`) oder nichts. Zahl und Spanne werden beim Skalieren
-mitgerechnet und im Einkauf zusammengezählt, ein Text bleibt stehen, wie er ist.
+Wie eine Zutatenzeile geschrieben wird, steht in [FORMAT.md §3](FORMAT.md).
 
 ---
 
@@ -116,71 +98,12 @@ verworfen: der Aufwand der Einordnung stand nicht im Verhältnis zum Ertrag.
 
 ## 5. Datenmodell
 
-```jsonc
-{
-  "title": "Dinkelquarkbrot",
-  "yield": "1 Kastenbrot",
-  "prep":  [ { "text": "Kastenform 30 cm einfetten" } ],
-  "rows":  [ { "amount": 300, "unit": "g", "name": "Dinkelmehl", "qual": "" } ],
-  "cells": [ { "col": 1, "row": 0, "span": 8, "colspan": 1,
-               "text": "vermengen", "note": "von Hand, Teig bleibt weich" } ]
-}
-```
-
-- `row` ist der Index der ersten Zutatenzeile, `span` die Anzahl Zeilen.
-- `col` beginnt bei 1 (Spalte 0 sind die Zutaten).
-- `amount: null` heißt „ohne Menge“, nicht „null“.
-- Skalierung wirkt auf `amount`; die gespeicherten Werte sind immer 1×.
-
-### Offene Punkte für die App
-
-1. **`ref` pro Zeile** — eine Zutaten-ID statt Gruppierung über den Namen.
-   Erst damit funktioniert die Einkaufsansicht bei unterschiedlich benannten
-   Verwendungen und über Einheitengrenzen hinweg.
-2. **`scalable: false`** für Zeilen wie „1 Würfel Hefe“, die beim Verdoppeln
-   nicht linear mitwachsen sollen.
-3. **Zeitfeld pro Zelle** (`duration`), damit sich ein Zeitplan rückwärts vom
-   gewünschten Anschnitt rechnen lässt. Bei Sauerteigen ist das der Punkt, an
-   dem die Karte mehr kann als Papier.
+Eine Karte ist ein Baum: der letzte Schritt ist die Wurzel, die Zutaten sind die
+Blätter, und das Raster entsteht daraus. Felder, Typen und die Textform stehen
+in [FORMAT.md](FORMAT.md) und werden dort von Tests festgehalten - dieses
+Dokument beschreibt die Notation, jenes die Datei.
 
 ---
-
-## 5a. Die Karte als Liste
-
-Dasselbe Rezept als Text, für alle, die lieber tippen als klicken. Keine eigene
-Sprache, sondern eine verschachtelte Liste, deren Verschachtelung genau die des
-Baums ist:
-
-```
-# Dinkelquarkbrot | 1 Kastenbrot
-* Kastenform 30 cm einfetten
-
-- backen 200 °C Heißluft 60 min | ohne Vorheizen, unterste Schiene
-  - in Form geben
-    - vermengen | von Hand, Teig bleibt weich
-      - 300 g Dinkelmehl
-      - 100 g Körner (z. B. Sonnenblumen)
-    - ausstreuen | in die gefettete Form
-      - Haferflocken (grob)
-```
-
-| Zeichen | Bedeutung |
-|---|---|
-| `#` | Titel, nach `\|` der Ertrag |
-| `>` | Anmerkung zur ganzen Karte |
-| `*` | Vorbereitung |
-| `-` | ein Punkt des Baums |
-| `\|` | trennt Verb und Hinweis |
-
-Die einzige Regel: **was eingerückt unter einem Punkt steht, fließt in ihn
-hinein.** Ein Punkt mit eingerückten Punkten darunter ist ein Schritt, ein Punkt
-ohne ist eine Zutat.
-
-Die Wurzel steht oben, der letzte Schritt also zuerst. Das ist die Ordnung des
-Baums und nicht die des Kochens; chronologisch liest man die Ansicht „Ablauf"
-oder die Karte selbst, die von links nach rechts läuft. Der Versuch, beides
-zugleich zu haben, kostet Sonderzeichen für die Frage, wo die Eingänge eines
-Schritts nach oben aufhören - und die sind teurer als die Umkehrung.
 
 ## 6. Ein Rezept überführen — Arbeitsablauf
 

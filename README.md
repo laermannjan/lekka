@@ -1,7 +1,12 @@
 # Lekka
 
 Tabellarische Rezeptkarten. Ein Node-Prozess ohne Laufzeit-Abhängigkeiten,
-eine Karte je Datei, offline lesbar. Zur Notation siehe [NOTATION.md](NOTATION.md).
+eine Karte je Datei, offline lesbar.
+
+- [FORMAT.md](FORMAT.md) beschreibt das Dateiformat: wie man eine Karte
+  schreibt und wie sie gespeichert wird. Jedes Beispiel darin wird getestet.
+- [NOTATION.md](NOTATION.md) beschreibt die Notation dahinter: warum eine Karte
+  ein Datenflussgraph ist, wie Schritte formuliert werden und wie sie aussieht.
 
 ## Rechte hängen am Link
 
