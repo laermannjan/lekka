@@ -1,6 +1,7 @@
-const NUMBER = '\\d+(?:[.,]\\d+)?'
-const DASH = '-'
-const AMOUNT = new RegExp(`^(${NUMBER})(?:\\s*${DASH}\\s*(${NUMBER}))?(?:\\s+(.*))?$`)
+const NUMBER = String.raw`\d+(?:[.,]\d+)?`
+const AMOUNT = new RegExp(
+  String.raw`^(?<from>${NUMBER})(?:\s*-\s*(?<to>${NUMBER}))?(?:\s+(?<unit>.*))?$`,
+)
 
 /** Text after the colon. null when the line had no colon at all. */
 export function parseAmount(text) {
@@ -10,7 +11,7 @@ export function parseAmount(text) {
   const match = AMOUNT.exec(trimmed)
   if (!match) return { kind: 'words', text: trimmed }
 
-  const [, from, to, unit = ''] = match
+  const { from, to, unit = '' } = match.groups
   return to === undefined
     ? { kind: 'number', value: toNumber(from), unit: unit.trim() }
     : { kind: 'range', from: toNumber(from), to: toNumber(to), unit: unit.trim() }

@@ -56,6 +56,32 @@ test('a short strand is pushed right, leaving a free area in front of it', () =>
   ])
 })
 
+test('a strand shorter than its sibling is pushed right, with its subtree', () => {
+  const grid = buildGrid(
+    parseCard(`# A
+
+- smoke
+  - refrigerate
+    - rub
+      - remove
+        - Ribs: 2
+      - Rub: 1
+  - heat
+    - soak
+      - Chips: 2
+`),
+  )
+  const columns = Object.fromEntries(grid.cells.map((cell) => [cell.node.verb, cell.column]))
+  assert.deepEqual(columns, {
+    smoke: 4,
+    refrigerate: 3,
+    rub: 2,
+    remove: 1,
+    heat: 3,
+    soak: 2,
+  })
+})
+
 test('the invariants hold for the sample cards and for random trees', () => {
   const cards = readdirSync('rezepte').map((name) =>
     parseCard(readFileSync(`rezepte/${name}`, 'utf8')),

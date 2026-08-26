@@ -31,7 +31,8 @@ function measure(node, rows, span) {
 
 function place(node, column, span, cells) {
   if (node.kind === 'ingredient') return
-  cells.push({ node, column, ...span.get(node), columnSpan: 1 })
+  const { row, rowSpan } = span.get(node)
+  cells.push({ node, column, columnSpan: 1, row, rowSpan })
   for (const child of node.children) place(child, column - 1, span, cells)
 }
 
