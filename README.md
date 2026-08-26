@@ -58,21 +58,23 @@ not hardened for the open internet.
 | `MAX_CARD_BYTES` | 65536 | largest card accepted |
 | `TTL_DAYS` | unset | delete what nobody has opened for this long; unset means never |
 
-The container has a read-only filesystem, no capabilities, and a named volume at
-`/data`. That needs no setup.
+The container has a read-only filesystem and a volume at `/data`. Mounting a
+directory of your own instead is one line in `compose.yaml`, and needs no
+`chown`:
 
-To keep the cards in a directory of your own instead, uncomment the bind mount in
-`compose.yaml` and tell the container who you are:
-
-```
-cd deploy
-cp .env.example .env
-printf 'PUID=%s\nPGID=%s\n' "$(id -u)" "$(id -g)" > .env
-docker compose up -d --build
+```yaml
+volumes:
+  - ./data:/data
 ```
 
-The server then runs as you, so a directory you created is already writable and
-nothing needs `chown`. The container never runs as root, not even to start.
+The entrypoint is root only long enough to hand `/data` to the user the server
+runs as, and skips even that when the directory already belongs to them. The
+server itself never runs as root. To have the cards owned by you rather than by
+uid 1000, put your own ids in `deploy/.env`:
+
+```
+printf 'PUID=%s\nPGID=%s\n' "$(id -u)" "$(id -g)" > deploy/.env
+```
 
 ## Links are the rights
 

@@ -1,21 +1,25 @@
 FROM node:22-alpine
 
+RUN apk add --no-cache su-exec
+
 WORKDIR /srv
 COPY package.json ./
 COPY app ./app
 COPY server ./server
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh && mkdir -p /data
 
 ENV NODE_ENV=production
 ENV DATA_DIR=/data
 ENV PORT=8080
+ENV PUID=1000
+ENV PGID=1000
 
-RUN mkdir -p /data && chown node:node /data
 VOLUME /data
-
-USER node
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
   CMD wget -q -O - http://127.0.0.1:8080/healthz || exit 1
 
+ENTRYPOINT ["/srv/entrypoint.sh"]
 CMD ["node", "server/main.js"]
