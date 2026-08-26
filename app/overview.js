@@ -1,62 +1,32 @@
-import { parseCard } from './card.js'
-import { ids, read, drop } from './library.js'
-
-/** The cards this browser holds. Calls back when one is removed. */
-export function renderOverview(onChange) {
-  const list = document.createElement('div')
-  list.className = 'list'
-
-  const entries = ids()
-    .map((id) => ({ id, card: parse(read(id)) }))
-    .sort((a, b) => title(a).localeCompare(title(b)))
-
-  if (entries.length === 0) list.append(empty('No cards yet. Add one below.'))
-  for (const entry of entries) list.append(cardRow(entry, onChange))
+/** One row per card link the collection holds. */
+export function renderOverview(entries, { onRemove } = {}) {
+  const list = element('div', 'list')
+  if (entries.length === 0) list.append(element('div', 'row', 'No cards yet.'))
+  for (const entry of entries) list.append(row(entry, onRemove))
   return list
 }
 
-function cardRow({ id, card }, onChange) {
-  const line = document.createElement('div')
-  line.className = 'row'
+function row({ id, key, card }, onRemove) {
+  const line = element('div', 'row')
 
-  const link = document.createElement('a')
-  link.href = `/r/${id}`
-  link.className = 'name'
-  link.textContent = card ? card.title : id
+  const link = element('a', 'name', card ? card.title : id)
+  link.href = key ? `/r/${id}/${key}` : `/r/${id}`
 
-  const aside = document.createElement('span')
-  aside.className = 'aside'
-  aside.textContent = card?.yields ?? 'unreadable'
+  const badge = element('span', key ? 'badge own' : 'badge', key ? 'editable' : 'read only')
+  const aside = element('span', 'aside', card?.yields ?? '')
 
-  const remove = document.createElement('button')
-  remove.className = 'quiet'
-  remove.textContent = 'Remove'
-  remove.onclick = () => {
-    if (confirm(`Remove ${card ? card.title : id}?`)) {
-      drop(id)
-      onChange()
-    }
+  line.append(link, badge, aside)
+  if (onRemove) {
+    const remove = element('button', 'quiet', 'Remove')
+    remove.onclick = () => onRemove(id)
+    line.append(remove)
   }
-
-  line.append(link, aside, remove)
   return line
 }
 
-function empty(text) {
-  const line = document.createElement('div')
-  line.className = 'row'
-  line.textContent = text
-  return line
-}
-
-function title({ id, card }) {
-  return card ? card.title : id
-}
-
-function parse(text) {
-  try {
-    return parseCard(text)
-  } catch {
-    return null
-  }
+function element(tag, className, text) {
+  const node = document.createElement(tag)
+  node.className = className
+  if (text !== undefined) node.textContent = text
+  return node
 }

@@ -127,8 +127,9 @@ test('a read keeps a record alive, but writes the envelope at most daily', async
   assert.equal(await touched(where, id), before)
 
   await age(where, id, 2)
+  const stale = await touched(where, id)
   await cards.touch(id)
-  assert.notEqual(await touched(where, id), before)
+  assert.notEqual(await touched(where, id), stale)
 })
 
 function envelopePath(where, id) {

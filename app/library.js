@@ -1,19 +1,39 @@
-const PREFIX = 'lekka:'
+const CURRENT = 'lekka:collection'
+const KNOWN = 'lekka:collections'
+const ROWS = 'lekka:rows'
+const CARD = 'lekka:card:'
 
-export function ids() {
-  return Object.keys(localStorage)
-    .filter((key) => key.startsWith(PREFIX))
-    .map((key) => key.slice(PREFIX.length))
+const load = (key, fallback) => JSON.parse(localStorage.getItem(key) ?? fallback)
+const save = (key, value) => localStorage.setItem(key, JSON.stringify(value))
+
+/** The collection this browser writes to, or null when it holds none. */
+export function collection() {
+  return load(CURRENT, 'null')
 }
 
-export function read(id) {
-  return localStorage.getItem(PREFIX + id)
+export function useCollection(entry) {
+  save(CURRENT, entry)
+  save(KNOWN, [entry, ...known().filter((other) => other.id !== entry.id)])
+  save(ROWS, [])
 }
 
-export function keep(id, text) {
-  localStorage.setItem(PREFIX + id, text)
+export function known() {
+  return load(KNOWN, '[]')
 }
 
-export function drop(id) {
-  localStorage.removeItem(PREFIX + id)
+export function rows() {
+  return load(ROWS, '[]')
+}
+
+export function setRows(list) {
+  save(ROWS, list)
+}
+
+/** A copy of every card seen, so a card opens again without a network. */
+export function cache(id, text) {
+  localStorage.setItem(CARD + id, text)
+}
+
+export function cached(id) {
+  return localStorage.getItem(CARD + id)
 }

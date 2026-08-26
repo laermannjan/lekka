@@ -124,6 +124,19 @@ body {
   flex: 1;
 }
 
+.badge {
+  background: var(--ground);
+  color: var(--grey);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.badge.own {
+  background: var(--preparation);
+  color: var(--accent);
+}
+
 .band {
   background: var(--preparation);
   border-bottom: 1px solid var(--line);
