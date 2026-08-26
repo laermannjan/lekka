@@ -1,5 +1,3 @@
-// A card → .lekka text. The inverse of parse.js: parse(write(card)) is card.
-
 import { formatAmount } from './amount.js'
 
 export function writeCard(card) {

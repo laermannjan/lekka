@@ -1,11 +1,3 @@
-// .lekka text → a card. See FORMAT.md.
-//
-// card        { title, yields, notes, preparations, root }
-// step        { kind: 'step', verb, aside, children }
-// ingredient  { kind: 'ingredient', name, aside, amount }
-//
-// A line with indented lines under it is a step, one without is an ingredient.
-
 import { parseAmount } from './amount.js'
 
 export class ParseError extends Error {
@@ -20,12 +12,10 @@ const INDENT = 2
 
 export function parseCard(text) {
   const card = { title: null, yields: null, notes: [], preparations: [], root: null }
-  const stack = [] // stack[level] = the raw node opened at that level
+  const stack = []
   let root = null
 
-  for (const line of contentLines(text)) {
-    const { number, indent, body } = line
-
+  for (const { number, indent, body } of contentLines(text)) {
     if (body[0] !== '-') {
       if (indent > 0) throw new ParseError('Only steps and ingredients are indented', number)
       readCardLine(card, body, number)
@@ -52,7 +42,6 @@ export function parseCard(text) {
   return card
 }
 
-/** Non-blank lines, with their indent and number. */
 function* contentLines(text) {
   for (const [index, content] of text.split('\n').entries()) {
     if (content.trim() === '') continue
@@ -79,11 +68,10 @@ function readCardLine(card, body, number) {
     case '*':
       return void card.preparations.push(splitAside(rest))
     default:
-      throw new ParseError(`A line starts with #, >, * or -`, number)
+      throw new ParseError('A line starts with #, >, * or -', number)
   }
 }
 
-/** A raw node becomes a step if it has children, an ingredient if not. */
 function toNode(raw) {
   if (raw.children.length > 0) {
     const { text, aside } = splitAside(raw.text)
@@ -101,7 +89,6 @@ function toNode(raw) {
   }
 }
 
-/** `Mehl (Type 550)` → text `Mehl`, aside `Type 550`. */
 function splitAside(text) {
   const match = /^(.*?)\s*\(([^()]*)\)$/.exec(text.trim())
   return match ? { text: match[1], aside: match[2] } : { text: text.trim(), aside: null }
