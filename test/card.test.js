@@ -23,7 +23,9 @@ test('the card head', () => {
   assert.equal(card.title, 'Pfannkuchen')
   assert.equal(card.yields, '12 Stück')
   assert.deepEqual(card.notes, ['für Ida'])
-  assert.deepEqual(card.preparations, [{ text: 'Pfanne vorheizen', aside: null }])
+  assert.deepEqual(card.preparations, [
+    { kind: 'preparation', text: 'Pfanne vorheizen', aside: null },
+  ])
 })
 
 test('children make a step, their absence an ingredient', () => {
@@ -80,6 +82,28 @@ test('errors carry the line', () => {
   } catch (error) {
     assert.equal(error.line, 3)
   }
+})
+
+test('a preparation can hang under the step it precedes', () => {
+  const card = parseCard(`# A
+
+- backen
+  * Ofen vorheizen (200 °C)
+  - in Form geben
+    - Teig: 1
+`)
+  assert.deepEqual(card.root.children[0], {
+    kind: 'preparation',
+    text: 'Ofen vorheizen',
+    aside: '200 °C',
+  })
+  assert.equal(formatCard(card).includes('  * Ofen vorheizen (200 °C)'), true)
+  assert.deepEqual(parseCard(formatCard(card)), card)
+})
+
+test('a preparation has no inputs, a step has an ingredient', () => {
+  assert.throws(() => parseCard('# A\n- a\n  * b\n    - c: 1\n'), ParseError)
+  assert.throws(() => parseCard('# A\n- a\n  * b\n'), ParseError)
 })
 
 test('writing round-trips', () => {

@@ -82,13 +82,39 @@ test('a strand shorter than its sibling is pushed right, with its subtree', () =
   })
 })
 
+test('preparations sit over the step they precede, packed into band rows', () => {
+  const { band, columns } = buildGrid(
+    parseCard(`# A
+* Kohle kaufen
+
+- glasieren
+  * Grill direkt heizen
+  - räuchern
+    * Grill indirekt heizen
+    - Rippen: 2
+  - Sauce: 1
+`),
+  )
+  assert.equal(columns, 2)
+  assert.deepEqual(
+    band.map((row) => row.map((entry) => [entry.node.text, entry.column, entry.columnSpan])),
+    [
+      [['Kohle kaufen', 0, 3]],
+      [
+        ['Grill indirekt heizen', 1, 1],
+        ['Grill direkt heizen', 2, 1],
+      ],
+    ],
+  )
+})
+
 test('the invariants hold for the sample cards and for random trees', () => {
   const cards = readdirSync('rezepte').map((name) =>
     parseCard(readFileSync(`rezepte/${name}`, 'utf8')),
   )
   for (let seed = 0; seed < 200; seed++) {
     const root = randomNode(random(seed), 0)
-    if (root.kind === 'step') cards.push({ root })
+    if (root.kind === 'step') cards.push({ root, preparations: [] })
   }
 
   for (const card of cards) checkInvariants(buildGrid(card))

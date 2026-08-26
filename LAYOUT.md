@@ -91,8 +91,10 @@ the grid is simply blank.
 
 Above the ingredient rows, in this order:
 
-1. one row per **preparation**, each spanning the full width of the grid so it
-   travels along when the grid is scrolled sideways,
+1. the **preparations**. One that belongs to a step sits in that step's column;
+   one written at the outermost level spans the full width, so it travels along
+   when the grid is scrolled sideways. Preparations whose columns do not touch
+   share a band row, otherwise a new row opens below.
 2. a **header row**: a label over the ingredient column, then the columns
    numbered from `01`.
 

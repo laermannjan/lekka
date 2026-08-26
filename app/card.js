@@ -17,17 +17,19 @@ export function parseCard(text) {
   let root = null
 
   for (const { number, indent, body } of contentLines(text)) {
-    if (body[0] !== '-') {
-      if (indent > 0) throw new ParseError('Only steps and ingredients are indented', number)
-      parseHeadLine(card, body, number)
+    const marker = body[0]
+    if (indent === 0 && marker !== '-') {
+      parseHeadLine(card, marker, body.slice(1).trim(), number)
       continue
     }
+    if (marker !== '-' && marker !== '*')
+      throw new ParseError('Only steps, ingredients and preparations are indented', number)
 
     if (indent % INDENT !== 0) throw new ParseError('Indent by two spaces per level', number)
     const level = indent / INDENT
     if (level > stack.length) throw new ParseError('Indentation skips a level', number)
 
-    const node = { text: body.slice(1).trim(), line: number, children: [] }
+    const node = { marker, text: body.slice(1).trim(), line: number, children: [] }
     if (level === 0) {
       if (root) throw new ParseError('A card has one outermost line', number)
       root = node
@@ -54,9 +56,8 @@ function* contentLines(text) {
   }
 }
 
-function parseHeadLine(card, body, number) {
-  const rest = body.slice(1).trim()
-  switch (body[0]) {
+function parseHeadLine(card, marker, rest, number) {
+  switch (marker) {
     case '#': {
       if (card.title) throw new ParseError('A card has one title', number)
       const { text, aside } = splitAside(rest)
@@ -67,16 +68,24 @@ function parseHeadLine(card, body, number) {
     case '>':
       return void card.notes.push(rest)
     case '*':
-      return void card.preparations.push(splitAside(rest))
+      return void card.preparations.push({ kind: 'preparation', ...splitAside(rest) })
     default:
       throw new ParseError('A line starts with #, >, * or -', number)
   }
 }
 
 function toNode(raw) {
+  if (raw.marker === '*') {
+    if (raw.children.length > 0) throw new ParseError('A preparation has no inputs', raw.line)
+    return { kind: 'preparation', ...splitAside(raw.text) }
+  }
+
   if (raw.children.length > 0) {
     const { text, aside } = splitAside(raw.text)
-    return { kind: 'step', verb: text, aside, children: raw.children.map(toNode) }
+    const children = raw.children.map(toNode)
+    if (children.every((child) => child.kind === 'preparation'))
+      throw new ParseError('A step needs an ingredient', raw.line)
+    return { kind: 'step', verb: text, aside, children }
   }
 
   const colon = raw.text.indexOf(':')
@@ -106,6 +115,10 @@ export function formatCard(card) {
 
 function* formatNode(node, level) {
   const indent = '  '.repeat(level)
+  if (node.kind === 'preparation') {
+    yield withAside(`${indent}* ${node.text}`, node.aside)
+    return
+  }
   if (node.kind === 'step') {
     yield withAside(`${indent}- ${node.verb}`, node.aside)
     for (const child of node.children) yield* formatNode(child, level + 1)

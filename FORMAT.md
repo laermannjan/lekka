@@ -51,11 +51,16 @@ From that one rule everything follows:
 |---|---|
 | `# Pfannkuchen (12 Stück)` | title, and in brackets what it yields. Exactly one |
 | `> made this for Ida's birthday` | a note about the whole card. Any number |
-| `* Ofen auf 200 °C vorheizen` | something you do that flows nowhere |
+| `* Ofen auf 200 °C vorheizen` | a preparation: something you do that flows nowhere |
 | `- verrühren (von Hand)` | a step: verb first, remark in brackets |
 | `- Mehl (Type 550): 250 g` | an ingredient: name, remark, then the amount |
 
 Indent by two spaces per level. Blank lines mean nothing.
+
+A preparation may stand at the outermost level, and then it comes before
+everything, or be indented under a step, and then it comes before that step. It
+is read like any other indented line: what is under a step happens before it. It
+simply brings no ingredient with it, so it gets no row.
 
 **Brackets always hold the same kind of thing:** the aside. What it yields, how
 to do it, which sort of flour.
@@ -74,3 +79,5 @@ is no amount.
 3. Numbers may be `2`, `2,5`, `½`, `1½`. Ranges are `40-60`.
 4. Anything not matching a `#`, `>`, `*` or `-` line is an error, as is a second
    title, a second outermost line, or indentation that skips a level.
+5. A preparation has nothing indented under it, and a step has at least one
+   ingredient somewhere below it. Both are errors otherwise.

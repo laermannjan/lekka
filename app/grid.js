@@ -1,16 +1,23 @@
 /** A card to the table that draws it. Columns are numbered from 1; column 0 is the ingredients. */
 export function buildGrid(card) {
   const rows = []
-  if (!card.root) return { rows, cells: [], frees: [], columns: 0 }
+  if (!card.root) return { rows, cells: [], frees: [], band: [], columns: 0 }
 
   const span = new Map()
   measure(card.root, rows, span)
 
   const cells = []
+  const attached = []
   const columns = span.get(card.root).column
-  place(card.root, columns, span, cells)
+  place(card.root, columns, span, cells, attached)
 
-  return { rows, cells, frees: findFrees(occupy(rows, cells, columns)), columns }
+  return {
+    rows,
+    cells,
+    frees: findFrees(occupy(rows, cells, columns)),
+    band: buildBand(card.preparations, attached, columns),
+    columns,
+  }
 }
 
 function measure(node, rows, span) {
@@ -23,17 +30,39 @@ function measure(node, rows, span) {
 
   let column = 0
   for (const child of node.children) {
+    if (child.kind === 'preparation') continue
     measure(child, rows, span)
     column = Math.max(column, span.get(child).column)
   }
   span.set(node, { row, rowSpan: rows.length - row, column: column + 1 })
 }
 
-function place(node, column, span, cells) {
+function place(node, column, span, cells, attached) {
   if (node.kind === 'ingredient') return
   const { row, rowSpan } = span.get(node)
   cells.push({ node, column, columnSpan: 1, row, rowSpan })
-  for (const child of node.children) place(child, column - 1, span, cells)
+  for (const child of node.children)
+    if (child.kind === 'preparation') attached.push({ node: child, column, columnSpan: 1 })
+    else place(child, column - 1, span, cells, attached)
+}
+
+function buildBand(global, attached, columns) {
+  const entries = [
+    ...global.map((node) => ({ node, column: 0, columnSpan: columns + 1 })),
+    ...attached.sort((a, b) => a.column - b.column),
+  ]
+
+  const band = []
+  for (const entry of entries) {
+    const row = band.find((row) => row.every((other) => !overlaps(other, entry)))
+    if (row) row.push(entry)
+    else band.push([entry])
+  }
+  return band
+}
+
+function overlaps(a, b) {
+  return a.column < b.column + b.columnSpan && b.column < a.column + a.columnSpan
 }
 
 function occupy(rows, cells, columns) {
