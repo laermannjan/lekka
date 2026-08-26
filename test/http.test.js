@@ -5,6 +5,8 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { mkdir, writeFile } from 'node:fs/promises'
+
 import { openStore } from '../server/store.js'
 import { handler } from '../server/http.js'
 
@@ -165,6 +167,25 @@ test('a body larger than the limit is refused', async (t) => {
 
   const big = await call('/api/cards', { method: 'POST', body: `# A\n> ${'x'.repeat(200)}\n` })
   assert.equal(big.status, 413)
+})
+
+test('the worker is served with a version taken from the app', async (t) => {
+  const app = await mkdtemp(join(tmpdir(), 'lekka-app-'))
+  await writeFile(join(app, 'sw.js'), "const CACHE = 'lekka-%VERSION%'\n")
+  await writeFile(join(app, 'main.js'), 'one\n')
+
+  const { call, close } = await serve({ app })
+  t.after(close)
+
+  const first = await (await call('/sw.js')).text()
+  const [, digest] = first.match(/lekka-([0-9a-f]{12})/)
+  assert.equal(first.includes('%VERSION%'), false)
+
+  assert.equal(await (await call('/sw.js')).text(), first)
+
+  await writeFile(join(app, 'main.js'), 'two\n')
+  const second = await (await call('/sw.js')).text()
+  assert.notEqual(second.match(/lekka-([0-9a-f]{12})/)[1], digest)
 })
 
 test('every answer carries the headers that stop a link leaking', async (t) => {

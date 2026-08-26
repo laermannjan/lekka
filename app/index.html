@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>lekka</title>
+    <meta name="theme-color" content="#1E6B4C" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
@@ -15,5 +19,9 @@
       <div id="screen"></div>
     </article>
     <script type="module" src="/main.js"></script>
+    <script>
+      // Fails quietly without a secure context, which is what plain http gives.
+      navigator.serviceWorker?.register('/sw.js').catch(() => {})
+    </script>
   </body>
 </html>

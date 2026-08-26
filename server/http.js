@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
 import { parseCard, ParseError } from '../app/card.js'
@@ -50,6 +50,7 @@ async function route(store, options, request, response) {
   const key = bearer(request)
 
   if (path === '/healthz') return send(response, 200, 'text/plain', 'ok')
+  if (path === '/sw.js') return worker(options.app, response)
 
   if (path === '/api/cards' || path === '/api/collections') {
     if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
@@ -179,6 +180,25 @@ async function body(request, { maxBytes }) {
     if (text.length > maxBytes) throw new Refusal(413, 'too large')
   }
   return text
+}
+
+/** The worker's cache version is a hash of the app, so a changed file is a new cache. */
+async function worker(app, response) {
+  if (!app) throw missing()
+  const source = await readFile(join(app, 'sw.js'), 'utf8')
+  send(response, 200, TYPES['.js'], source.replace('%VERSION%', await version(app)), {
+    'cache-control': 'no-cache',
+    'service-worker-allowed': '/',
+  })
+}
+
+async function version(app) {
+  const digest = createHash('sha256')
+  for (const name of (await readdir(app)).sort()) {
+    digest.update(name)
+    digest.update(await readFile(join(app, name)))
+  }
+  return digest.digest('hex').slice(0, 12)
 }
 
 async function statics(app, path, response) {
