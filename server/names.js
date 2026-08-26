@@ -1,11 +1,16 @@
 import { newId } from '../app/id.js'
 
-const TASTES = `wuerzig herzhaft suess salzig sauer bitter rauchig nussig fruchtig
-cremig knusprig saftig zart deftig frisch mild scharf kraeftig buttrig honigsuess`.split(/\s+/)
+const DEGREES = `incredibly deeply subtly wildly truly gently boldly quietly richly
+purely freshly softly warmly briskly utterly madly sweetly keenly hugely nimbly
+barely fiercely oddly plainly`.split(/\s+/)
 
-const FOODS = `safran anis fenchel kardamom kuemmel lorbeer majoran muskat oregano
-paprika pfeffer rosmarin salbei thymian vanille zimt basilikum estragon ingwer koriander
-haferflocke walnuss quitte mirabelle holunder rhabarber`.split(/\s+/)
+const TASTES = `delicious savoury smoky nutty fruity creamy crispy juicy tender hearty
+spicy buttery honeyed tangy zesty salty peppery toasty silky syrupy sharp mellow
+crumbly golden`.split(/\s+/)
+
+const FOODS = `oatmeal saffron walnut quince rhubarb cinnamon pepper basil ginger
+vanilla elderberry thyme sage fennel cardamom coriander chestnut apricot plum barley
+buckwheat hazelnut mustard fig`.split(/\s+/)
 
 const UMLAUTS = { ä: 'ae', ö: 'oe', ü: 'ue', ß: 'ss' }
 
@@ -15,7 +20,7 @@ export function cardId(title) {
 }
 
 export function collectionId() {
-  return `${pick(TASTES)}-${pick(FOODS)}-${newId(4)}`
+  return `${pick(DEGREES)}-${pick(TASTES)}-${pick(FOODS)}-${newId(4)}`
 }
 
 export function slug(title) {

@@ -35,7 +35,7 @@ test('a collection is the same shelf with a readable name', async () => {
   const rows = JSON.stringify([{ id: '7kmqR2xvbn' }])
   const { id, key } = await collections.create(rows)
 
-  assert.match(id, /^[a-z]+-[a-z]+-[a-z0-9]{4}$/)
+  assert.match(id, /^[a-z]+-[a-z]+-[a-z]+-[a-z0-9]{4}$/)
   assert.equal(key.length, 22)
   assert.equal(await collections.read(id), rows)
 })
