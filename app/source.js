@@ -20,7 +20,11 @@ export function editable(area) {
 export function wrapInStep(area) {
   const lines = area.value.split('\n')
   const [first, last] = block(lines, area)
-  const base = Math.min(...lines.slice(first, last + 1).filter(Boolean).map(indent))
+  const indents = lines
+    .slice(first, last + 1)
+    .filter(Boolean)
+    .map(indent)
+  const base = indents.length ? Math.min(...indents) : 0
 
   const wrapped = lines.slice(first, last + 1).map((line) => (line ? INDENT + line : line))
   const step = `${' '.repeat(base)}- `

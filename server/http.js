@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
@@ -47,8 +47,16 @@ class Refusal extends Error {
 /** A wrong key and a card that is not there answer the same, so neither can be probed for. */
 const missing = () => new Refusal(404, 'not found')
 
+function decode(path) {
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    throw new Refusal(400, 'bad path')
+  }
+}
+
 async function route(store, options, request, response) {
-  const path = decodeURIComponent(new URL(request.url, 'http://lekka').pathname)
+  const path = decode(new URL(request.url, 'http://lekka').pathname)
   const key = bearer(request)
 
   if (path === '/healthz') return send(response, 200, 'text/plain', 'ok')
@@ -167,7 +175,14 @@ function strip(list) {
 }
 
 function allowed({ createToken }, request) {
-  if (createToken && bearer(request) !== createToken) throw new Refusal(401, 'token required')
+  if (createToken && !same(bearer(request) ?? '', createToken))
+    throw new Refusal(401, 'token required')
+}
+
+function same(a, b) {
+  const left = Buffer.from(a, 'utf8')
+  const right = Buffer.from(b, 'utf8')
+  return left.length === right.length && timingSafeEqual(left, right)
 }
 
 function bearer(request) {
@@ -176,12 +191,15 @@ function bearer(request) {
 }
 
 async function body(request, { maxBytes }) {
-  let text = ''
+  const chunks = []
+  let bytes = 0
   for await (const chunk of request) {
-    text += chunk
-    if (text.length > maxBytes) throw new Refusal(413, 'too large')
+    bytes += chunk.length
+    if (bytes > maxBytes) throw new Refusal(413, 'too large')
+    chunks.push(chunk)
   }
-  return text
+  /** A character can straddle two chunks, so the bytes are decoded together or not at all. */
+  return Buffer.concat(chunks).toString('utf8')
 }
 
 /** The worker's cache version is a hash of the app, so a changed file is a new cache. */

@@ -52,7 +52,10 @@ self.addEventListener('fetch', (event) => {
 async function fallback(request) {
   const hit = await caches.match(request)
   if (hit) return hit
-  if (request.mode === 'navigate') return caches.match('/')
+  if (request.mode === 'navigate') {
+    const shell = await caches.match('/')
+    if (shell) return shell
+  }
   return Response.error()
 }
 

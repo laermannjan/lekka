@@ -4,6 +4,7 @@ import { createServer } from 'node:http'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { mkdir, writeFile } from 'node:fs/promises'
 
@@ -186,6 +187,23 @@ test('the worker is served with a version taken from the app', async (t) => {
   await writeFile(join(app, 'main.js'), 'two\n')
   const second = await (await call('/sw.js')).text()
   assert.notEqual(second.match(/lekka-([0-9a-f]{12})/)[1], digest)
+})
+
+test('the page holds no inline script, because the policy would refuse it', async (t) => {
+  const app = fileURLToPath(new URL('../app', import.meta.url))
+  const { call, close } = await serve({ app })
+  t.after(close)
+
+  const page = await call('/')
+  const policy = page.headers.get('content-security-policy')
+  assert.equal(policy.includes("'unsafe-inline'"), false)
+
+  const html = await page.text()
+  const inline = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter(
+    ([, attributes, source]) => !/\bsrc=/.test(attributes) && source.trim() !== '',
+  )
+  assert.deepEqual(inline, [])
+  assert.match(html, /<script[^>]+src="\/main\.js"/)
 })
 
 test('every answer carries the headers that stop a link leaking', async (t) => {

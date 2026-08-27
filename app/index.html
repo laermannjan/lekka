@@ -19,9 +19,5 @@
       <div id="screen"></div>
     </article>
     <script type="module" src="/main.js"></script>
-    <script>
-      // Fails quietly without a secure context, which is what plain http gives.
-      navigator.serviceWorker?.register('/sw.js').catch(() => {})
-    </script>
   </body>
 </html>

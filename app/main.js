@@ -21,6 +21,7 @@ const CARD = /^\/r\/([^/]+)(?:\/([^/]+))?/
 const COLLECTION = /^\/c\/([^/]+)(?:\/([^/]+))?/
 
 start()
+register()
 
 async function start() {
   const path = location.pathname
@@ -319,6 +320,14 @@ function scales(id, key, scale) {
     group.append(button)
   }
   return group
+}
+
+/**
+ * The worker lives here and not in a tag in the page, because the policy the server sends
+ * allows no inline script. Registering fails without a secure context, which plain http gives.
+ */
+function register() {
+  navigator.serviceWorker?.register('/sw.js').catch((error) => console.warn('no worker', error))
 }
 
 function element(tag, className = '', text, children = []) {
