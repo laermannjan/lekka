@@ -52,7 +52,9 @@ server stores **only a SHA-256 of the key** and compares in constant time.
 
 A collection is written from more than one device, so a read returns an `ETag`
 and a write must name it with `If-Match`. A write built on a version somebody
-else has replaced is refused rather than silently overwriting them.
+else has replaced is refused rather than silently overwriting them. Checking the
+version and writing is one move: writes to the same collection are held in a
+chain, or both devices would read the same tag and both pass the check.
 
 There is no login, no session, no cookie. Consequences to keep:
 
@@ -83,7 +85,9 @@ Every write goes to a temporary file and is renamed into place, which is atomic:
 a power cut leaves the old card or the new one, never half of either. Reading a
 record refreshes its `touched` stamp, at most once a day, so that an optional
 `TTL_DAYS` sweep can delete what nobody has opened without ever deleting what is
-in use. Unset, nothing is ever swept.
+in use. Unset, nothing is ever swept. The sweep also reaps what an interrupted
+write left behind - a body with no envelope, a temporary whose rename never
+happened - since nothing can reach either.
 
 There is no state anywhere else. A server started against an existing data
 directory is immediately serving every link in it.
