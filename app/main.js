@@ -131,7 +131,13 @@ function panel(id, key, text, scale) {
       message.hidden = false
       return
     }
-    await api.writeCard(id, key, area.value)
+    try {
+      await api.writeCard(id, key, area.value)
+    } catch (error) {
+      message.textContent = `Not saved. ${reason(error)}`
+      message.hidden = false
+      return
+    }
     cache(id, area.value)
     showCard(id, key, scale, true)
   }
@@ -174,7 +180,11 @@ function keeper(id, key) {
   if (!held) {
     const create = element('button', 'quiet', 'Save to a new collection')
     create.onclick = async () => {
-      const made = await api.createCollection([{ id, ...(key ? { key } : {}) }])
+      const made = await attempt(
+        () => api.createCollection([{ id, ...(key ? { key } : {}) }]),
+        'The collection was not made.',
+      )
+      if (made === FAILED) return
       useCollection(made)
       location.assign('/')
     }
@@ -187,17 +197,26 @@ function keeper(id, key) {
 
   const save = element('button', 'quiet', found ? 'Keep the edit link' : 'Save to collection')
   save.onclick = async () => {
-    await change(held, (current) => [
-      ...current.filter((row) => row.id !== id),
-      { id, ...(key ? { key } : {}) },
-    ])
+    const done = await attempt(
+      () =>
+        change(held, (current) => [
+          ...current.filter((row) => row.id !== id),
+          { id, ...(key ? { key } : {}) },
+        ]),
+      'The collection was not changed.',
+    )
+    if (done === FAILED) return
     showCard(id, key)
   }
   return save
 }
 
 async function remove(held, id) {
-  await change(held, (current) => current.filter((row) => row.id !== id))
+  const done = await attempt(
+    () => change(held, (current) => current.filter((row) => row.id !== id)),
+    'The card was not removed.',
+  )
+  if (done === FAILED) return
   showOverview()
 }
 
@@ -205,7 +224,7 @@ async function remove(held, id) {
 async function erase(held, id, key, card) {
   const name = card ? card.title : id
   if (!confirm(`Delete ${name} for everyone who has its link?`)) return
-  await api.deleteCard(id, key)
+  if ((await attempt(() => api.deleteCard(id, key), 'The card was not deleted.')) === FAILED) return
   await remove(held, id)
 }
 
@@ -251,9 +270,18 @@ function showWriting() {
       )
     }
 
-    const made = await api.createCard(area.value)
-    if (held) await change(held, (current) => [...current, made])
-    location.assign(`/r/${made.id}/${made.key}`)
+    const made = await attempt(() => api.createCard(area.value), 'The card was not created.')
+    if (made === FAILED) return
+
+    const link = `/r/${made.id}/${made.key}`
+    if (held) {
+      const kept = await attempt(
+        () => change(held, (current) => [...current, made]),
+        'The card was made, but not put in your collection.',
+      )
+      if (kept === FAILED) return notice(`Its link is ${link}`)
+    }
+    location.assign(link)
   }
 
   show(bar(back(), create, wrapper(area)), area)
@@ -265,7 +293,9 @@ function welcome() {
   const line = element('div', 'row')
   const create = element('button', 'quiet', 'Create a collection')
   create.onclick = async () => {
-    useCollection(await api.createCollection([]))
+    const made = await attempt(() => api.createCollection([]), 'The collection was not made.')
+    if (made === FAILED) return
+    useCollection(made)
     showOverview()
   }
   line.append(create, element('span', 'aside', 'or open the link to one you already have'))
@@ -277,6 +307,30 @@ function share(held) {
   const link = element('a', 'name', 'Link for another device')
   link.href = `/c/${held.id}/${held.key}`
   return link
+}
+
+const FAILED = Symbol('failed')
+
+/** A write that does not arrive is said out loud, never swallowed. */
+async function attempt(work, message) {
+  try {
+    return await work()
+  } catch (error) {
+    notice(`${message} ${reason(error)}`)
+    return FAILED
+  }
+}
+
+function reason(error) {
+  if (error instanceof api.ApiError)
+    return error.status === 404 ? 'The link is gone.' : `The server said ${error.status}.`
+  if (error instanceof TypeError) return 'No connection.'
+  return error.message
+}
+
+/** Above whatever is on the screen, so the text the user typed stays where it is. */
+function notice(message) {
+  screen.prepend(band(message, 'warning'))
 }
 
 function head(name, note) {
