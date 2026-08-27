@@ -1,8 +1,8 @@
-node_modules
-.svelte-kit
-build
 .git
-.env
-*.db
-test-results
-docs
+.github
+node_modules
+data
+test
+tools
+rezepte
+*.md

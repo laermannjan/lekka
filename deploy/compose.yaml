@@ -1,0 +1,29 @@
+services:
+  lekka:
+    image: ghcr.io/laermannjan/lekka:latest
+    # To run your own build of the checkout instead, uncomment:
+    # build: ..
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp]
+    environment:
+      PORT: 8080
+      DATA_DIR: /data
+      # Who the server runs as, and who owns the cards. Your own `id -u` and
+      # `id -g` if you mount a directory of your own; otherwise leave them.
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      # CREATE_TOKEN: set this to keep anyone on the network from adding cards
+      # TTL_DAYS: set this to delete cards nobody has opened for that long
+    ports:
+      - "8380:8080"
+    volumes:
+      - lekka-data:/data
+      # Or keep the cards in a directory of your own:
+      # - ./data:/data
+
+volumes:
+  lekka-data:

@@ -1,0 +1,33 @@
+[tools]
+node = "22"
+
+[env]
+PORT = "8080"
+DATA_DIR = "./data"
+
+[tasks.serve]
+description = "App and API on $PORT, no build"
+run = "node server/main.js"
+
+[tasks.test]
+description = "Run the tests once"
+run = "node --test"
+
+[tasks.show]
+description = "Draw a card in the terminal"
+run = "node tools/show.mjs"
+
+[tasks.up]
+description = "Build and start the container (http://localhost:8380)"
+dir = "deploy"
+run = "docker compose up -d --build"
+
+[tasks.down]
+description = "Stop the container"
+dir = "deploy"
+run = "docker compose down"
+
+[tasks.logs]
+description = "Follow the container logs"
+dir = "deploy"
+run = "docker compose logs -f"
