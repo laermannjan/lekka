@@ -16,7 +16,7 @@ export function renderCard(card, scale = 1) {
   grid.band.forEach((entries, index) => {
     const ends = new Set(entries.map((entry) => entry.column + entry.columnSpan - 1))
     for (const entry of entries) {
-      const box = element('div', 'preparation', bind(entry.node.text))
+      const box = preparationField(entry.node)
       if (ends.has(entry.column - 1)) box.classList.add('joined')
       if (entry.column === 0) {
         box.style.gridColumn = '1 / -1'
@@ -59,6 +59,12 @@ export function renderCard(card, scale = 1) {
   }
 
   return table
+}
+
+function preparationField(node) {
+  const box = element('div', 'preparation', bind(node.text))
+  if (node.aside) box.append(element('span', 'aside', bind(node.aside)))
+  return box
 }
 
 function ingredientFields(node, scale) {

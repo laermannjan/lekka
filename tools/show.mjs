@@ -24,7 +24,7 @@ function draw(card, grid, scale) {
 
   band.forEach((entries, index) => {
     for (const entry of entries)
-      box(sheet, entry.column, entry.columnSpan, index, 1, entry.node.text, 'centre')
+      box(sheet, entry.column, entry.columnSpan, index, 1, preparationText(entry.node), 'centre')
   })
 
   const head = band.length
@@ -47,6 +47,10 @@ function draw(card, grid, scale) {
 function title(card) {
   const notes = card.notes.length ? `  ${card.notes.join(' · ')}` : ''
   return `${card.title}${card.yields ? ` (${card.yields})` : ''}${notes}`
+}
+
+function preparationText(node) {
+  return node.aside ? `${node.text} (${node.aside})` : node.text
 }
 
 function ingredientText(node, scale) {
