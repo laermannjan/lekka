@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { newId } from '../app/id.js'
@@ -89,13 +89,30 @@ function shelf(directory, extension, nextId) {
       await put(envelope(id), JSON.stringify({ ...found, touched: now.toISOString() }))
     },
 
+    /**
+     * Also reaps what an interrupted write left behind: a body with no envelope is
+     * unreachable, since everything here is found through the envelope, and a temporary
+     * belongs to a rename that never happened.
+     */
     async sweep(days) {
       const limit = Date.now() - days * DAY
-      for (const name of await readdir(directory)) {
+      const names = await readdir(directory)
+      const kept = new Set()
+
+      for (const name of names) {
         if (!name.endsWith('.meta.json')) continue
         const id = name.slice(0, -'.meta.json'.length)
         const found = await meta(id)
         if (found && new Date(found.touched).getTime() < limit) await this.remove(id)
+        else kept.add(id)
+      }
+
+      for (const name of names) {
+        if (name.endsWith('.meta.json')) continue
+        if (name.endsWith(extension) && kept.has(name.slice(0, -extension.length))) continue
+        const path = join(directory, name)
+        const found = await stat(path).catch(() => null)
+        if (found?.isFile() && found.mtimeMs < limit) await unlink(path).catch(() => {})
       }
     },
   }

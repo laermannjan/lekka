@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -124,6 +124,24 @@ test('a sweep drops what nobody has touched', async () => {
 
   assert.equal(await cards.read(stale.id), null)
   assert.notEqual(await cards.read(fresh.id), null)
+})
+
+test('a sweep reaps what an interrupted write left behind', async () => {
+  const where = await directory()
+  const { cards } = await openStore(where).open()
+  const { id } = await cards.create(CARD)
+
+  const orphan = join(where, 'cards', 'orphan-cccccccccc.lekka')
+  const temporary = join(where, 'cards', `${id}.lekka.abc123`)
+  const young = join(where, 'cards', 'young-dddddddddd.lekka')
+  for (const path of [orphan, temporary, young]) await writeFile(path, CARD)
+  const old = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000)
+  for (const path of [orphan, temporary]) await utimes(path, old, old)
+
+  await cards.sweep(365)
+
+  const left = await readdir(join(where, 'cards'))
+  assert.deepEqual(left.sort(), [`${id}.lekka`, `${id}.meta.json`, 'young-dddddddddd.lekka'].sort())
 })
 
 test('a read keeps a record alive, but writes the envelope at most daily', async () => {
