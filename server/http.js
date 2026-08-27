@@ -120,10 +120,31 @@ async function collectionRoute(store, options, request, response, id, key) {
   }
   if (request.method !== 'PUT') throw new Refusal(405, 'method not allowed')
 
-  agrees(request, tag(await collections.read(id)))
   const { text } = rows(await body(request, options))
-  await collections.write(id, text)
-  return send(response, 204, null, '', { etag: tag(text) })
+  return alone(id, async () => {
+    agrees(request, tag(await collections.read(id)))
+    await collections.write(id, text)
+    return send(response, 204, null, '', { etag: tag(text) })
+  })
+}
+
+const writing = new Map()
+
+/**
+ * Reading the tag, checking it and writing is one move. One process, so a chain per
+ * collection is enough: without it both devices read the same tag and both write.
+ */
+function alone(id, work) {
+  const done = (writing.get(id) ?? Promise.resolve()).then(work, work)
+  const settled = done.then(
+    () => {},
+    () => {},
+  )
+  writing.set(id, settled)
+  settled.then(() => {
+    if (writing.get(id) === settled) writing.delete(id)
+  })
+  return done
 }
 
 /** A collection is changed from two devices, so a write must name the version it grew from. */

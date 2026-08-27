@@ -140,6 +140,23 @@ test('a write must name the version it grew from', async (t) => {
   assert.deepEqual(await (await call(`/api/collections/${id}`, { key })).json(), one)
 })
 
+test('two devices writing from the same version do not both win', async (t) => {
+  const { call, close } = await serve()
+  t.after(close)
+
+  const { id, key } = await (
+    await call('/api/collections', { method: 'POST', body: '[]' })
+  ).json()
+  const version = (await call(`/api/collections/${id}`, { key })).headers.get('etag')
+
+  const write = (row) =>
+    call(`/api/collections/${id}`, { method: 'PUT', body: JSON.stringify([row]), key, version })
+  const answers = await Promise.all([write({ id: 'brot-aaaaaaaaaa' }), write({ id: 'salz-bbbbbbbbbb' })])
+
+  assert.deepEqual(answers.map((answer) => answer.status).sort(), [204, 412])
+  assert.equal((await (await call(`/api/collections/${id}`, { key })).json()).length, 1)
+})
+
 test('a collection holds links and nothing else', async (t) => {
   const { call, close } = await serve()
   t.after(close)
