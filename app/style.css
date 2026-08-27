@@ -134,6 +134,7 @@ body {
   flex: 1;
 }
 
+/* Held down with !important: a later rule once won over hidden and showed a button. */
 [hidden] {
   display: none !important;
 }

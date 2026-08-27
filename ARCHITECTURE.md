@@ -206,9 +206,22 @@ work.
   writing is idempotent. Check it against random trees, not only the examples.
 - **The API** against a running server: rights, wrong key, missing key, another
   card's key, no listing endpoint.
-- **At least the rights matrix in a real browser.** A DOM stub is not enough:
-  three rounds were lost to a CSS rule that overrode `[hidden]`, where the
-  property said "hidden" and the button was visible. Only a browser catches it.
+- **No browser tests, for now.** Three rounds were once lost to a CSS rule that
+  overrode `[hidden]`, where the property said "hidden" and the button was
+  visible, so a DOM stub would have passed. This app answers that by building
+  no element it does not mean: no key, no *Edit source* button; no key on a row,
+  no *Delete*. What is absent cannot be shown by a stylesheet. The one thing
+  still toggled with `hidden` is the save-error line, and `[hidden]` carries an
+  `!important` in `style.css` to hold it down.
+
+  Note what this does **not** buy: rights are enforced by the server and tested
+  there. A missing button is not a permission. The browser would only tell us
+  whether the app offers what the server would refuse.
+
+  Once the UI grows past hiding a single line - in-place editing of cells is the
+  next thing that would do it - end-to-end tests in a real browser become worth
+  their weight, and the rights table above is what they should walk: each of the
+  four link shapes, and what is actually visible under it.
 
 ## Threat model
 
