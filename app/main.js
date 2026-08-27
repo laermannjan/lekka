@@ -4,6 +4,7 @@ import { renderOverview } from './overview.js'
 import * as api from './api.js'
 import { editable, wrapInStep } from './source.js'
 import { cache, cached, collection, rows, setRows, useCollection } from './library.js'
+import { svg } from './qr.js'
 
 const SCALES = [
   [0.5, '½×'],
@@ -303,10 +304,63 @@ function welcome() {
   return box
 }
 
+/**
+ * The link was once an anchor, which opened the collection this device already holds:
+ * a flash, and back to where one started. It is a button now, and what it opens says so.
+ */
 function share(held) {
-  const link = element('a', 'name', 'Link for another device')
-  link.href = `/c/${held.id}/${held.key}`
-  return link
+  const button = element('button', 'quiet name', 'Link for another device')
+  button.onclick = () => showShare(held)
+  return button
+}
+
+function showShare(held) {
+  const address = new URL(`/c/${held.id}/${held.key}`, location.origin).href
+  const box = element('dialog', 'sheet')
+
+  const code = element('div', 'code')
+  try {
+    code.innerHTML = svg(address)
+  } catch {
+    code.replaceChildren(element('p', 'note', 'The link is too long for a code.'))
+  }
+
+  // Written out in full and wrapped, because a link one cannot read is a link one cannot type.
+  const field = element('p', 'address', address)
+  const select = () => {
+    const range = document.createRange()
+    range.selectNodeContents(field)
+    const selection = getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }
+  field.onclick = select
+
+  const copy = element('button', 'quiet', 'Copy link')
+  copy.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(address)
+      copy.textContent = 'Copied'
+    } catch {
+      select()
+      copy.textContent = 'Copy it by hand'
+    }
+  }
+
+  const close = element('button', 'quiet', 'Close')
+  close.onclick = () => box.close()
+
+  box.append(
+    element('p', 'verb', 'Open this collection on another device'),
+    code,
+    element('p', 'note', 'Scan the code, or open the link. Whoever has it can change these cards.'),
+    field,
+    element('div', 'bar', undefined, [copy, close]),
+  )
+  box.onclose = () => box.remove()
+  document.body.append(box)
+  box.showModal()
+  copy.focus()
 }
 
 const FAILED = Symbol('failed')
