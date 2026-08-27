@@ -75,6 +75,8 @@ stretching into a few enormous cells.
   left; yield and card notes on the right in accent pale.
 - **Toolbar** below it on the ground colour, closed by a 1 px line: scale left,
   views middle, actions right, each group with a small grey upper-case label.
+  Too narrow to hold them in one line, it wraps: a control moves down whole,
+  never breaking its own label.
 - **Switches** are segmented: buttons sharing one outline, separated by 1 px
   lines, the active one filled with the accent and white on it.
 - **Buttons** are outlined in the line colour on white and invert to accent on
