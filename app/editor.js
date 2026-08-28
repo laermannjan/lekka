@@ -32,6 +32,12 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    */
   let chosen = new Set()
   let anchor = null
+  let saving = false
+
+  // The table is rebuilt on every repaint, and a repaint happens on every tick. Without
+  // this a wide card jumps back to its first column each time a row is chosen, which is
+  // exactly while the cook is working across it.
+  let scroller = null
 
   const box = element('div', 'editor')
 
@@ -67,22 +73,36 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
 
   function paint() {
     const faults = validate(current)
+    const across = scroller?.scrollLeft ?? 0
     box.replaceChildren(
       ...[toolbar(faults), report(faults), selection(), table(), hint(faults)].filter(Boolean),
     )
+    // Only once it is on the page does it have anything to scroll.
+    if (scroller) scroller.scrollLeft = across
   }
 
   function toolbar(faults) {
     const head = button('Card', openCard)
 
     const save = element('button', 'go', 'Save')
-    save.disabled = faults.length > 0 || !dirty
+    save.disabled = faults.length > 0 || !dirty || saving
     save.onclick = async () => {
-      save.disabled = true
-      const failed = await commit()
+      if (saving) return
+      saving = true
+      // The draft this write is of. The page stays live while it is in flight, so what
+      // comes back can be an answer about a card that has since been edited.
+      const sent = current
+      paint()
+
+      const failed = await commit(sent)
+      saving = false
       // A write that arrives is said as plainly as one that does not: without a word
       // either way there is no telling a saved card from a card the server refused.
-      notice = failed ? { text: failed, bad: true } : { text: 'Saved.', bad: false }
+      notice = failed
+        ? { text: failed, bad: true }
+        : current === sent
+          ? { text: 'Saved.', bad: false }
+          : { text: 'Saved. What you changed while it was sending is not - save again.', bad: false }
       paint()
     }
 
@@ -141,12 +161,14 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * handing it over. Validation already refuses the punctuation that would not survive;
    * this is the backstop for whatever nobody thought of, and it fails shut.
    */
-  async function commit() {
-    const text = storedForm(current)
+  async function commit(sent) {
+    const text = storedForm(sent)
     if (text === null) return 'This card does not come back the same when stored. Nothing was saved.'
     const failed = await onSave(text)
     if (failed) return failed
-    dirty = false
+    // Only what was sent is saved. An edit made while it was in flight is not, so the
+    // flag stays up rather than being cleared for a card the server never saw.
+    if (current === sent) dirty = false
     return null
   }
 
@@ -184,6 +206,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   function table() {
     const grid = buildForest(current.strands, current.preparations)
     const box = element('div', 'scroll')
+    scroller = box
     box.append(
       renderGrid(grid, 1, {
         onPick: open,

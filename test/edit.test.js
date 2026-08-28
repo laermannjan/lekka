@@ -5,7 +5,7 @@ import { parseCard, formatCard } from '../app/card.js'
 import {
   toDraft, fromDraft, candidates, inputs, holds, parentOf, beneath,
   addIngredient, addStep, editIngredient, editStep, removeNode, claim, upheaval,
-  fieldsOf, preparationLines, validate, label,
+  fieldsOf, preparationLines, validate, label, storedForm,
 } from '../app/edit.js'
 
 const PANCAKES = `# Pfannkuchen (12 Stück)

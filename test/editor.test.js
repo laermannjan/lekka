@@ -12,15 +12,19 @@ const { buildEditor } = await import('../app/editor.js')
 function open(text, refuse = null) {
   body.replaceChildren()
   const saved = []
+  let release = null
   const screen = buildEditor({
     draft: toDraft(parseCard(text)),
     onSave: async (written) => {
+      // A write that does not resolve until the test says so, for the window in which
+      // the page is still live.
+      if (release) await new Promise((go) => (release = go))
       if (refuse) return refuse
       saved.push(written)
     },
     onClose: () => saved.push(null),
   })
-  return { screen, saved }
+  return { screen, saved, hold: () => (release = () => {}), let_go: () => release?.() }
 }
 
 const sheet = () => one(body, (node) => node.tag === 'dialog', 'sheet')
@@ -534,4 +538,40 @@ test('a step can be added before anything is ticked, and the table says so', () 
   tap(one(onlyTable(screen), byText('+ Step'), '+ Step'))
   assert.deepEqual(choices(), [])
   assert.ok(all(sheet()).some((node) => byClass('taken')(node) && node.textContent === 'schmelzen'))
+})
+
+test('an edit made while a save is in flight is not counted as saved', async () => {
+  const { screen, saved, hold, let_go } = open(PANCAKES)
+  const edit = (from, to) => {
+    tap(one(screen, (node) => byClass('verb')(node) && node.textContent === from, from))
+    fill({ Instruction: to })
+    submit()
+  }
+
+  edit('braten', 'anbraten')
+  hold()
+  const writing = one(screen, byText('Save'), 'Save').onclick()
+
+  // While it is in flight the page is live, and Save must not invite a second write.
+  assert.equal(one(screen, byText('Save'), 'Save').disabled, true)
+  edit('anbraten', 'scharf anbraten')
+
+  let_go()
+  await writing
+
+  assert.equal(saved.length, 1)
+  // The card the server has is the old one, so there is still something to send.
+  assert.equal(one(screen, byText('Save'), 'Save').disabled, false)
+  assert.ok(all(screen).some((node) => node.textContent.includes('save again')))
+})
+
+test('the table keeps its place across a repaint', () => {
+  const { screen } = open(PANCAKES)
+  const scroller = () => one(screen, byClass('scroll'), 'scroll')
+
+  scroller().scrollLeft = 240
+  // Ticking repaints the whole table; a wide card must not jump back to its first
+  // column while the cook is working across it.
+  tick(screen, 'Mehl')
+  assert.equal(scroller().scrollLeft, 240)
 })

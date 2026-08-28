@@ -224,6 +224,19 @@ button.quiet:hover {
     32px 58px 54px max-content repeat(var(--columns), minmax(150px, 240px)) 46px;
 }
 
+/*
+ * A card with no steps yet. The `repeat()` is written out rather than left to take a
+ * count of zero, which is not a valid track list: the declaration would be dropped and
+ * the table drawn in implicit tracks, with every column the wrong width.
+ */
+.grid.flat {
+  grid-template-columns: 58px 54px max-content;
+}
+
+.grid.choosing.flat {
+  grid-template-columns: 32px 58px 54px max-content 46px;
+}
+
 .grid > * {
   border-bottom: 1px solid var(--line);
   border-right: 1px solid var(--line);

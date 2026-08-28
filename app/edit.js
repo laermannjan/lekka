@@ -273,7 +273,7 @@ export function fieldsOf(node) {
 export function validate(draft) {
   const faults = []
   if ((draft.title ?? '').trim() === '') faults.push({ kind: 'title', message: 'The card needs a title' })
-  storable(null, faults, ['title', draft.title], ['yield', draft.yields])
+  storable(null, faults, false, ['title', draft.title], ['yield', draft.yields])
   for (const prep of draft.preparations) walk(prep, faults)
 
   const loose = draft.strands.filter((strand) => strand.kind === 'ingredient')
@@ -301,12 +301,15 @@ export function validate(draft) {
  * back as salt, in an amount of "grob". The text would even be written and read back
  * unchanged, so no round trip catches it - only knowing what the punctuation means does.
  */
-function storable(node, faults, ...fields) {
+function storable(node, faults, splits, ...fields) {
   for (const [what, text] of fields) {
     if (text === null || text === undefined) continue
     if (/[()\n]/.test(text))
       faults.push({ kind: 'unstorable', node, message: `Brackets cannot be part of a ${what}. Put it in the note instead` })
-    else if (what === 'name' && text.includes(':'))
+    // Only an ingredient line is split at a colon, and it is split at the *first* one,
+    // before the bracket is looked for - so a colon in its note is as fatal as one in
+    // its name. A step, a preparation and the title are never split, and may hold one.
+    else if (splits && text.includes(':'))
       faults.push({ kind: 'unstorable', node, message: `A colon cannot be part of a ${what}. Put it in the amount instead` })
   }
 }
@@ -314,17 +317,17 @@ function storable(node, faults, ...fields) {
 function walk(node, faults) {
   if (node.kind === 'ingredient') {
     if (node.name.trim() === '') faults.push({ kind: 'name', node, message: 'An ingredient needs a name' })
-    storable(node, faults, ['name', node.name], ['note', node.aside])
+    storable(node, faults, true, ['name', node.name], ['note', node.aside])
     return
   }
   if (node.kind === 'preparation') {
     if (node.text.trim() === '')
       faults.push({ kind: 'name', node, message: 'A preparation needs something to do' })
-    storable(node, faults, ['preparation', node.text], ['note', node.aside])
+    storable(node, faults, false, ['preparation', node.text], ['note', node.aside])
     return
   }
   if (node.verb.trim() === '') faults.push({ kind: 'verb', node, message: 'A step needs a verb' })
-  storable(node, faults, ['instruction', node.verb], ['note', node.aside])
+  storable(node, faults, false, ['instruction', node.verb], ['note', node.aside])
   if (inputs(node).length === 0)
     faults.push({ kind: 'starved', node, message: `${label(node)} has nothing going into it` })
   for (const child of node.children) walk(child, faults)

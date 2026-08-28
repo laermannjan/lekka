@@ -322,7 +322,8 @@ function showWriting() {
         () => change(held, (current) => [...current, made]),
         'The card was made, but not put in your collection.',
       )
-      if (kept === FAILED) notice(`Its link is /r/${made.id}/${made.key}`)
+      // Said and then left standing: showEditor would replace the screen under it.
+      if (kept === FAILED) return notice(`Its link is /r/${made.id}/${made.key}`)
     }
 
     // No reload: the draft is already here, and the link is what the address bar shows.
