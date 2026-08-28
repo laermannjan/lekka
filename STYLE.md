@@ -91,6 +91,14 @@ name is weight 600 and links to reading; a badge follows it, 12 px 600, in
 accent on preparation when this device can edit, grey on ground when it cannot.
 The actions sit right aligned in the same row.
 
+**Sharing dialog.** A small card in the middle of a dimmed page, framed like the
+page itself: 2 px accent, at most 320 px wide, no radius. Its heading sits on
+the preparation colour and reads as a sentence, not a label. Under it the code
+on white, at most 240 px, quiet zone included; then the note in grey; then the
+link in full, in the editor's monospace, wrapped rather than cut, because a link
+one cannot read is a link one cannot type. The actions sit right aligned in a
+bar of their own, like every other bar.
+
 **Step and shopping views.** At most 70 characters wide. Rows separated by 1 px
 in the **ground** colour, not the line colour: these are lists, not a grid. A
 step shows its number in a 24 px grey tabular column, the verb 600, ingredients

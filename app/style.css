@@ -195,6 +195,62 @@ button.quiet:hover {
   color: var(--accent);
 }
 
+.sheet {
+  background: var(--white);
+  border: 2px solid var(--accent);
+  color: var(--ink);
+  font: inherit;
+  /* The reset above zeroes every margin, and a dialog centres itself with one. */
+  margin: auto;
+  max-width: min(100%, 320px);
+  padding: 0;
+}
+
+.sheet::backdrop {
+  background: rgb(27 27 25 / 45%);
+}
+
+.sheet > .verb,
+.sheet > .note,
+.sheet > .code {
+  padding: 8px 12px;
+}
+
+.sheet > .verb {
+  background: var(--preparation);
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+}
+
+.sheet > .note {
+  text-align: center;
+}
+
+.code {
+  display: block;
+}
+
+.code svg {
+  display: block;
+  margin: 0 auto;
+  width: min(100%, 240px);
+}
+
+.sheet .address {
+  border-top: 1px solid var(--line);
+  color: var(--grey);
+  cursor: text;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+  padding: 6px 12px;
+}
+
+.sheet .bar {
+  border-bottom: 0;
+  border-top: 1px solid var(--line);
+  justify-content: flex-end;
+}
+
 .grid {
   display: grid;
   font-variant-numeric: tabular-nums;

@@ -14,6 +14,7 @@ const SHELL = [
   '/library.js',
   '/source.js',
   '/id.js',
+  '/qr.js',
   '/manifest.webmanifest',
   '/icon.svg',
   '/fonts/plex.woff2',

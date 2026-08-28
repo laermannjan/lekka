@@ -118,6 +118,20 @@ It is not a list of cards on the server, because there cannot be one. Each row:
 the name links to reading, a badge says whether you can edit it, `Remove` drops
 the link, `Delete` drops the card for everyone who holds one.
 
+`Link for another device` opens a dialog: the full link written out, a copy
+button, and the same link as a QR code to scan with a phone. It was once an
+anchor to `/c/<name>/<key>`, which on the device that already holds the
+collection meant adopting what it had, replacing the address with `/`, and
+landing back on the overview - a flash, and nothing said. Nothing navigates now,
+so the address bar stays at `/`, which is where the key belongs to stay: out of
+the address bar, out of history, out of a screen share.
+
+The code is drawn by `app/qr.js`, some four hundred lines, no dependency. The
+app has no build step and a policy that loads nothing from elsewhere, so the
+alternative was a minified blob in `app/` that no one reads. Byte mode, error
+correction M, versions 1 to 10, which is 213 bytes of UTF-8 - longer than that
+is not a link one shares.
+
 Holding no collection, the overview offers to make one. Opening `/c/<name>`
 without its key shows somebody else's list and does **not** adopt it, since a
 device that cannot write to a collection has no business calling it its own.
@@ -206,6 +220,12 @@ work.
   writing is idempotent. Check it against random trees, not only the examples.
 - **The API** against a running server: rights, wrong key, missing key, another
   card's key, no listing endpoint.
+- **The QR code against a scanner, once.** A code is either right or unreadable,
+  and reading it back with the same code that wrote it proves nothing. So every
+  length from 1 to 213 was drawn and read by a real decoder (`zxing`) while the
+  encoder was written, and `test/qr.test.js` keeps four of those matrices by
+  hash. If a change moves a single module, the hashes say so; if the hashes are
+  ever updated, they must be re-read by a scanner first.
 - **No browser tests, for now.** Three rounds were once lost to a CSS rule that
   overrode `[hidden]`, where the property said "hidden" and the button was
   visible, so a DOM stub would have passed. This app answers that by building
