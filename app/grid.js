@@ -1,21 +1,38 @@
 /** A card to the table that draws it. Columns are numbered from 1; column 0 is the ingredients. */
 export function buildGrid(card) {
-  const rows = []
-  if (!card.root) return { rows, cells: [], frees: [], band: [], columns: 0 }
+  if (!card.root) return { rows: [], cells: [], frees: [], band: [], columns: 0 }
+  return buildForest([card.root], card.preparations)
+}
 
+/**
+ * Several strands in one table, for a card that is still being written.
+ *
+ * A finished card has one root and this is that case. Half-written it has several, and
+ * they belong in one table rather than one each: they share the ingredient column, and
+ * an ingredient nobody has used yet is not a separate idea needing a separate drawing -
+ * it is a row with nothing to the right of it, which the layout already draws as free
+ * area.
+ *
+ * Every root is placed on the same last column. Right alignment (`LAYOUT.md`) already
+ * moves a short strand right until it sits in front of the merge; here the merge has
+ * not been written yet, so the strands align to where it will be. The point of doing it
+ * now is that writing it later then moves nothing.
+ */
+export function buildForest(strands, preparations = []) {
+  const rows = []
   const span = new Map()
-  measure(card.root, rows, span)
+  for (const strand of strands) measure(strand, rows, span)
 
   const cells = []
   const attached = []
-  const columns = span.get(card.root).column
-  place(card.root, columns, span, cells, attached)
+  const columns = Math.max(0, ...strands.map((strand) => span.get(strand).column))
+  for (const strand of strands) place(strand, columns, span, cells, attached)
 
   return {
     rows,
     cells,
     frees: findFrees(occupy(rows, cells, columns)),
-    band: buildBand(card.preparations, attached, columns),
+    band: buildBand(preparations, attached, columns),
     columns,
   }
 }
