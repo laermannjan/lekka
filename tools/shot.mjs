@@ -13,6 +13,7 @@
  * Needs Chrome. Set CHROME to point at another one.
  */
 import { spawn } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -59,6 +60,16 @@ const editor = () =>
   })
 
 scene('Card view', wrap(renderCard(parseCard(TEXT), 1)))
+
+// The two states a card passes through before it has a single step, which is where
+// the table has no step columns at all.
+scene('Editor, a new card', buildEditor({ draft: toDraft(parseCard('# Neu\\n')), onSave: async () => null, onClose: () => {} }))
+scene('Editor, ingredients but no step', buildEditor({
+  draft: ['Mehl', 'Milch'].reduce((d, name) => addIngredient(d, { name, amount: '250', unit: 'g' }), toDraft(parseCard('# Neu\\n'))),
+  onSave: async () => null,
+  onClose: () => {},
+}))
+
 scene('Editor, at rest', editor())
 
 // One row ticked, which is the case that has to say what it would disturb.
@@ -100,7 +111,8 @@ try {
   await new Promise((ready) => server.listen(0, '127.0.0.1', ready))
   const { port } = server.address()
 
-  const chrome = CHROMES.find(Boolean)
+  const chrome = CHROMES.find(existsSync)
+  if (!chrome) throw new Error(`no Chrome found. Set CHROME.\ntried:\n  ${CHROMES.join('\n  ')}`)
   await run(chrome, [
     '--headless=new',
     '--disable-gpu',

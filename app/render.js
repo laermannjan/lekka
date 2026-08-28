@@ -38,8 +38,12 @@ export function renderGrid(grid, scale = 1, edit = null) {
 
   const table = element('div', 'grid')
   table.style.setProperty('--columns', grid.columns)
-  // A class, not a variable: `repeat(0, …)` is not a track list every browser accepts.
+  // Classes, not counts: `repeat(0, …)` is not a valid track list, and a browser that
+  // rejects one throws the whole template away and lays the table out in implicit
+  // tracks - every cell present, every one the wrong width. A card with no step yet is
+  // the first thing every new card is, so this is the common case, not the corner.
   if (lead) table.classList.add('choosing')
+  if (grid.columns === 0) table.classList.add('flat')
 
   const head = grid.band.length
   const bottom = head + 1 + grid.rows.length
