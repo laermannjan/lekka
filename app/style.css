@@ -260,6 +260,142 @@ button.quiet:hover {
   border-bottom: 0;
   border-top: 1px solid var(--line);
   justify-content: flex-end;
+
+/*
+ * The walk is the whole table, scrolled sideways with its ingredient column pinned. The
+ * pin has to be paid for out of a narrow screen, so unlike the whole table the three
+ * columns are capped and the name wraps inside them; a step column keeps the table's own
+ * width, because what is worth scrolling to must be worth reading when it arrives.
+ *
+ * fit-content, not auto: a grid box narrower than its tracks clamps sticky cells to their
+ * own column, and the pin below stops holding.
+ */
+.walk .grid {
+  --amount: min(12vw, 58px);
+  --unit: min(10vw, 54px);
+  --names: min(28vw, 200px);
+
+  grid-template-columns:
+    var(--amount) var(--unit) var(--names)
+    repeat(var(--columns), minmax(150px, 240px));
+  width: fit-content;
+}
+
+.walk .grid .name {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* A qualifier takes its own line rather than being broken across one. */
+.walk .grid .name .aside {
+  display: block;
+  margin-left: 0;
+}
+
+/*
+ * The pinned column. It needs a background to hide what passes beneath and a layer above
+ * the cells drawn after it.
+ */
+.walk .grid > .amount,
+.walk .grid > .unit,
+.walk .grid > .name,
+.walk .grid > .words,
+.walk .grid > .heading,
+.walk .grid > .standing {
+  position: sticky;
+  z-index: 1;
+}
+
+.walk .grid > .amount,
+.walk .grid > .words,
+.walk .grid > .heading,
+.walk .grid > .standing {
+  left: 0;
+}
+
+.walk .grid > .unit {
+  left: var(--amount);
+}
+
+.walk .grid > .name {
+  left: calc(var(--amount) + var(--unit));
+}
+
+.walk .grid > .amount,
+.walk .grid > .unit,
+.walk .grid > .name,
+.walk .grid > .words,
+.walk .grid > .standing {
+  background: var(--white);
+}
+
+/*
+ * Its right edge is the pin's edge, so it is drawn whatever the cell would otherwise do.
+ * It is centred down its band the way a step is centred down the rows it merges, but
+ * stays left across, because it is sitting where names sit.
+ */
+.walk .grid > .standing {
+  align-content: center;
+  border-right: 1px solid var(--line);
+  display: grid;
+}
+
+/* Still laid out, so its row keeps its height; the band above it does the talking. */
+.covered {
+  visibility: hidden;
+}
+
+/* A step standing in the ingredient column for what it consumed. It is a step, so it
+   carries the weight of one; it sits where a name sits, so it is not centred. */
+.carried {
+  font-weight: 600;
+}
+
+/* The note beside it is a note, not part of the verb. */
+.carried .aside {
+  font-weight: 450;
+}
+
+/* A qualifier takes its own line rather than being broken across one. */
+.slice .grid .name .aside {
+  display: block;
+  margin-left: 0;
+}
+
+/*
+ * A name here wraps, and a word with no break in it is broken anyway. An ingredient
+ * column two columns wide has no room for `Roggenvollkornmehl`, and a name painted over
+ * the step beside it is worse than one split across two lines.
+ */
+.slice .grid .name,
+.slice .grid .words {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.tick {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+/* The only control reached over and over with wet hands, so it is a real target. */
+.tick button {
+  background: var(--white);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  min-height: 44px;
+  min-width: 64px;
+}
+
+.tick button:disabled {
+  border-color: var(--accent-pale);
+  color: var(--grey);
+  cursor: default;
 }
 
 .grid {
@@ -691,6 +827,8 @@ button.go:disabled {
   .faults,
   .choose,
   .add,
+
+  .tick,
   button {
     display: none;
   }

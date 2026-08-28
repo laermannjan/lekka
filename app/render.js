@@ -10,8 +10,9 @@ export function renderCard(card, scale = 1, edit = null) {
 }
 
 /**
- * Any grid as a table. Split out from `renderCard` because the editor draws a grid it
- * built itself, from several strands, and must go through the same code to be the card.
+ * Any grid as a table, whole or a slice of one. Split out from `renderCard` because the
+ * editor draws a grid it built itself, from several strands, and the walk draws a slice
+ * of one; both must go through this code to be the card rather than a picture of it.
  *
  * `edit` is what makes the table editable, and it is all the editor needs the drawing to
  * give it. Layout keeps, for every row and every cell, the node it came from; handing
@@ -27,6 +28,9 @@ export function renderCard(card, scale = 1, edit = null) {
  * exactly the same arithmetic as before.
  */
 export function renderGrid(grid, scale = 1, edit = null) {
+  // A slice of the card numbers its columns with the places they hold in the whole of
+  // it, so the header still says when this is.
+  const numbers = grid.numbers ?? Array.from({ length: grid.columns }, (_, index) => index + 1)
   const lead = edit?.onChoose ? 1 : 0
   const put = (node, spec) => place(node, grid, spec, lead)
   const pick = (box, node) => {
@@ -65,12 +69,13 @@ export function renderGrid(grid, scale = 1, edit = null) {
     }
   })
 
-  const label = element('div', 'label', 'Ingredient')
+  // The walk puts steps in this column too, so it names it for what it holds.
+  const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
   label.style.gridColumn = `${1 + lead} / ${NAME_COLUMN + 1 + lead}`
   label.style.gridRow = String(head + 1)
   table.append(label)
   for (let column = 1; column <= grid.columns; column++)
-    table.append(put(element('div', 'label', pad(column)), {
+    table.append(put(element('div', 'label', pad(numbers[column - 1])), {
       column: NAME_COLUMN + column, columnSpan: 1, row: head + 1, rowSpan: 1,
     }))
 
@@ -93,8 +98,11 @@ export function renderGrid(grid, scale = 1, edit = null) {
     }
     // Every field of a row leads to the same ingredient: the amount, the unit and the
     // name are one line of the card split into three columns, not three things.
-    for (const field of ingredientFields(node, scale))
+    for (const field of ingredientFields(node, scale)) {
+      // The walk hides these a row at a time as steps take them over.
+      field.node.dataset.row = String(index)
       table.append(put(pick(field.node, node), { ...field, row, rowSpan: 1, last }))
+    }
   })
 
   for (const cell of grid.cells)
@@ -172,6 +180,13 @@ function preparationField(node) {
 }
 
 function ingredientFields(node, scale) {
+  // A slice can put a step where ingredients go, standing for everything it consumed.
+  if (node.kind === 'step') {
+    const box = element('div', 'carried', node.verb)
+    if (node.aside) box.append(element('span', 'aside', node.aside))
+    return [{ node: box, column: 1, columnSpan: NAME_COLUMN }]
+  }
+
   const amount = scaleAmount(node.amount, scale)
   const name = element('div', 'name')
   name.append(element('span', 'noun', node.name))
