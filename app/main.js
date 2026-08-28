@@ -1,5 +1,6 @@
 import { parseCard, ParseError } from './card.js'
 import { renderCard } from './render.js'
+import { renderWalk } from './walk.js'
 import { renderOverview } from './overview.js'
 import * as api from './api.js'
 import { editable, wrapInStep } from './source.js'
@@ -10,6 +11,11 @@ const SCALES = [
   [1, '1×'],
   [1.5, '1½×'],
   [2, '2×'],
+]
+
+const VIEWS = [
+  ['card', 'Whole'],
+  ['slice', 'Step'],
 ]
 
 const title = document.getElementById('title')
@@ -78,7 +84,10 @@ async function showCollection(id, key) {
   return showOverview()
 }
 
-async function showCard(id, key, scale = 1, editing = false) {
+async function showCard(id, key, state = {}) {
+  const { scale = 1, editing = false, view = firstView(), at = 1 } = state
+  const here = { scale, editing, view, at }
+
   const text = await load(id)
   if (text === null) return fail('No card under this link.')
 
@@ -91,19 +100,46 @@ async function showCard(id, key, scale = 1, editing = false) {
   }
 
   head(card.title, [card.yields, ...card.notes].filter(Boolean).join(' · '))
-  const scroll = element('div', 'scroll')
-  scroll.append(renderCard(card, scale))
   show(
-    bar(back(), label('Scale'), scales(id, key, scale), keeper(id, key), source(id, key, scale, editing)),
-    scroll,
-    editing ? panel(id, key, text, scale) : null,
+    bar(
+      back(),
+      label('Scale'),
+      scales(id, key, here),
+      label('View'),
+      views(id, key, here),
+      keeper(id, key, here),
+      source(id, key, here),
+    ),
+    body(card, id, key, here),
+    editing ? panel(id, key, text, here) : null,
   )
 }
 
-function source(id, key, scale, editing) {
+function body(card, id, key, state) {
+  // Walking is a scroll, not a redraw: the state is only kept so that changing the scale
+  // or opening the source comes back to the step the cook was standing on.
+  if (state.view === 'slice')
+    return renderWalk(card, state.scale, state.at, (at) => {
+      state.at = at
+    })
+  const scroll = element('div', 'scroll')
+  scroll.append(renderCard(card, state.scale))
+  return scroll
+}
+
+/**
+ * The whole table is as wide as the recipe is long, which a phone cannot show: its
+ * ingredient column alone can fill the screen. A narrow screen therefore starts on one
+ * step at a time, which is the same table with the columns in between dropped.
+ */
+function firstView() {
+  return matchMedia('(max-width: 640px)').matches ? 'slice' : 'card'
+}
+
+function source(id, key, state) {
   if (!key) return null
-  const button = element('button', 'quiet', editing ? 'Close source' : 'Edit source')
-  button.onclick = () => showCard(id, key, scale, !editing)
+  const button = element('button', 'quiet', state.editing ? 'Close source' : 'Edit source')
+  button.onclick = () => showCard(id, key, { ...state, editing: !state.editing })
   return button
 }
 
@@ -113,7 +149,7 @@ function wrapper(area) {
   return button
 }
 
-function panel(id, key, text, scale) {
+function panel(id, key, text, state) {
   const area = editable(element('textarea', 'source'))
   area.value = text
   area.spellcheck = false
@@ -139,11 +175,11 @@ function panel(id, key, text, scale) {
       return
     }
     cache(id, area.value)
-    showCard(id, key, scale, true)
+    showCard(id, key, { ...state, editing: true })
   }
 
   const discard = element('button', 'quiet', 'Discard')
-  discard.onclick = () => showCard(id, key, scale, true)
+  discard.onclick = () => showCard(id, key, { ...state, editing: true })
 
   return element('div', 'panel', undefined, [
     bar(label('Source'), save, discard, wrapper(area)),
@@ -175,7 +211,7 @@ async function describe(list) {
   )
 }
 
-function keeper(id, key) {
+function keeper(id, key, state) {
   const held = collection()
   if (!held) {
     const create = element('button', 'quiet', 'Save to a new collection')
@@ -206,7 +242,7 @@ function keeper(id, key) {
       'The collection was not changed.',
     )
     if (done === FAILED) return
-    showCard(id, key)
+    showCard(id, key, state)
   }
   return save
 }
@@ -365,12 +401,23 @@ function back() {
   return link
 }
 
-function scales(id, key, scale) {
+function scales(id, key, state) {
   const group = element('span', 'switch')
   for (const [factor, text] of SCALES) {
     const button = element('button', '', text)
-    button.setAttribute('aria-pressed', factor === scale)
-    button.onclick = () => showCard(id, key, factor)
+    button.setAttribute('aria-pressed', factor === state.scale)
+    button.onclick = () => showCard(id, key, { ...state, scale: factor })
+    group.append(button)
+  }
+  return group
+}
+
+function views(id, key, state) {
+  const group = element('span', 'switch')
+  for (const [name, text] of VIEWS) {
+    const button = element('button', '', text)
+    button.setAttribute('aria-pressed', name === state.view)
+    button.onclick = () => showCard(id, key, { ...state, view: name })
     group.append(button)
   }
   return group

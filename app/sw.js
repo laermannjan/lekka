@@ -10,6 +10,7 @@ const SHELL = [
   '/amount.js',
   '/grid.js',
   '/render.js',
+  '/walk.js',
   '/overview.js',
   '/library.js',
   '/source.js',

@@ -6,7 +6,15 @@ const UNIT = /(\d)\s+(?=[^\s\d]{1,3}(?:[\s,]|$))/g
 
 /** A card as a table. Column 0 of the grid is the three ingredient columns. */
 export function renderCard(card, scale = 1) {
-  const grid = buildGrid(card)
+  return renderGrid(buildGrid(card), scale)
+}
+
+/**
+ * Any grid as a table, whole or a slice of one. A slice numbers its columns with the
+ * places they hold in the card, not with 01, so the header still says when this is.
+ */
+export function renderGrid(grid, scale = 1) {
+  const numbers = grid.numbers ?? Array.from({ length: grid.columns }, (_, index) => index + 1)
   const table = element('div', 'grid')
   table.style.setProperty('--columns', grid.columns)
 
@@ -26,20 +34,24 @@ export function renderCard(card, scale = 1) {
     }
   })
 
-  const label = element('div', 'label', 'Ingredient')
+  // The walk puts steps in this column too, so it names it for what it holds.
+  const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
   label.style.gridColumn = `1 / ${NAME_COLUMN + 1}`
   label.style.gridRow = String(head + 1)
   table.append(label)
   for (let column = 1; column <= grid.columns; column++)
-    table.append(place(element('div', 'label', String(column).padStart(2, '0')), grid, {
+    table.append(place(element('div', 'label', pad(numbers[column - 1])), grid, {
       column: NAME_COLUMN + column, columnSpan: 1, row: head + 1, rowSpan: 1,
     }))
 
   grid.rows.forEach((node, index) => {
     const row = head + 2 + index
     const last = row === bottom
-    for (const field of ingredientFields(node, scale))
+    for (const field of ingredientFields(node, scale)) {
+      // The walk hides these a row at a time as steps take them over.
+      field.node.dataset.row = String(index)
       table.append(place(field.node, grid, { ...field, row, rowSpan: 1, last }))
+    }
   })
 
   for (const cell of grid.cells)
@@ -61,6 +73,10 @@ export function renderCard(card, scale = 1) {
   return table
 }
 
+function pad(number) {
+  return String(number).padStart(2, '0')
+}
+
 function preparationField(node) {
   const box = element('div', 'preparation', bind(node.text))
   if (node.aside) box.append(element('span', 'aside', bind(node.aside)))
@@ -68,6 +84,13 @@ function preparationField(node) {
 }
 
 function ingredientFields(node, scale) {
+  // A slice can put a step where ingredients go, standing for everything it consumed.
+  if (node.kind === 'step') {
+    const box = element('div', 'carried', node.verb)
+    if (node.aside) box.append(element('span', 'aside', node.aside))
+    return [{ node: box, column: 1, columnSpan: NAME_COLUMN }]
+  }
+
   const amount = scaleAmount(node.amount, scale)
   const name = element('div', 'name')
   name.append(element('span', 'noun', node.name))

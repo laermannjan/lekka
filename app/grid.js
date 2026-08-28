@@ -17,7 +17,41 @@ export function buildGrid(card) {
     frees: findFrees(occupy(rows, cells, columns)),
     band: buildBand(card.preparations, attached, columns),
     columns,
+    root: card.root,
   }
+}
+
+/**
+ * What stands on the counter when a column runs, as bands of the table's own rows.
+ *
+ * A step that has already run stands for every row it consumed - once the dough is mixed
+ * and risen, its flour and water are not things the cook handles any more, `reifen 12 h`
+ * is - and an ingredient nothing has reached yet stands for its own row, however long it
+ * waits. Walking the card is walking this, one column at a time, and because a band keeps
+ * the rows of what it replaced, nothing moves up or down on the way.
+ */
+export function frontierAt(grid, column) {
+  const placed = new Map(grid.cells.map((cell) => [cell.node, cell]))
+  const rowOf = new Map(grid.rows.map((node, row) => [node, row]))
+  const bands = []
+
+  const walk = (node) => {
+    if (node.kind === 'preparation') return
+    if (node.kind === 'ingredient')
+      return void bands.push({ node, row: rowOf.get(node), rowSpan: 1 })
+
+    const cell = placed.get(node)
+    if (cell.column < column) return void bands.push({ node, row: cell.row, rowSpan: cell.rowSpan })
+    for (const child of node.children) walk(child)
+  }
+
+  if (grid.root) walk(grid.root)
+  return bands
+}
+
+/** The columns a card has, earliest first. One stop of the walk each. */
+export function timeline(grid) {
+  return [...new Set(grid.cells.map((cell) => cell.column))].sort((one, other) => one - other)
 }
 
 function measure(node, rows, span) {

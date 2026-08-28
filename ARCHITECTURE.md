@@ -126,10 +126,35 @@ device that cannot write to a collection has no business calling it its own.
 sends, so a card that cannot be drawn is never stored.
 
 **Card at `/r/…`.** Header with title, yield and notes. Below it a bar with
-scale (½× 1× 1½× 2×), the actions, and `Save to collection` when the card is not
-in yours yet. Then the card.
+scale (½× 1× 1½× 2×), the view, the actions, and `Save to collection` when the
+card is not in yours yet. Then the card, in one of two views.
 
-## Editing
+The **card view** is the table. It is the artifact; everything else is a way of
+reading it.
+
+The **step view** is the whole table again, drawn by the same code and scrolled
+the same way, and it exists because that table cannot fit a phone: its ingredient
+column alone can be wider than the screen, so scrolling it plainly loses the row a
+verb belongs to. A narrow screen opens on the walk and a wide one on the whole
+table; the switch overrides either.
+
+What the walk adds is a **pinned ingredient column whose contents follow the
+scroll**. `frontierAt` says what stands on the counter when a given column runs: a
+step that has already run stands for every row it consumed - once the dough is
+mixed and risen, its flour and water are not things the cook handles any more,
+`reifen 12 h` is - while an ingredient nothing has reached yet stands for its own
+row. As the walk passes a column, the cells in the pin are replaced by that.
+
+Two properties make it work, and both come from the table rather than from the
+view. A step covers exactly the rows of its own subtree, so a band can replace
+those rows in place and nothing moves up or down; the card keeps one height for
+the whole walk. And right alignment (`LAYOUT.md`) puts every step a step feeds on
+at the column before it, so walking the tree once, stopping at whatever has
+already run, is enough to know the whole frontier.
+
+The rows a band covers are not removed but made invisible, so they go on asking
+for the height their ingredient needed. That is what stops the table shrinking as
+steps take rows over.## Editing
 
 Only with a key in the path.
 

@@ -93,10 +93,33 @@ name is weight 600 and links to reading; a badge follows it, 12 px 600, in
 accent on preparation when this device can edit, grey on ground when it cannot.
 The actions sit right aligned in the same row.
 
-**Step and shopping views.** At most 70 characters wide. Rows separated by 1 px
-in the **ground** colour, not the line colour: these are lists, not a grid. A
-step shows its number in a 24 px grey tabular column, the verb 600, ingredients
-and note grey. A shopping line shows the amount in a 96 px column, right
+**Step view.** The whole table, scrolled sideways with its ingredient column
+**pinned**. The pin is what the view is for: as a step passes behind it, that step
+takes the place of everything it consumed, so the column always says what is
+standing on the counter rather than what was bought. It is headed `Goes in`, not
+`Ingredient`, because it holds both. An ingredient nothing has reached yet stays
+where it is, however long it waits; only a step replaces it, never a blank.
+
+Rows never move, because a step stands on exactly the rows it took, and a row
+that has been taken over keeps the height its ingredient asked for. The card
+holds one height for the whole walk.
+
+A step standing in that column is weight 600, like any verb, and centred down its
+band the way a step is centred down the rows it merges - but left aligned across,
+because it is sitting where names sit. Its note stays 450 and grey.
+
+The pin has to be paid for out of a narrow screen, so the three columns are capped
+here rather than fixed at 58 and 54 px, and the name wraps inside them, breaking a
+word with no break in it rather than pushing the step column off the screen. A
+qualifier drops to its own line. A step column keeps the table's own 150 to 240 px:
+what is worth scrolling to is worth reading whole when it arrives.
+
+Below the table a walk through time: back, `04 / 09`, on. Those two buttons are
+the only controls used over and over with wet hands, so they are 44 px tall rather
+than the toolbar's height, and they are outlined rather than quiet. They only
+scroll; the count follows the scroll wherever a thumb leaves it.
+
+**Shopping view.** Not built. A line shows the amount in a 96 px column, right
 aligned, weight 600.
 
 ## Editing
