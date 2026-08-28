@@ -3,6 +3,8 @@ import { renderCard } from './render.js'
 import { renderOverview } from './overview.js'
 import * as api from './api.js'
 import { editable, wrapInStep } from './source.js'
+import { toDraft } from './edit.js'
+import { buildEditor } from './editor.js'
 import { cache, cached, collection, rows, setRows, useCollection } from './library.js'
 
 const SCALES = [
@@ -94,9 +96,50 @@ async function showCard(id, key, scale = 1, editing = false) {
   const scroll = element('div', 'scroll')
   scroll.append(renderCard(card, scale))
   show(
-    bar(back(), label('Scale'), scales(id, key, scale), keeper(id, key), source(id, key, scale, editing)),
+    bar(
+      back(),
+      label('Scale'),
+      scales(id, key, scale),
+      keeper(id, key),
+      composer(id, key, card),
+      source(id, key, scale, editing),
+    ),
     scroll,
     editing ? panel(id, key, text, scale) : null,
+  )
+}
+
+function composer(id, key, card) {
+  if (!key) return null
+  const button = element('button', 'quiet', 'Edit')
+  button.onclick = () => showEditor(id, key, toDraft(card))
+  return button
+}
+
+/**
+ * The editor holds the draft, so the screen is built once and repaints itself. Coming
+ * back out re-reads the card from the server, which is the only copy that counts.
+ */
+function showEditor(id, key, draft) {
+  const describe = (current) =>
+    head(current.title || 'New card', [current.yields, ...current.notes].filter(Boolean).join(' \u00b7 '))
+  describe(draft)
+
+  show(
+    buildEditor({
+      draft,
+      onChange: describe,
+      onClose: () => showCard(id, key),
+      onSave: async (text) => {
+        try {
+          await api.writeCard(id, key, text)
+        } catch (error) {
+          return `Not saved. ${reason(error)}`
+        }
+        cache(id, text)
+        return null
+      },
+    }),
   )
 }
 
@@ -250,7 +293,52 @@ function writeLink() {
   return link
 }
 
+/**
+ * A new card starts with its title and nothing else. An empty card parses - a title is
+ * all the format asks for - so it can be stored at once and then written in the editor,
+ * which is where entering a recipe belongs. Writing the text by hand stays one tap away
+ * for whoever already has the card as text.
+ */
 function showWriting() {
+  const held = collection()
+  head('New card', held ? held.id : '')
+
+  const title = element('input', 'line')
+  title.type = 'text'
+  title.placeholder = 'Pfannkuchen'
+  title.autofocus = true
+
+  const create = element('button', 'go', 'Start')
+  create.onclick = async () => {
+    const text = `# ${title.value.trim()}\n`
+    if (title.value.trim() === '') return notice('A card needs a title.')
+
+    const made = await attempt(() => api.createCard(text), 'The card was not created.')
+    if (made === FAILED) return
+    cache(made.id, text)
+
+    if (held) {
+      const kept = await attempt(
+        () => change(held, (current) => [...current, made]),
+        'The card was made, but not put in your collection.',
+      )
+      if (kept === FAILED) notice(`Its link is /r/${made.id}/${made.key}`)
+    }
+
+    // No reload: the draft is already here, and the link is what the address bar shows.
+    history.replaceState(null, '', `/r/${made.id}/${made.key}`)
+    showEditor(made.id, made.key, toDraft(parseCard(text)))
+  }
+
+  const asText = element('button', 'quiet', 'Write as text')
+  asText.onclick = showSource
+
+  const row = element('div', 'row', undefined, [element('span', 'label', 'Title'), title, create])
+  show(bar(back(), asText), element('div', 'list', undefined, [row]))
+  title.focus()
+}
+
+function showSource() {
   const held = collection()
   head('New card', held ? held.id : '')
 

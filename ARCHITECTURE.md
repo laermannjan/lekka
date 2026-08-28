@@ -122,8 +122,10 @@ Holding no collection, the overview offers to make one. Opening `/c/<name>`
 without its key shows somebody else's list and does **not** adopt it, since a
 device that cannot write to a collection has no business calling it its own.
 
-**Writing at `/new`.** A textarea holding a card as text. It parses before it
-sends, so a card that cannot be drawn is never stored.
+**Writing at `/new`.** A title, and then the editor. A card with only a title
+parses, so it is stored at once and written in. `Write as text` is still there,
+a textarea holding a card as text, which parses before it sends: a card that
+cannot be drawn is never stored.
 
 **Card at `/r/…`.** Header with title, yield and notes. Below it a bar with
 scale (½× 1× 1½× 2×), the actions, and `Save to collection` when the card is not
@@ -131,31 +133,97 @@ in yours yet. Then the card.
 
 ## Editing
 
-Only with a key in the path.
+Only with a key in the path. Two ways in, for two different jobs.
 
-Structure - inserting a step, moving a strand - is edited as `.lekka` text in a
-panel below the card, which is what exists today. It parses before it saves, and
-the card above redraws while the panel stays open. Because indenting a strand by
-hand is the tedious part, the panel knows three things: tab and shift-tab move
-the selected lines, enter keeps the current indentation, and **wrap in step**
-takes the line under the cursor together with everything indented below it,
-which is exactly one subtree, and hangs it under a new step.
+**The editor** is where a card is written. `Edit` on a card opens it, and `/new`
+starts in it: a new card is a title and nothing else, which parses, so it can be
+stored at once and filled in here rather than typed as text.
 
-**Still to build:** every field editable in place - title, preparation, verb,
-note, amount, unit, name, qualifier. Value editing in the card, structure in the
-text: rewiring is rare, typos are frequent.
+It has one button that adds, in the table rather than over it. `+ Ingredient`
+sits under the last ingredient, always in the same place, because a button that
+moves about is a button nobody finds twice. It asks for amount, unit, name and
+note, and what it makes is a new row with nothing to its right.
 
-Changes will be collected, not sent. A dirty flag decides whether saving does
-anything. Live-saving every keystroke would publish half-typed words to everyone
-holding the read link.
+**A step is built by choosing rows.** Every row carries a checkbox in a column
+of its own, so tapping a row still opens the row and choosing it is a separate
+target the width of a finger. Ticked rows raise a bar saying what they came to,
+and `Process in step` turns them into one.
 
-Two rules learned the hard way, which apply when that lands:
+What a row *means* is not the ingredient on it. It is whatever currently holds
+that ingredient - the rightmost cell in the row, which by right alignment is the
+root of its strand. So the rule is one walk: **take the outermost node whose
+rows are all chosen.** Choose every row under `verrühren` and you have said
+`verrühren`; choose two of its three and you have said those two ingredients,
+which then have to come out of it. Choose every row of two strands and you have
+said both roots, which is how strands are joined.
 
-- After leaving a field, refresh **only that field** from the model. Redrawing
-  the card replaces the element being clicked next, and the following keystroke
-  is lost.
-- Amounts are shown scaled. A number typed at 2× means the doubled amount; store
-  it divided.
+The second half of that move is the half nobody pointed at, so it is said before
+it happens, in the bar and again in the form: *"250 g Mehl comes out of
+verrühren"*. And a step left holding nothing is not a shape the format has
+(`FORMAT.md` rule 5), so it goes with what was taken out of it, and that is
+said too. The same cascade runs when an ingredient is deleted.
+
+**A card is the case where that array holds one root**, and that is what makes
+the errors sayable. Every ingredient must end in a step, so a loose ingredient
+is a root and is named as unused. All the strands must meet, so two step roots
+are a card that is two recipes sharing a title - *"kochen and braten never
+meet"* - and the fix is a step that takes both. Rice and chicken filets are one
+card with a final `anrichten`, not two endings: `FORMAT.md` has one outermost
+line and stays that way.
+
+The screen is that model drawn, as **one table, always**. Not one per strand:
+they share the ingredient column, and a strand nobody has joined yet is not a
+different kind of thing needing a drawing of its own - it is some cells further
+left, with free area after them. An ingredient nobody has used is a row with
+nothing at all to its right, which is exactly what it is. `buildForest` places
+every root on the same last column, because right alignment (`LAYOUT.md`)
+already moves a short strand up against the merge; here the merge is not
+written yet, so they align to where it will be, and writing it later moves
+nothing.
+
+Each fault is a line that leads to the node it is about. `Save` is off while
+any fault stands.
+
+Tapping a cell edits it, which needs the back-reference layout keeps: `renderGrid`
+takes an `edit` object and hands back the node a cell was drawn from, so the
+editor never works out from a position in the DOM what was clicked. The three
+fields of an ingredient row all lead to the ingredient, because they are one
+line of the card split across three columns.
+
+The checkboxes are the same drawing with one column in front. Only the editor
+has one, so only the editor carries the `choosing` class that puts the track
+there; everywhere else the arithmetic is what it always was, and the card is
+drawn by the same code either way. A count is deliberately not used for this:
+`repeat(0, …)` is not a valid track list, so a browser throws the whole
+template away and draws every element in the wrong place.
+
+**Punctuation is structure.** A colon splits an ingredient line and brackets are
+the aside, so neither may sit inside a name, a verb or a note. This is checked
+as a fault while it is typed, not on save, because `Salz: grob` would be written
+and read back as the same text while meaning salt in an amount of "grob" - no
+round trip can catch that, only knowing what the punctuation means. Saving still
+formats, re-parses and compares the card structurally as a backstop, and fails
+shut.
+
+**The text panel** stays for the rare job the editor is clumsy at: re-indenting
+a subtree by hand. It parses before it saves, and the card above redraws while
+the panel stays open. Tab and shift-tab move the selected lines, enter keeps the
+current indentation, and **wrap in step** takes the line under the cursor
+together with everything indented below it, which is exactly one subtree, and
+hangs it under a new step.
+
+Changes are collected, not sent: a dirty flag decides whether saving does
+anything, and leaving with one set asks first. Live-saving every keystroke would
+publish half-typed words to everyone holding the read link.
+
+Two hazards, one of which is now designed out:
+
+- The editor **repaints itself** and never rebuilds the screen from the link.
+  Every other screen does rebuild, which here would re-read the card from the
+  server and throw the draft away.
+- **The editor always draws at 1×.** Amounts elsewhere are shown scaled, and a
+  number typed at 2× would mean the doubled amount and have to be stored
+  divided. Editing at one scale removes the question rather than answering it.
 
 ## Offline
 
@@ -206,22 +274,44 @@ work.
   writing is idempotent. Check it against random trees, not only the examples.
 - **The API** against a running server: rights, wrong key, missing key, another
   card's key, no listing endpoint.
+- **The editing rules as pure functions.** `edit.js` holds every rule about what
+  may be joined to what and what is wrong with a draft, and holds no DOM, so it
+  is tested as arithmetic: the candidates are the roots, taking one hides it,
+  editing a step sees its own inputs and never the strand it sits in.
+
+- **The editor's wiring, against a stub DOM** (`test/dom.js`, ~120 lines). It
+  walks what a person does - enter two ingredients, join them in a step, tap a
+  cell, drop an input - and checks which sheet opened, what the list offered and
+  what the save would write. A stub proves none of that is *visible*; it proves
+  the right node reached the right form, which is where the rules live.
+
+- **A picture, from `node tools/shot.mjs`.** It serves the app, draws the card
+  view and the editor into one page, and screenshots it with
+  headless Chrome. Not an assertion - something to look at. It exists because
+  the stub answers for what is *there* and nothing answers for what the
+  stylesheet does to it: `repeat(0, 32px)` is not a track list, so
+  `grid-template-columns` fell back to `none` and the card was drawn with every
+  element present and every column the wrong width. Two of these side by side
+  is what caught it.
+
 - **No browser tests, for now.** Three rounds were once lost to a CSS rule that
   overrode `[hidden]`, where the property said "hidden" and the button was
   visible, so a DOM stub would have passed. This app answers that by building
-  no element it does not mean: no key, no *Edit source* button; no key on a row,
-  no *Delete*. What is absent cannot be shown by a stylesheet. The one thing
-  still toggled with `hidden` is the save-error line, and `[hidden]` carries an
+  no element it does not mean: no key, no *Edit* button; no key on a row, no
+  *Delete*. What is absent cannot be shown by a stylesheet. The one thing still
+  toggled with `hidden` is the save-error line, and `[hidden]` carries an
   `!important` in `style.css` to hold it down.
 
   Note what this does **not** buy: rights are enforced by the server and tested
   there. A missing button is not a permission. The browser would only tell us
   whether the app offers what the server would refuse.
 
-  Once the UI grows past hiding a single line - in-place editing of cells is the
-  next thing that would do it - end-to-end tests in a real browser become worth
-  their weight, and the rights table above is what they should walk: each of the
-  four link shapes, and what is actually visible under it.
+  What the stub still cannot reach is the sheet: `dialog.showModal` taking the
+  focus, keeping it inside, and closing on escape are behaviours of a real
+  browser, and they are the reason a `dialog` was used instead of a `div`. That
+  is now the strongest case for end-to-end tests, and the rights table above is
+  what they should walk alongside it: each of the four link shapes, and what is
+  actually visible under it.
 
 ## Threat model
 
@@ -285,5 +375,6 @@ of these is our own bug to find.
    card beats paper.
 2. **Step and shopping views.** Both are pure functions over the tree; the
    shopping list sums equal ingredients and shows how the amount splits up.
+   The step view is being written on its own branch.
 3. **Non-scaling amounts**, for a line like `Hefe: 1 Würfel` that should not
    double when the recipe does.
