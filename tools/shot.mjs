@@ -47,6 +47,7 @@ const CARD = `# Pfannkuchen (12 Stück)
 const SCENES = `
 import { parseCard } from './card.js'
 import { renderCard } from './render.js'
+import { renderWalk } from './walk.js'
 import { buildEditor } from './editor.js'
 import { toDraft, addIngredient } from './edit.js'
 
@@ -60,6 +61,7 @@ const editor = () =>
   })
 
 scene('Card view', wrap(renderCard(parseCard(TEXT), 1)))
+scene('Step view - the walk', renderWalk(parseCard(TEXT), 1, 1, () => {}))
 
 // The two states a card passes through before it has a single step, which is where
 // the table has no step columns at all.

@@ -1,7 +1,8 @@
 /** A card to the table that draws it. Columns are numbered from 1; column 0 is the ingredients. */
 export function buildGrid(card) {
-  if (!card.root) return { rows: [], cells: [], frees: [], band: [], columns: 0 }
-  return buildForest([card.root], card.preparations)
+  if (!card.root) return { rows: [], cells: [], frees: [], band: [], columns: 0, root: null }
+  // The walk needs the tree the table came from, which a card has and a forest does not.
+  return { ...buildForest([card.root], card.preparations), root: card.root }
 }
 
 /**
@@ -34,7 +35,6 @@ export function buildForest(strands, preparations = []) {
     frees: findFrees(occupy(rows, cells, columns)),
     band: buildBand(preparations, attached, columns),
     columns,
-    root: card.root,
   }
 }
 

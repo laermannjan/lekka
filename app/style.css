@@ -260,6 +260,7 @@ button.quiet:hover {
   border-bottom: 0;
   border-top: 1px solid var(--line);
   justify-content: flex-end;
+}
 
 /*
  * The walk is the whole table, scrolled sideways with its ingredient column pinned. The
