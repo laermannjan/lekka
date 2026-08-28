@@ -575,3 +575,39 @@ test('the table keeps its place across a repaint', () => {
   tick(screen, 'Mehl')
   assert.equal(scroller().scrollLeft, 240)
 })
+
+/** `row / column / span rows / span columns`, as `renderGrid` writes it. */
+const area = (node) => {
+  const [row, column, rows, columns] = node.style.gridArea.split(' / ')
+  return {
+    row: Number(row),
+    column: Number(column),
+    rows: Number(rows.replace('span ', '')),
+    columns: Number(columns.replace('span ', '')),
+  }
+}
+
+test('the table has square edges: the add row and the step column reach them', () => {
+  const { screen } = open(WITH_BUTTER)
+  const grid = onlyTable(screen)
+  const add = area(one(grid, byText('+ Ingredient'), '+ Ingredient'))
+  const step = area(one(grid, byText('+ Step'), '+ Step'))
+
+  // The add row starts at the very left, across the checkbox column, or it leaves a notch.
+  assert.equal(add.column, 1)
+  // The step column runs from the header to the same last row as the add row.
+  assert.equal(step.row, 1)
+  assert.equal(step.row + step.rows - 1, add.row)
+  // And the rest of the add row is drawn, so the bottom edge runs the whole width.
+  const along = all(grid)
+    .filter((node) => byClass('free')(node) && area(node).row === add.row)
+    .map(area)
+  assert.equal(along.length, 1)
+  assert.equal(add.column + add.columns, along[0].column)
+  assert.equal(along[0].column + along[0].columns, step.column)
+
+  // A row with something under it keeps its rule: only the bottom row drops one.
+  const rows = all(grid).filter(byClass('noun')).map((node) => node.parent)
+  assert.ok(rows.every((node) => !node.classList.contains('lowest')))
+  assert.ok(one(grid, byText('+ Ingredient'), 'add').classList.contains('lowest'))
+})

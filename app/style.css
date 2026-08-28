@@ -636,6 +636,8 @@ button.go:disabled {
 /* The step column is read downwards, because it is one column and a narrow one. */
 .grid > .add.step {
   align-content: center;
+  /* It stands at the edge of the table, where the card's own frame is the line. */
+  border-right: 0;
   /* The last step column is `rightmost` and drops its border, so this draws the line. */
   border-left: 1px solid var(--line);
   display: grid;
