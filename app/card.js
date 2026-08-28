@@ -103,7 +103,7 @@ function toNode(raw) {
   }
 }
 
-function splitAside(text) {
+export function splitAside(text) {
   const match = /^(.*?)\s*\(([^()]*)\)$/.exec(text.trim())
   return match ? { text: match[1], aside: match[2] } : { text: text.trim(), aside: null }
 }
