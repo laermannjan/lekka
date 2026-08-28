@@ -46,7 +46,11 @@ export function renderGrid(grid, scale = 1, edit = null) {
   if (grid.columns === 0) table.classList.add('flat')
 
   const head = grid.band.length
-  const bottom = head + 1 + grid.rows.length
+  // The row that adds an ingredient is a row of the table like any other, so it counts
+  // towards where the bottom is. Otherwise the rows above it are drawn as the last ones
+  // and drop their bottom rule, and the table ends twice.
+  const adds = edit?.onAdd ? 1 : 0
+  const bottom = head + 1 + grid.rows.length + adds
 
   grid.band.forEach((entries, index) => {
     const ends = new Set(entries.map((entry) => entry.column + entry.columnSpan - 1))
@@ -109,21 +113,34 @@ export function renderGrid(grid, scale = 1, edit = null) {
     }))
   }
 
-  // Under the last ingredient, where the next one goes.
-  if (edit?.onAdd) {
+  // Under the last ingredient, where the next one goes. It runs from the very left
+  // edge, across the checkboxes, because a row that starts halfway leaves a notch.
+  if (adds) {
     const box = element('div', 'add', '+ Ingredient')
     box.onclick = edit.onAdd
-    area(box, 1, NAME_COLUMN, bottom + 1, 1, lead)
-    table.append(box)
+    table.append(put(box, {
+      column: 0, columnSpan: NAME_COLUMN + lead, row: bottom, rowSpan: 1, last: true,
+    }))
+    // and the rest of that row, so the table has an edge along its whole width.
+    if (grid.columns > 0)
+      table.append(put(element('div', 'free'), {
+        column: NAME_COLUMN + 1, columnSpan: grid.columns, row: bottom, rowSpan: 1, last: true,
+      }))
   }
 
   // After the last step, where the next one goes. A column of its own, because that is
   // what a step is: the table has to say a step can be added before anybody ticks a row.
+  // It runs the full height for the same reason the add row runs the full width.
   if (edit?.onStep) {
     const box = element('div', 'add step', '+ Step')
     box.onclick = edit.onStep
-    area(box, NAME_COLUMN + grid.columns + 1, 1, head + 1, 1 + grid.rows.length, lead)
-    table.append(box)
+    table.append(put(box, {
+      column: NAME_COLUMN + grid.columns + 1,
+      columnSpan: 1,
+      row: head + 1,
+      rowSpan: 1 + grid.rows.length + adds,
+      last: true,
+    }))
   }
 
   return table
