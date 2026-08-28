@@ -129,8 +129,8 @@ the address bar, out of history, out of a screen share.
 The code is drawn by `app/qr.js`, some four hundred lines, no dependency. The
 app has no build step and a policy that loads nothing from elsewhere, so the
 alternative was a minified blob in `app/` that no one reads. Byte mode, error
-correction M, versions 1 to 10, which is 213 characters - longer than that is
-not a link one shares.
+correction M, versions 1 to 10, which is 213 bytes of UTF-8 - longer than that
+is not a link one shares.
 
 Holding no collection, the overview offers to make one. Opening `/c/<name>`
 without its key shows somebody else's list and does **not** adopt it, since a

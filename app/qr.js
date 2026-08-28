@@ -2,7 +2,7 @@
  * A QR code, drawn from nothing but the bytes of a link.
  *
  * Only what a link needs: byte mode, error correction M, versions 1 to 10,
- * which hold 213 characters. Longer than that is not a link one shares.
+ * which hold 213 bytes of UTF-8. Longer than that is not a link one shares.
  */
 
 const ALIGNMENT = [

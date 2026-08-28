@@ -334,7 +334,10 @@ function showShare(held) {
     selection.removeAllRanges()
     selection.addRange(range)
   }
-  field.onclick = select
+  // A click selects the whole address, unless one has just dragged out a part of it.
+  field.onclick = () => {
+    if (getSelection().isCollapsed) select()
+  }
 
   const copy = element('button', 'quiet', 'Copy link')
   copy.onclick = async () => {
@@ -350,8 +353,12 @@ function showShare(held) {
   const close = element('button', 'quiet', 'Close')
   close.onclick = () => box.close()
 
+  const title = element('p', 'verb', 'Open this collection on another device')
+  title.id = 'share-title'
+  box.setAttribute('aria-labelledby', title.id)
+
   box.append(
-    element('p', 'verb', 'Open this collection on another device'),
+    title,
     code,
     element('p', 'note', 'Scan the code, or open the link. Whoever has it can change these cards.'),
     field,

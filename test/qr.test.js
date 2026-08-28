@@ -57,5 +57,6 @@ test('every code carries its finders and its timing line', () => {
 test('the drawing holds a quiet zone and nothing that runs', () => {
   const drawing = svg('hi')
   assert.match(drawing, /^<svg [^>]*viewBox="0 0 29 29"/)
-  assert.doesNotMatch(drawing, /script|href/i)
+  // Markup in the text is encoded, never carried into the drawing.
+  assert.doesNotMatch(svg('<script>alert(1)</script>'), /script|href/i)
 })
