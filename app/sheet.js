@@ -15,7 +15,9 @@ import { label, beneath } from './edit.js'
  */
 function sheet(heading, build, { save, remove, again = null }) {
   const box = document.createElement('dialog')
-  box.className = 'sheet'
+  // Not `sheet`: the sharing dialog owns that class, and two dialogs sharing one class
+  // means whichever stylesheet rule comes last decides how both of them look.
+  box.className = 'compose'
 
   const form = element('form', 'body')
   form.method = 'dialog'
