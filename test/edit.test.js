@@ -5,7 +5,7 @@ import { parseCard, formatCard } from '../app/card.js'
 import {
   toDraft, fromDraft, candidates, inputs, holds, parentOf, beneath,
   addIngredient, addStep, editIngredient, editStep, removeNode, claim, upheaval,
-  fieldsOf, preparationLines, validate, label, storedForm,
+  fieldsOf, preparationLines, validate, label, storedForm, sweptBy, titleFault,
 } from '../app/edit.js'
 
 const PANCAKES = `# Pfannkuchen (12 Stück)
@@ -299,4 +299,57 @@ test('an amount typed back in keeps its unit apart from its number', () => {
   const milch = draft.strands[0]
   editIngredient(draft, milch, { ...fieldsOf(milch), amount: '1' })
   assert.deepEqual(milch.amount, { kind: 'number', value: 1, unit: 'l' })
+})
+
+/* What a move sweeps away that nobody pointed at. */
+
+const NESTED = `# A
+
+- anrichten (heiß)
+  * Teller wärmen
+  - verrühren
+    - Mehl: 250 g
+`
+
+test('emptying climbs all the way, and is said all the way', () => {
+  const draft = draftOf(NESTED)
+  const anrichten = draft.strands[0]
+  const verruehren = inputs(anrichten)[0]
+  const mehl = inputs(verruehren)[0]
+
+  // Mehl is all verrühren holds, and verrühren is all anrichten holds, so deleting one
+  // ingredient takes the whole card body with it - including `(heiß)` and the preparation.
+  assert.deepEqual(sweptBy(draft, mehl).map(label), ['verrühren', 'anrichten'])
+  assert.deepEqual(upheaval(draft, [mehl]).emptied.map(label), ['verrühren', 'anrichten'])
+
+  assert.deepEqual(removeNode(draft, mehl).strands, [])
+})
+
+test('nothing is swept when the step keeps something', () => {
+  const draft = draftOf(PANCAKES)
+  const verruehren = inputs(draft.strands[0])[0]
+  assert.deepEqual(sweptBy(draft, inputs(verruehren)[0]), [])
+})
+
+test('a draft with more than one strand cannot be stored', () => {
+  // `fromDraft` keeps one root, so a comparison against it would be against the
+  // truncation itself and would always pass.
+  let draft = addIngredient(empty(), { name: 'Reis' })
+  draft = addStep(draft, { verb: 'kochen', inputs: [draft.strands[0]] })
+  assert.equal(typeof storedForm(draft), 'string')
+
+  draft = addIngredient(draft, { name: 'Salz' })
+  draft = addStep(draft, { verb: 'würzen', inputs: [draft.strands[1]] })
+  assert.equal(draft.strands.length, 2)
+  assert.equal(storedForm(draft), null)
+})
+
+test('a title is asked the same question before there is a card to put it in', () => {
+  assert.equal(titleFault('Pfannkuchen'), null)
+  assert.equal(titleFault('  '), 'A card needs a title.')
+  // `Chili (scharf)` would be stored as a title of "Chili" that yields "scharf".
+  assert.match(titleFault('Chili (scharf)'), /Brackets cannot be part of a title/)
+  assert.match(titleFault('Suppe (heiß'), /Brackets cannot be part of a title/)
+  // A colon is fine in a title: the head line is never split at one.
+  assert.equal(titleFault('Abendessen: Reis'), null)
 })

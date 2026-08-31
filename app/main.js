@@ -3,7 +3,7 @@ import { renderCard } from './render.js'
 import { renderOverview } from './overview.js'
 import * as api from './api.js'
 import { editable, wrapInStep } from './source.js'
-import { toDraft } from './edit.js'
+import { toDraft, titleFault } from './edit.js'
 import { buildEditor } from './editor.js'
 import { cache, cached, collection, rows, setRows, useCollection } from './library.js'
 import { svg } from './qr.js'
@@ -137,7 +137,9 @@ function showEditor(id, key, draft) {
         } catch (error) {
           return `Not saved. ${reason(error)}`
         }
-        cache(id, text)
+        // The card is written. Keeping a copy for offline is a convenience, and a full
+        // or blocked localStorage must not turn a save that arrived into one that threw.
+        keep(id, text)
         return null
       },
     }),
@@ -194,6 +196,15 @@ function panel(id, key, text, scale) {
     message,
     area,
   ])
+}
+
+/** Caching is a convenience; storage that refuses is not worth failing a write over. */
+function keep(id, text) {
+  try {
+    cache(id, text)
+  } catch (error) {
+    console.warn('not cached', error)
+  }
 }
 
 async function load(id) {
@@ -311,12 +322,19 @@ function showWriting() {
 
   const create = element('button', 'go', 'Start')
   create.onclick = async () => {
+    // The same rule the editor applies, asked before the card exists: `Chili (scharf)`
+    // would otherwise be stored as a title of "Chili" that yields "scharf".
+    const wrong = titleFault(title.value)
+    if (wrong) return notice(wrong)
+
+    // A tap on a phone is easily two. Without this, both post, and both are kept.
+    if (create.disabled) return
+    create.disabled = true
     const text = `# ${title.value.trim()}\n`
-    if (title.value.trim() === '') return notice('A card needs a title.')
 
     const made = await attempt(() => api.createCard(text), 'The card was not created.')
-    if (made === FAILED) return
-    cache(made.id, text)
+    if (made === FAILED) return void (create.disabled = false)
+    keep(made.id, text)
 
     if (held) {
       const kept = await attempt(
@@ -360,8 +378,12 @@ function showSource() {
       )
     }
 
+    // One tap, one card: the same double-tap guard the title form has.
+    if (create.disabled) return
+    create.disabled = true
+
     const made = await attempt(() => api.createCard(area.value), 'The card was not created.')
-    if (made === FAILED) return
+    if (made === FAILED) return void (create.disabled = false)
 
     const link = `/r/${made.id}/${made.key}`
     if (held) {

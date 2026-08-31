@@ -4,12 +4,18 @@ import assert from 'node:assert/strict'
 import { install, all, one, tap, byText, byClass, descendants } from './dom.js'
 
 const body = install()
+/** What `confirm` answered, and what it was asked. */
+let asked = []
+globalThis.confirm = (text) => {
+  asked.push(text)
+  return globalThis.confirm.answer ?? true
+}
 const { parseCard } = await import('../app/card.js')
 const { toDraft } = await import('../app/edit.js')
 const { buildEditor } = await import('../app/editor.js')
 
 /** The editor, and whatever it last tried to save. */
-function open(text, refuse = null) {
+function open(text, refuse = null, throws = false) {
   body.replaceChildren()
   const saved = []
   let release = null
@@ -19,6 +25,8 @@ function open(text, refuse = null) {
       // A write that does not resolve until the test says so, for the window in which
       // the page is still live.
       if (release) await new Promise((go) => (release = go))
+      // A write that rejects rather than reporting - a full localStorage, say.
+      if (throws) throw new Error('storage is full')
       if (refuse) return refuse
       saved.push(written)
     },
@@ -610,4 +618,53 @@ test('the table has square edges: the add row and the step column reach them', (
   const rows = all(grid).filter(byClass('noun')).map((node) => node.parent)
   assert.ok(rows.every((node) => !node.classList.contains('lowest')))
   assert.ok(one(grid, byText('+ Ingredient'), 'add').classList.contains('lowest'))
+})
+
+test('deleting says what else it would take, and does nothing if refused', () => {
+  const { screen } = open(`# A
+
+- anrichten (heiß)
+  - verrühren
+    - Mehl: 250 g
+`)
+  asked = []
+  globalThis.confirm.answer = false
+
+  tap(one(screen, (node) => byClass('noun')(node) && node.textContent === 'Mehl', 'Mehl').parent)
+  tap(one(sheet(), byText('Delete'), 'Delete'))
+
+  // Mehl is all verrühren holds and verrühren is all anrichten holds, so deleting one
+  // ingredient would take the whole card. It says so, and it asks first.
+  assert.equal(asked.length, 1)
+  assert.match(asked[0], /verrühren, anrichten/)
+  assert.deepEqual(shown(screen).sort(), ['anrichten', 'verrühren'])
+
+  // Answering yes goes through with it.
+  globalThis.confirm.answer = true
+  tap(one(screen, (node) => byClass('noun')(node) && node.textContent === 'Mehl', 'Mehl').parent)
+  tap(one(sheet(), byText('Delete'), 'Delete'))
+  assert.deepEqual(shown(screen), [])
+})
+
+test('deleting something that empties nothing does not ask', () => {
+  const { screen } = open(WITH_BUTTER)
+  asked = []
+  tap(one(screen, (node) => byClass('noun')(node) && node.textContent === 'Mehl', 'Mehl').parent)
+  tap(one(sheet(), byText('Delete'), 'Delete'))
+  assert.deepEqual(asked, [])
+  assert.deepEqual(shown(screen).sort(), ['braten', 'schmelzen', 'verrühren'])
+})
+
+test('a save that throws does not wedge the editor', async () => {
+  const { screen } = open(PANCAKES, null, true)
+  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
+  fill({ Instruction: 'anbraten' })
+  submit()
+
+  await one(screen, byText('Save'), 'Save').onclick()
+
+  // Save comes back rather than staying down for the life of the editor, and the reason
+  // is on the screen rather than nowhere.
+  assert.equal(one(screen, byText('Save'), 'Save').disabled, false)
+  assert.ok(all(screen).some((node) => node.textContent.includes('storage is full')))
 })
