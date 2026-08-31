@@ -16,6 +16,7 @@ class Element {
     this.own = ''
     this.className = ''
     this.parent = null
+    this.dataset = {}
     this.style = { setProperty: (name, value) => (this.style[name] = value) }
     this.classList = {
       add: (...names) => {

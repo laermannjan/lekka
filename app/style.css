@@ -262,6 +262,143 @@ button.quiet:hover {
   justify-content: flex-end;
 }
 
+/*
+ * The walk is the whole table, scrolled sideways with its ingredient column pinned. The
+ * pin has to be paid for out of a narrow screen, so unlike the whole table the three
+ * columns are capped and the name wraps inside them; a step column keeps the table's own
+ * width, because what is worth scrolling to must be worth reading when it arrives.
+ *
+ * fit-content, not auto: a grid box narrower than its tracks clamps sticky cells to their
+ * own column, and the pin below stops holding.
+ */
+.walk .grid {
+  --amount: min(12vw, 58px);
+  --unit: min(10vw, 54px);
+  --names: min(28vw, 200px);
+
+  grid-template-columns:
+    var(--amount) var(--unit) var(--names)
+    repeat(var(--columns), minmax(150px, 240px));
+  width: fit-content;
+}
+
+.walk .grid .name {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* A qualifier takes its own line rather than being broken across one. */
+.walk .grid .name .aside {
+  display: block;
+  margin-left: 0;
+}
+
+/*
+ * The pinned column. It needs a background to hide what passes beneath and a layer above
+ * the cells drawn after it.
+ */
+.walk .grid > .amount,
+.walk .grid > .unit,
+.walk .grid > .name,
+.walk .grid > .words,
+.walk .grid > .heading,
+.walk .grid > .standing {
+  position: sticky;
+  z-index: 1;
+}
+
+.walk .grid > .amount,
+.walk .grid > .words,
+.walk .grid > .heading,
+.walk .grid > .standing {
+  left: 0;
+}
+
+.walk .grid > .unit {
+  left: var(--amount);
+}
+
+.walk .grid > .name {
+  left: calc(var(--amount) + var(--unit));
+}
+
+.walk .grid > .amount,
+.walk .grid > .unit,
+.walk .grid > .name,
+.walk .grid > .words,
+.walk .grid > .standing {
+  background: var(--white);
+}
+
+/*
+ * Its right edge is the pin's edge, so it is drawn whatever the cell would otherwise do.
+ * It is centred down its band the way a step is centred down the rows it merges, but
+ * stays left across, because it is sitting where names sit.
+ */
+.walk .grid > .standing {
+  align-content: center;
+  border-right: 1px solid var(--line);
+  display: grid;
+}
+
+/* Still laid out, so its row keeps its height; the band above it does the talking. */
+.covered {
+  visibility: hidden;
+}
+
+/* A step standing in the ingredient column for what it consumed. It is a step, so it
+   carries the weight of one; it sits where a name sits, so it is not centred. */
+.carried {
+  font-weight: 600;
+}
+
+/* The note beside it is a note, not part of the verb. */
+.carried .aside {
+  font-weight: 450;
+}
+
+/* A qualifier takes its own line rather than being broken across one. */
+.slice .grid .name .aside {
+  display: block;
+  margin-left: 0;
+}
+
+/*
+ * A name here wraps, and a word with no break in it is broken anyway. An ingredient
+ * column two columns wide has no room for `Roggenvollkornmehl`, and a name painted over
+ * the step beside it is worse than one split across two lines.
+ */
+.slice .grid .name,
+.slice .grid .words {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.tick {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+/* The only control reached over and over with wet hands, so it is a real target. */
+.tick button {
+  background: var(--white);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  min-height: 44px;
+  min-width: 64px;
+}
+
+.tick button:disabled {
+  border-color: var(--accent-pale);
+  color: var(--grey);
+  cursor: default;
+}
+
 .grid {
   display: grid;
   font-variant-numeric: tabular-nums;
@@ -452,7 +589,7 @@ button.go:disabled {
  * where the hand is, and no taller than most of it so the card behind stays in sight -
  * you are usually joining a strand you can see.
  */
-.sheet {
+.compose {
   background: var(--white);
   border: 2px solid var(--accent);
   border-bottom: 0;
@@ -466,11 +603,11 @@ button.go:disabled {
   width: 100%;
 }
 
-.sheet::backdrop {
+.compose::backdrop {
   background: rgb(27 27 25 / 0.4);
 }
 
-.sheet .body {
+.compose .body {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 8px;
@@ -479,7 +616,7 @@ button.go:disabled {
   padding: 12px;
 }
 
-.sheet .heading {
+.compose .heading {
   color: var(--grey);
   font: 450 14px/1.3 inherit;
   letter-spacing: 0.06em;
@@ -487,7 +624,7 @@ button.go:disabled {
   width: 100%;
 }
 
-.sheet .row {
+.compose .row {
   border: 0;
   display: block;
   padding: 0;
@@ -495,11 +632,11 @@ button.go:disabled {
 }
 
 /* Amount and unit are one thought and sit on one line, as they do in the card. */
-.sheet .row.short {
+.compose .row.short {
   width: calc(50% - 4px);
 }
 
-.sheet .row > .name {
+.compose .row > .name {
   color: var(--grey);
   display: block;
   font-weight: 450;
@@ -507,8 +644,8 @@ button.go:disabled {
   text-transform: uppercase;
 }
 
-.sheet input[type='text'],
-.sheet textarea {
+.compose input[type='text'],
+.compose textarea {
   background: var(--white);
   border: 1px solid var(--line);
   border-radius: 2px;
@@ -519,29 +656,29 @@ button.go:disabled {
   width: 100%;
 }
 
-.sheet textarea {
+.compose textarea {
   resize: vertical;
 }
 
-.sheet input[type='text']:focus,
-.sheet textarea:focus {
+.compose input[type='text']:focus,
+.compose textarea:focus {
   box-shadow: 0 0 0 1px var(--accent);
   outline: 0;
 }
 
-.sheet .hint {
+.compose .hint {
   color: var(--grey);
   display: block;
 }
 
-.sheet .inputs {
+.compose .inputs {
   border: 1px solid var(--line);
   max-height: 34vh;
   overflow-y: auto;
 }
 
 /* Reached with wet hands like the step buttons, so a row here is a real target. */
-.sheet .choice {
+.compose .choice {
   align-items: center;
   border-bottom: 1px solid var(--ground);
   cursor: pointer;
@@ -551,27 +688,27 @@ button.go:disabled {
   padding: 4px 8px;
 }
 
-.sheet .choice:last-child {
+.compose .choice:last-child {
   border-bottom: 0;
 }
 
-.sheet .choice input {
+.compose .choice input {
   accent-color: var(--accent);
   height: 18px;
   margin: 0;
   width: 18px;
 }
 
-.sheet .choice.step .what {
+.compose .choice.step .what {
   font-weight: 600;
 }
 
-.sheet .choice .aside {
+.compose .choice .aside {
   flex: 1;
   text-align: right;
 }
 
-.sheet .actions {
+.compose .actions {
   background: var(--white);
   border-top: 1px solid var(--line);
   display: flex;
@@ -583,11 +720,11 @@ button.go:disabled {
   width: 100%;
 }
 
-.sheet .actions .warn {
+.compose .actions .warn {
   margin-left: auto;
 }
 
-.sheet .actions .warn:hover {
+.compose .actions .warn:hover {
   color: var(--warning);
 }
 
@@ -660,14 +797,14 @@ button.go:disabled {
   white-space: normal;
 }
 
-.sheet .choice.taken {
+.compose .choice.taken {
   display: block;
   font-weight: 600;
   min-height: 0;
   padding: 6px 8px;
 }
 
-.sheet .hint.warn {
+.compose .hint.warn {
   color: var(--warning);
 }
 
@@ -688,9 +825,12 @@ button.go:disabled {
   .panel,
   .badge,
   .sheet,
+  .compose,
   .faults,
   .choose,
   .add,
+
+  .tick,
   button {
     display: none;
   }
