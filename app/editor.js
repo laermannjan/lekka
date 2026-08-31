@@ -4,7 +4,7 @@ import { renderGrid } from './render.js'
 import { ingredientSheet, stepSheet, cardSheet } from './sheet.js'
 import {
   candidates, parentOf, fieldsOf, validate, label, storedForm, beneath,
-  addIngredient, addStep, editIngredient, editStep, removeNode, claim, upheaval,
+  addIngredient, addStep, editIngredient, editStep, removeNode, claim, upheaval, sweptBy,
 } from './edit.js'
 
 /**
@@ -94,8 +94,16 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       const sent = current
       paint()
 
-      const failed = await commit(sent)
-      saving = false
+      // `finally`, because a throw would otherwise leave `saving` up for good: Save
+      // disabled for the life of the editor, no message, and the changes still dirty.
+      let failed
+      try {
+        failed = await commit(sent)
+      } catch (error) {
+        failed = `Not saved. ${error.message}`
+      } finally {
+        saving = false
+      }
       // A write that arrives is said as plainly as one that does not: without a word
       // either way there is no telling a saved card from a card the server refused.
       notice = failed
@@ -249,8 +257,23 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
         run: (fields) => change(node ? editIngredient(current, node, fields) : addIngredient(current, fields)),
       },
       again: node ? null : { text: 'Add and another', run: (fields) => change(addIngredient(current, fields)) },
-      remove: node ? { text: 'Delete', run: () => change(removeNode(current, node)) } : null,
+      remove: node ? { text: 'Delete', run: () => drop(node) } : null,
     })
+  }
+
+  /**
+   * Deleting climbs: a step left holding nothing goes too, and so can the step above it,
+   * taking its verb, its note and its preparations. Adding a step already says what it
+   * would disturb before it does it; deleting has to as well, because there is no undo.
+   */
+  function drop(node) {
+    const swept = sweptBy(current, node)
+    if (swept.length > 0) {
+      const names = swept.map(label).join(', ')
+      if (!confirm(`Deleting ${label(node)} leaves ${names} with nothing, so ${swept.length === 1 ? 'it goes' : 'they go'} too. Delete anyway?`))
+        return
+    }
+    change(removeNode(current, node))
   }
 
   /**
@@ -275,9 +298,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
               : addStep(current, { ...fields, inputs: taken ?? fields.inputs }),
           ),
       },
-      remove: node
-        ? { text: 'Delete', run: () => change(removeNode(current, node)) }
-        : null,
+      remove: node ? { text: 'Delete', run: () => drop(node) } : null,
     })
   }
 

@@ -120,14 +120,41 @@ function gather(node, wanted, taken) {
 export function upheaval(draft, taken) {
   const moved = []
   const emptied = []
+  const gone = new Set(taken)
+
+  // Emptying climbs: a step left with nothing goes, which can leave *its* step with
+  // nothing, and so on to the root. `detach` and `removeNode` already do this, so
+  // anything that stops at the first parent promises less than it delivers.
+  const climb = (node) => {
+    const from = parentOf(draft, node)
+    if (!from || inputs(from).some((child) => !gone.has(child))) return
+    if (!emptied.includes(from)) emptied.push(from)
+    gone.add(from)
+    climb(from)
+  }
+
   for (const node of taken) {
     const from = parentOf(draft, node)
-    if (!from) continue
-    moved.push({ node, from })
-    const left = inputs(from).filter((child) => !taken.includes(child))
-    if (left.length === 0 && !emptied.includes(from)) emptied.push(from)
+    if (from) moved.push({ node, from })
   }
+  for (const node of taken) climb(node)
   return { moved, emptied }
+}
+
+/** What deleting a node would take with it: the steps it would leave holding nothing. */
+export function sweptBy(draft, node) {
+  return upheaval(draft, [node]).emptied
+}
+
+/**
+ * What is wrong with a title on its own, before there is a card to put it in. `/new`
+ * stores one straight away, so it has to ask the same question the editor would.
+ */
+export function titleFault(title) {
+  const faults = []
+  if ((title ?? '').trim() === '') faults.push({ message: 'A card needs a title.' })
+  storable(null, faults, false, ['title', title])
+  return faults[0]?.message ?? null
 }
 
 /** A new ingredient, waiting to be used. */
@@ -372,6 +399,9 @@ function alike(one, other) {
 
 /** The card as text, if the text means the same. Null when it would not survive. */
 export function storedForm(draft) {
+  // `fromDraft` keeps one root, so comparing against it cannot notice the others going
+  // missing: the comparison would be against the truncation itself.
+  if (draft.strands.length !== 1) return null
   const card = fromDraft(draft)
   const text = formatCard(card)
   return sameCard(parseCard(text), card) ? text : null
