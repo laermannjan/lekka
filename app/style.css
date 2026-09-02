@@ -341,12 +341,22 @@ button.quiet:hover {
   margin-left: 0;
 }
 
+/*
+ * A step column may not be narrower than 120 px. The floor is not about how a card
+ * looks when it fits - drawn whole, the columns come out wider than it anyway - it is
+ * what makes a card that cannot fit overflow rather than be squeezed. Without it a small
+ * card is crushed towards its longest word and, because overflowing is how a card asks
+ * to be read a step at a time, it is then judged to fit and never asks.
+ *
+ * 120 is the widest floor that still draws Erdkruste whole on a 1440 screen; at 130 it
+ * misses by 21 px. Reading a card sets its own widths and does not use this.
+ */
 .grid {
   display: grid;
   font-variant-numeric: tabular-nums;
   grid-auto-columns: minmax(44px, auto);
   grid-auto-rows: minmax(21px, auto);
-  grid-template-columns: 58px 54px max-content repeat(var(--columns), fit-content(240px));
+  grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(120px, 240px));
 }
 
 /*
@@ -356,7 +366,7 @@ button.quiet:hover {
  */
 .grid.choosing {
   grid-template-columns:
-    58px 54px max-content repeat(var(--columns), fit-content(240px)) 46px;
+    58px 54px max-content repeat(var(--columns), minmax(120px, 240px)) 46px;
 }
 
 /*
