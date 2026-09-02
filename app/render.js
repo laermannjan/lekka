@@ -51,6 +51,56 @@ export function renderGrid(grid, scale = 1, edit = null) {
   }
 
   /*
+   * Taking a set of rows at once: a heading takes what stands under it. Holding it and
+   * clicking it with a modifier are the same act, so they are wired together here - the
+   * hold is the only one a thumb has, and without it a phone could not take a strand at
+   * all once the column of checkboxes went.
+   */
+  /*
+   * A press held on a control. Six pixels of drift is a hand holding still, not a drag,
+   * which is the same threshold the reading view uses; a pixel used to call the press
+   * off and lose the row. The callout is suppressed because a long press on a phone
+   * would otherwise raise the selection menu over whatever it has just chosen.
+   */
+  const onHold = (box, run) => {
+    let waiting = null
+    let from = null
+    const drop = () => { if (waiting) clearTimeout(waiting); waiting = null }
+    box.addEventListener?.('pointerdown', (event) => {
+      from = { x: event?.clientX ?? 0, y: event?.clientY ?? 0 }
+      waiting = setTimeout(() => { waiting = null; run() }, 450)
+    })
+    box.addEventListener?.('pointerup', drop)
+    box.addEventListener?.('pointercancel', drop)
+    box.addEventListener?.('pointermove', (event) => {
+      if (!waiting || !from) return
+      const moved = Math.max(
+        Math.abs((event?.clientX ?? 0) - from.x),
+        Math.abs((event?.clientY ?? 0) - from.y),
+      )
+      if (moved > 6) drop()
+    })
+    box.addEventListener?.('contextmenu', (event) => event?.preventDefault?.())
+  }
+
+  const takes = (box, gather) => {
+    if (!edit?.onChoose) return box
+    const run = () => {
+      const nodes = gather()
+      if (nodes.length === 0) return
+      edit.onChoose(nodes, !nodes.every((node) => edit.chosen(node)), false)
+    }
+    box.classList.add('pickable')
+    let took = false
+    box.onclick = (event) => {
+      if (took) return void (took = false)
+      if (event?.shiftKey || event?.ctrlKey || event?.metaKey) run()
+    }
+    onHold(box, () => { took = true; run() })
+    return box
+  }
+
+  /*
    * A row is chosen on the row itself, not in a column of checkboxes: hold to take one,
    * shift to take the run from the last one touched. A plain tap still opens the row,
    * which is what a tap on a cell has always meant, so the three never collide.
@@ -66,29 +116,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
       if (event?.ctrlKey || event?.metaKey) return edit.onChoose([node], !edit.chosen(node), false)
       if (edit.onPick) edit.onPick(node)
     }
-    let holding = null
-    let from = null
-    box.addEventListener?.('pointerdown', (event) => {
-      from = { x: event?.clientX ?? 0, y: event?.clientY ?? 0 }
-      holding = setTimeout(() => {
-        holding = null
-        took = true
-        edit.onChoose([node], !edit.chosen(node), false)
-      }, 450)
-    })
-    const drop = () => { if (holding) clearTimeout(holding); holding = null }
-    box.addEventListener?.('pointerup', drop)
-    box.addEventListener?.('pointercancel', drop)
-    // No thumb is still. Only a drag calls the press off, and a drag is six pixels here
-    // as it is in the reading view; a pixel of drift used to lose the row.
-    box.addEventListener?.('pointermove', (event) => {
-      if (!holding || !from) return
-      const moved = Math.max(Math.abs((event?.clientX ?? 0) - from.x), Math.abs((event?.clientY ?? 0) - from.y))
-      if (moved > 6) drop()
-    })
-    // A long press on a phone raises the selection callout over the row it has just
-    // chosen. The row is a control while the editor is open, so it carries no selection.
-    box.addEventListener?.('contextmenu', (event) => event.preventDefault())
+    onHold(box, () => { took = true; edit.onChoose([node], !edit.chosen(node), false) })
     return box
   }
 
@@ -128,21 +156,26 @@ export function renderGrid(grid, scale = 1, edit = null) {
   const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
   label.style.gridColumn = `1 / ${NAME_COLUMN + 1}`
   label.style.gridRow = String(head + 1)
-  // Shift-clicking the heading takes the whole strand, which is what choosing every row
-  // of it means; it is where the header checkbox used to be.
-  if (edit?.onChoose && grid.rows.length > 0) {
-    label.classList.add('pickable')
-    label.onclick = (event) => {
-      if (!(event?.shiftKey || event?.ctrlKey || event?.metaKey)) return
-      const on = !grid.rows.every((node) => edit.chosen(node))
-      edit.onChoose(grid.rows, on, false)
-    }
-  }
+  // The heading takes the whole strand, which is what choosing every row of it means;
+  // it is where the header checkbox used to be.
+  if (grid.rows.length > 0) takes(label, () => grid.rows)
   table.append(label)
-  for (let column = 1; column <= grid.columns; column++)
-    table.append(put(element('div', 'label', pad(numbers[column - 1])), {
+  /*
+   * A column number takes the rows the steps in that column stand on - what this moment
+   * of the card is made of. A column can hold more than one step, because two strands
+   * that have not met yet are the same distance from the end, and taking the column
+   * takes both.
+   */
+  for (let column = 1; column <= grid.columns; column++) {
+    const box = element('div', 'label', pad(numbers[column - 1]))
+    takes(box, () =>
+      grid.cells
+        .filter((cell) => cell.column === column)
+        .flatMap((cell) => grid.rows.slice(cell.row, cell.row + cell.rowSpan)))
+    table.append(put(box, {
       column: NAME_COLUMN + column, columnSpan: 1, row: head + 1, rowSpan: 1,
     }))
+  }
 
   grid.rows.forEach((node, index) => {
     const row = head + 2 + index
