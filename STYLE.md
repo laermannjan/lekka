@@ -74,8 +74,9 @@ stretching into a few enormous cells.
 - **Header bar** in the accent, no rule below it: title upper case 700 on the
   left; yield and card notes on the right in accent pale.
 - **Toolbar** below it on the ground colour, closed by a 1 px line: scale left,
-  views middle, actions right, each group with a small grey upper-case label.
-  Too narrow to hold them in one line, it wraps: a control moves down whole,
+  actions right. It holds actions only - a status among buttons reads as their
+  heading. There is no group label while there is only one group to name. Too
+  narrow to hold everything in one line, it wraps: a control moves down whole,
   never breaking its own label.
 - **Switches** are segmented: buttons sharing one outline, separated by 1 px
   lines, the active one filled with the accent and white on it.
@@ -105,31 +106,36 @@ bar of their own, like every other bar.
 in the **ground** colour, not the line colour: these are lists, not a grid. A
 step shows its number in a 24 px grey tabular column, the verb 600, ingredients
 and note grey. A shopping line shows the amount in a 96 px column, right
-**Step view.** The whole table, scrolled sideways with its ingredient column
-**pinned**. The pin is what the view is for: as a step passes behind it, that step
-takes the place of everything it consumed, so the column always says what is
-standing on the counter rather than what was bought. It is headed `Goes in`, not
-`Ingredient`, because it holds both. An ingredient nothing has reached yet stays
-where it is, however long it waits; only a step replaces it, never a blank.
+**Reading a card that will not fit.** The whole table, scrolled sideways, with
+every cell **held at the left edge** until the step that takes it arrives and
+pushes it out. That hold is what the reading is for: the edge always says what is
+standing on the counter rather than what was bought. An ingredient nothing has
+reached yet stays where it is, however long it waits; only a step replaces it,
+never a blank.
 
-Rows never move, because a step stands on exactly the rows it took, and a row
-that has been taken over keeps the height its ingredient asked for. The card
-holds one height for the whole walk.
+Rows never move, because a step stands on exactly the rows it took, and a row that
+has been taken over keeps the height its ingredient asked for. The card holds one
+height throughout.
 
-A step standing in that column is weight 600, like any verb, and centred down its
-band the way a step is centred down the rows it merges - but left aligned across,
-because it is sitting where names sit. Its note stays 450 and grey.
+A step standing at the edge is weight 600, like any verb, and centred down its
+band the way a step is centred down the rows it merges. Its note stays 450 and
+grey.
 
-The pin has to be paid for out of a narrow screen, so the three columns are capped
-here rather than fixed at 58 and 54 px, and the name wraps inside them, breaking a
-word with no break in it rather than pushing the step column off the screen. A
-qualifier drops to its own line. A step column keeps the table's own 150 to 240 px:
-what is worth scrolling to is worth reading whole when it arrives.
+Above it, three places name where things are on the screen rather than which
+column they are: `Done`, `Now`, `Next`, in the toolbar's grey upper case with
+`Now` in the accent. They are fixed to the screen and never scroll, and `Next` is
+narrower than a column on purpose - a card that runs on has to say so. Everything
+standing in `Done` is flush with its right edge, so the boundary between `Done`
+and `Now` is a hard line the card is measured against. `Done` is a whole
+ingredient column wide while one may still be standing there, and no wider than
+the step itself after that.
 
-Below the table a walk through time: back, `04 / 09`, on. Those two buttons are
-the only controls used over and over with wet hands, so they are 44 px tall rather
-than the toolbar's height, and they are outlined rather than quiet. They only
-scroll; the count follows the scroll wherever a thumb leaves it.
+The hold has to be paid for out of a narrow screen, so the three ingredient
+columns are capped there rather than fixed at 58 and 54 px, and the name wraps
+inside them, breaking a word with no break in it rather than pushing the step
+column off the screen. A qualifier drops to its own line. No step column is wider
+than the ingredient column, which is what keeps the ingredient column the widest
+and stops anything overflowing the place it stands in.
 
 **Shopping view.** Not built. A line shows the amount in a 96 px column, right
 aligned, weight 600.
@@ -145,6 +151,10 @@ aligned, weight 600.
 - An empty note is invisible until the cell is hovered or focused, then it
   appears with the word "Hinweis". Notes are rare; placeholders on every cell
   would be noise.
+- A **chosen row** takes the preparation colour across all three of its fields.
+  There is no column of checkboxes: a row is chosen by holding it, or by shift or
+  command clicking it, so writing costs the card no column that reading has to
+  make room for.
 
 ## Print
 

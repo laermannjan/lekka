@@ -142,35 +142,40 @@ a textarea holding a card as text, which parses before it sends: a card that
 cannot be drawn is never stored.
 
 **Card at `/r/…`.** Header with title, yield and notes. Below it a bar with
-scale (½× 1× 1½× 2×), the view, the actions, and `Save to collection` when the
-card is not in yours yet. Then the card, in one of two views.
+scale (½× 1× 1½× 2×), the actions, and `Save to collection` when the card is not
+in yours yet. Then the card.
 
-The **card view** is the table. It is the artifact; everything else is a way of
-reading it.
+There is one view, because there is one card. `STYLE.md` already says what to do
+about a table wider than the screen, and that rule is the interface: **a card
+that fits is drawn whole, however large the screen; only one that does not gains
+the reading affordances.** So they are not a phone mode. They appear exactly when
+there is somewhere to go, and dissolve when there is not.
 
-The **step view** is the whole table again, drawn by the same code and scrolled
-the same way, and it exists because that table cannot fit a phone: its ingredient
-column alone can be wider than the screen, so scrolling it plainly loses the row a
-verb belongs to. A narrow screen opens on the walk and a wide one on the whole
-table; the switch overrides either.
-
-What the walk adds is a **pinned ingredient column whose contents follow the
-scroll**. `frontierAt` says what stands on the counter when a given column runs: a
-step that has already run stands for every row it consumed - once the dough is
-mixed and risen, its flour and water are not things the cook handles any more,
-`reifen 12 h` is - while an ingredient nothing has reached yet stands for its own
-row. As the walk passes a column, the cells in the pin are replaced by that.
+What a card that does not fit gains is **a cell held at the left edge**. Every
+cell sits in a slot running from its own column to the step that takes it, and
+sticks for that whole run, so what stands at the edge is always the last thing
+that happened to those rows: the ingredients until something takes them, then the
+step that took them, then the step after that. The counter is the table held
+still, not a second column kept in step with it - once the dough is mixed and
+risen, its flour and water are not things the cook handles any more, `reifen 12 h`
+is.
 
 Two properties make it work, and both come from the table rather than from the
-view. A step covers exactly the rows of its own subtree, so a band can replace
-those rows in place and nothing moves up or down; the card keeps one height for
-the whole walk. And right alignment (`LAYOUT.md`) puts every step a step feeds on
-at the column before it, so walking the tree once, stopping at whatever has
-already run, is enough to know the whole frontier.
+view. A step covers exactly the rows of its own subtree, so it can take those rows
+over in place and nothing moves up or down. And right alignment (`LAYOUT.md`) puts
+every step a step feeds on at the column before it, so a step's slot is always one
+column wide and only an ingredient ever waits.
 
-The rows a band covers are not removed but made invisible, so they go on asking
-for the height their ingredient needed. That is what stops the table shrinking as
-steps take rows over.## Editing
+Above the card, three places name where things are on the screen rather than which
+column they are: `Done`, `Now`, `Next`. They are fixed to the screen and never
+scroll. `Done` is as wide as the widest column while an ingredient may still be
+standing in it, and no wider than the step itself after that; everything in it is
+flush with its right edge, so a narrow step rests against the `Done` line with the
+column before it sliding out to its left. Dragging scrolls and settles on the
+nearest of those lines; a flick is worth exactly one step however far it
+travelled.
+
+## Editing
 
 Only with a key in the path. Two ways in, for two different jobs.
 
@@ -418,8 +423,7 @@ of these is our own bug to find.
 1. **Duration per step** as a real field, so a schedule can be computed
    backwards from when you want to eat. For sourdough this is the point where a
    card beats paper.
-2. **Step and shopping views.** Both are pure functions over the tree; the
-   shopping list sums equal ingredients and shows how the amount splits up.
-   The step view is being written on its own branch.
+2. **A shopping view.** A pure function over the tree; it sums equal ingredients
+   and shows how the amount splits up.
 3. **Non-scaling amounts**, for a line like `Hefe: 1 Würfel` that should not
    double when the recipe does.

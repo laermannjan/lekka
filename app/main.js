@@ -1,6 +1,5 @@
 import { parseCard, ParseError } from './card.js'
-import { renderCard } from './render.js'
-import { renderWalk } from './walk.js'
+import { renderReading } from './read.js'
 import { renderOverview } from './overview.js'
 import * as api from './api.js'
 import { editable, wrapInStep } from './source.js'
@@ -14,11 +13,6 @@ const SCALES = [
   [1, '1×'],
   [1.5, '1½×'],
   [2, '2×'],
-]
-
-const VIEWS = [
-  ['card', 'Whole'],
-  ['slice', 'Step'],
 ]
 
 const title = document.getElementById('title')
@@ -88,8 +82,8 @@ async function showCollection(id, key) {
 }
 
 async function showCard(id, key, state = {}) {
-  const { scale = 1, editing = false, view = firstView(), at = 1 } = state
-  const here = { scale, editing, view, at }
+  const { scale = 1, editing = false, at = 0 } = state
+  const here = { scale, editing, at }
 
   const text = await load(id)
   if (text === null) return fail('No card under this link.')
@@ -106,10 +100,10 @@ async function showCard(id, key, state = {}) {
   show(
     bar(
       back(),
-      label('Scale'),
+      // No "Scale" label. STYLE.md gives each group of the toolbar one, but that was
+      // written when there were three groups to tell apart; with the view switch gone
+      // there is only this one, and half a dozen multipliers say what they are.
       scales(id, key, here),
-      label('View'),
-      views(id, key, here),
       keeper(id, key, here),
       composer(id, key, card),
       source(id, key, here),
@@ -120,24 +114,11 @@ async function showCard(id, key, state = {}) {
 }
 
 function body(card, id, key, state) {
-  // Walking is a scroll, not a redraw: the state is only kept so that changing the scale
+  // Reading is a scroll, not a redraw: the place is only kept so that changing the scale
   // or opening the source comes back to the step the cook was standing on.
-  if (state.view === 'slice')
-    return renderWalk(card, state.scale, state.at, (at) => {
-      state.at = at
-    })
-  const scroll = element('div', 'scroll')
-  scroll.append(renderCard(card, state.scale))
-  return scroll
-}
-
-/**
- * The whole table is as wide as the recipe is long, which a phone cannot show: its
- * ingredient column alone can fill the screen. A narrow screen therefore starts on one
- * step at a time, which is the same table with the columns in between dropped.
- */
-function firstView() {
-  return matchMedia('(max-width: 640px)').matches ? 'slice' : 'card'
+  return renderReading(card, state.scale, state.at, (at) => {
+    state.at = at
+  })
 }
 
 function composer(id, key, card) {
@@ -178,7 +159,9 @@ function showEditor(id, key, draft) {
 
 function source(id, key, state) {
   if (!key) return null
-  const button = element('button', 'quiet', state.editing ? 'Close source' : 'Edit source')
+  // Not "Edit source": two buttons a word apart, both beginning "Edit", read as one
+  // thing done twice rather than the two different editors they are.
+  const button = element('button', 'quiet', state.editing ? 'Close' : 'Source')
   button.onclick = () => showCard(id, key, { ...state, editing: !state.editing })
   return button
 }
@@ -263,7 +246,7 @@ async function describe(list) {
 function keeper(id, key, state) {
   const held = collection()
   if (!held) {
-    const create = element('button', 'quiet', 'Save to a new collection')
+    const create = element('button', 'quiet', 'Save to collection')
     create.onclick = async () => {
       const made = await attempt(
         () => api.createCollection([{ id, ...(key ? { key } : {}) }]),
@@ -278,7 +261,12 @@ function keeper(id, key, state) {
 
   const list = rows()
   const found = list.find((row) => row.id === id)
-  if (found && (found.key || !key)) return label('In your collection')
+  /*
+   * Nothing at all when the card is already kept. A status has no business in a row of
+   * actions - it read as the heading of the buttons beside it - and the absence of a
+   * save is the answer to the question it was asking: there is nothing left to do.
+   */
+  if (found && (found.key || !key)) return null
 
   const save = element('button', 'quiet', found ? 'Keep the edit link' : 'Save to collection')
   save.onclick = async () => {
@@ -578,17 +566,6 @@ function scales(id, key, state) {
   return group
 }
 
-function views(id, key, state) {
-  const group = element('span', 'switch')
-  for (const [name, text] of VIEWS) {
-    const button = element('button', '', text)
-    button.setAttribute('aria-pressed', name === state.view)
-    button.onclick = () => showCard(id, key, { ...state, view: name })
-    group.append(button)
-  }
-  return group
-}
-
 /**
  * The worker lives here and not in a tag in the page, because the policy the server sends
  * allows no inline script. Registering fails without a secure context, which plain http gives.
@@ -601,6 +578,8 @@ function element(tag, className = '', text, children = []) {
   const node = document.createElement(tag)
   node.className = className
   if (text !== undefined) node.textContent = text
-  node.append(...children)
+  // A part that is not there is left out. Several of the toolbar's controls answer with
+  // nothing on a card nobody may change, and `append(null)` writes the word "null".
+  node.append(...children.filter(Boolean))
   return node
 }

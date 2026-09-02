@@ -13,7 +13,7 @@ const SHELL = [
   '/edit.js',
   '/editor.js',
   '/sheet.js',
-  '/walk.js',
+  '/read.js',
   '/overview.js',
   '/library.js',
   '/source.js',

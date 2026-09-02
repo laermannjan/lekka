@@ -10,9 +10,9 @@ export function renderCard(card, scale = 1, edit = null) {
 }
 
 /**
- * Any grid as a table, whole or a slice of one. Split out from `renderCard` because the
- * editor draws a grid it built itself, from several strands, and the walk draws a slice
- * of one; both must go through this code to be the card rather than a picture of it.
+ * Any grid as a table. Split out from `renderCard` because the editor draws a grid it
+ * built itself, from several strands; it must go through this code to be the card rather
+ * than a picture of it.
  *
  * `edit` is what makes the table editable, and it is all the editor needs the drawing to
  * give it. Layout keeps, for every row and every cell, the node it came from; handing
@@ -20,19 +20,29 @@ export function renderCard(card, scale = 1, edit = null) {
  * out from a position in the DOM what was clicked.
  *
  *   `onPick(node)`     a cell was tapped
- *   `onChoose(...)`    draw a column of checkboxes down the left, and report a change
+ *   `onChoose(...)`    a row was chosen, or a run of them
  *   `onAdd()`          draw a row under the last ingredient that adds one
  *
- * With `onChoose` the whole table shifts one column right to make room. Without it there
- * is no such column and every position is what it always was, so the card is drawn by
- * exactly the same arithmetic as before.
+ * Choosing happens on the row itself - shift-click with a mouse, a long press with a
+ * thumb - rather than in a column of checkboxes down the left. A column that exists only
+ * while writing is a column the card has to make room for, and on a phone that is eight
+ * per cent of the screen spent on a control used only when building a step.
  */
 export function renderGrid(grid, scale = 1, edit = null) {
   // A slice of the card numbers its columns with the places they hold in the whole of
   // it, so the header still says when this is.
   const numbers = grid.numbers ?? Array.from({ length: grid.columns }, (_, index) => index + 1)
-  const lead = edit?.onChoose ? 1 : 0
-  const put = (node, spec) => place(node, grid, spec, lead)
+  const put = (node, spec) => place(node, grid, spec)
+
+  /*
+   * What takes each ingredient, so its cell can be given the columns it waits through.
+   * A step always sits one column after the step that takes it (`place` in `grid.js`
+   * hands every child `column - 1`), so a step never waits; only an ingredient does.
+   */
+  const takenBy = new Map()
+  for (const cell of grid.cells)
+    for (const child of cell.node.children)
+      if (child.kind === 'ingredient') takenBy.set(child, cell.column)
   const pick = (box, node) => {
     if (!edit?.onPick) return box
     box.classList.add('pickable')
@@ -40,13 +50,86 @@ export function renderGrid(grid, scale = 1, edit = null) {
     return box
   }
 
+  /*
+   * Taking a set of rows at once: a heading takes what stands under it. Holding it and
+   * clicking it with a modifier are the same act, so they are wired together here - the
+   * hold is the only one a thumb has, and without it a phone could not take a strand at
+   * all once the column of checkboxes went.
+   */
+  /*
+   * A press held on a control. Six pixels of drift is a hand holding still, not a drag,
+   * which is the same threshold the reading view uses; a pixel used to call the press
+   * off and lose the row. The callout is suppressed because a long press on a phone
+   * would otherwise raise the selection menu over whatever it has just chosen.
+   */
+  const onHold = (box, run) => {
+    let waiting = null
+    let from = null
+    const drop = () => { if (waiting) clearTimeout(waiting); waiting = null }
+    box.addEventListener?.('pointerdown', (event) => {
+      from = { x: event?.clientX ?? 0, y: event?.clientY ?? 0 }
+      waiting = setTimeout(() => { waiting = null; run() }, 450)
+    })
+    box.addEventListener?.('pointerup', drop)
+    box.addEventListener?.('pointercancel', drop)
+    box.addEventListener?.('pointermove', (event) => {
+      if (!waiting || !from) return
+      const moved = Math.max(
+        Math.abs((event?.clientX ?? 0) - from.x),
+        Math.abs((event?.clientY ?? 0) - from.y),
+      )
+      if (moved > 6) drop()
+    })
+    box.addEventListener?.('contextmenu', (event) => event?.preventDefault?.())
+  }
+
+  const takes = (box, gather) => {
+    if (!edit?.onChoose) return box
+    const run = () => {
+      const nodes = gather()
+      if (nodes.length === 0) return
+      edit.onChoose(nodes, !nodes.every((node) => edit.chosen(node)), false)
+    }
+    box.classList.add('pickable')
+    let took = false
+    box.onclick = (event) => {
+      if (took) return void (took = false)
+      if (event?.shiftKey || event?.ctrlKey || event?.metaKey) run()
+    }
+    onHold(box, () => { took = true; run() })
+    return box
+  }
+
+  /*
+   * A row is chosen on the row itself, not in a column of checkboxes: hold to take one,
+   * shift to take the run from the last one touched. A plain tap still opens the row,
+   * which is what a tap on a cell has always meant, so the three never collide.
+   */
+  const choosable = (box, node) => {
+    if (!edit?.onChoose) return pick(box, node)
+    box.classList.add('pickable')
+    // A press that has already chosen the row must not also open it on the way up.
+    let took = false
+    box.onclick = (event) => {
+      if (took) return void (took = false)
+      if (event?.shiftKey) return edit.onChoose([node], !edit.chosen(node), true)
+      if (event?.ctrlKey || event?.metaKey) return edit.onChoose([node], !edit.chosen(node), false)
+      if (edit.onPick) edit.onPick(node)
+    }
+    onHold(box, () => { took = true; edit.onChoose([node], !edit.chosen(node), false) })
+    return box
+  }
+
   const table = element('div', 'grid')
   table.style.setProperty('--columns', grid.columns)
+  // The editor's table is one column longer, for `+ Step`. The class is what gives that
+  // column a track of its own; without it the column is implicit and a band drawn
+  // `1 / -1` stops where the named tracks do.
+  if (edit?.onStep) table.classList.add('choosing')
   // Classes, not counts: `repeat(0, …)` is not a valid track list, and a browser that
   // rejects one throws the whole template away and lays the table out in implicit
   // tracks - every cell present, every one the wrong width. A card with no step yet is
   // the first thing every new card is, so this is the common case, not the corner.
-  if (lead) table.classList.add('choosing')
   if (grid.columns === 0) table.classList.add('flat')
 
   const head = grid.band.length
@@ -64,54 +147,84 @@ export function renderGrid(grid, scale = 1, edit = null) {
       if (entry.column === 0) {
         box.style.gridColumn = '1 / -1'
         box.style.gridRow = String(index + 1)
-      } else area(box, NAME_COLUMN + entry.column, entry.columnSpan, index + 1, 1, lead)
+      } else area(box, NAME_COLUMN + entry.column, entry.columnSpan, index + 1, 1)
       table.append(box)
     }
   })
 
-  // The walk puts steps in this column too, so it names it for what it holds.
+  // The reading view puts steps in this column too, so it names it for what it holds.
   const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
-  label.style.gridColumn = `${1 + lead} / ${NAME_COLUMN + 1 + lead}`
+  label.style.gridColumn = `1 / ${NAME_COLUMN + 1}`
   label.style.gridRow = String(head + 1)
+  // The heading takes the whole strand, which is what choosing every row of it means;
+  // it is where the header checkbox used to be.
+  if (grid.rows.length > 0) takes(label, () => grid.rows)
   table.append(label)
-  for (let column = 1; column <= grid.columns; column++)
-    table.append(put(element('div', 'label', pad(numbers[column - 1])), {
+  /*
+   * A column number takes the rows the steps in that column stand on - what this moment
+   * of the card is made of. A column can hold more than one step, because two strands
+   * that have not met yet are the same distance from the end, and taking the column
+   * takes both.
+   */
+  for (let column = 1; column <= grid.columns; column++) {
+    const box = element('div', 'label', pad(numbers[column - 1]))
+    takes(box, () =>
+      grid.cells
+        .filter((cell) => cell.column === column)
+        .flatMap((cell) => grid.rows.slice(cell.row, cell.row + cell.rowSpan)))
+    table.append(put(box, {
       column: NAME_COLUMN + column, columnSpan: 1, row: head + 1, rowSpan: 1,
     }))
-
-  // The whole strand at once, since choosing every row of it is what says "this strand".
-  if (lead) {
-    const on = grid.rows.length > 0 && grid.rows.every((node) => edit.chosen(node))
-    const all = choice(on)
-    all.onclick = () => edit.onChoose(grid.rows, !on, false)
-    table.append(put(all, { column: 0, columnSpan: 1, row: head + 1, rowSpan: 1 }))
   }
 
   grid.rows.forEach((node, index) => {
     const row = head + 2 + index
     const last = row === bottom
-    if (lead) {
-      const one = choice(edit.chosen(node))
-      // Shift extends from the last row touched, which is how a run of rows is chosen.
-      one.onclick = (event) => edit.onChoose([node], !edit.chosen(node), event?.shiftKey === true)
-      table.append(put(one, { column: 0, columnSpan: 1, row, rowSpan: 1, last }))
-    }
     // Every field of a row leads to the same ingredient: the amount, the unit and the
-    // name are one line of the card split into three columns, not three things.
+    // name are one line of the card split into three columns, not three things. They sit
+    // in a slot of their own, which runs from the ingredient column to whatever takes
+    // this ingredient - the free area to its right, drawn as the reach of the cell that
+    // is waiting rather than as a rectangle worked out separately.
+    const waits = (takenBy.get(node) ?? grid.columns + 1) - 1
+    const hold = element('div', 'hold')
+    hold.style.gridArea = `${row} / 1 / span 1 / span ${NAME_COLUMN + waits}`
+    if (last) hold.classList.add('lowest')
+    if (edit?.chosen?.(node)) hold.classList.add('chosen')
     for (const field of ingredientFields(node, scale)) {
-      // The walk hides these a row at a time as steps take them over.
+      // The reading view hides these a row at a time as steps take them over.
       field.node.dataset.row = String(index)
-      table.append(put(pick(field.node, node), { ...field, row, rowSpan: 1, last }))
+      area(field.node, field.column, field.columnSpan, 1, 1)
+      hold.append(field.node)
     }
+    choosable(hold, node)
+    table.append(hold)
   })
 
-  for (const cell of grid.cells)
-    table.append(put(pick(stepField(cell.node), cell.node), {
+  /*
+   * A step in a slot of its own. The slot is one column wide, which is all a step ever
+   * needs, and it is what stops the cell from holding the left edge for the whole card:
+   * a sticky cell may not leave its own slot, so the next step pushes it out exactly as
+   * it arrives. That is the roll.
+   */
+  for (const cell of grid.cells) {
+    const box = pick(stepField(cell.node), cell.node)
+    const holder = element('div', 'holds')
+    area(box, 1, 1, 1, 1)
+    holder.append(box)
+    table.append(put(holder, {
       column: NAME_COLUMN + cell.column, columnSpan: 1,
       row: head + 2 + cell.row, rowSpan: cell.rowSpan,
       last: head + 1 + cell.row + cell.rowSpan === bottom,
     }))
+  }
 
+  /*
+   * The free rectangles still carry the ink. A cell reaching as far as the step that
+   * takes it gives the blank space its shape, but not its edges: where two runs of
+   * blank meet and are not the same width, a rule has to be drawn or a line that is
+   * visible on both sides of them stops in the middle of the card. That is rule 3 in
+   * `LAYOUT.md`, and it is why this cannot be worked out from the cells alone.
+   */
   for (const free of grid.frees) {
     const box = element('div', free.into ? 'free open' : 'free')
     table.append(put(box, {
@@ -121,13 +234,13 @@ export function renderGrid(grid, scale = 1, edit = null) {
     }))
   }
 
-  // Under the last ingredient, where the next one goes. It runs from the very left
-  // edge, across the checkboxes, because a row that starts halfway leaves a notch.
+  // Under the last ingredient, where the next one goes. It runs the width of the
+  // ingredient column, because a row that starts halfway leaves a notch.
   if (adds) {
     const box = element('div', 'add', '+ Ingredient')
     box.onclick = edit.onAdd
     table.append(put(box, {
-      column: 0, columnSpan: NAME_COLUMN + lead, row: bottom, rowSpan: 1, last: true,
+      column: 1, columnSpan: NAME_COLUMN, row: bottom, rowSpan: 1, last: true,
     }))
     // and the rest of that row, so the table has an edge along its whole width.
     if (grid.columns > 0)
@@ -152,21 +265,6 @@ export function renderGrid(grid, scale = 1, edit = null) {
   }
 
   return table
-}
-
-/**
- * A checkbox in a cell of its own, so that tapping a row still opens the row. The box
- * itself takes no pointer events (`style.css`); the cell around it is the target, which
- * is what makes it big enough to hit.
- */
-function choice(on) {
-  const box = element('div', 'choose')
-  const input = document.createElement('input')
-  input.type = 'checkbox'
-  input.checked = on
-  input.tabIndex = -1
-  box.append(input)
-  return box
 }
 
 function pad(number) {
@@ -212,15 +310,15 @@ function stepField(node) {
   return cell
 }
 
-function place(node, grid, { column, columnSpan, row, rowSpan, last }, lead = 0) {
-  area(node, column, columnSpan, row, rowSpan, lead)
+function place(node, grid, { column, columnSpan, row, rowSpan, last }) {
+  area(node, column, columnSpan, row, rowSpan)
   if (column + columnSpan - 1 === NAME_COLUMN + grid.columns) node.classList.add('rightmost')
   if (last) node.classList.add('lowest')
   return node
 }
 
-function area(node, column, columnSpan, row, rowSpan, lead = 0) {
-  node.style.gridArea = `${row} / ${column + lead} / span ${rowSpan} / span ${columnSpan}`
+function area(node, column, columnSpan, row, rowSpan) {
+  node.style.gridArea = `${row} / ${column} / span ${rowSpan} / span ${columnSpan}`
 }
 
 function bind(text) {

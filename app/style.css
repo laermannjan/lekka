@@ -263,158 +263,110 @@ button.quiet:hover {
 }
 
 /*
- * The walk is the whole table, scrolled sideways with its ingredient column pinned. The
- * pin has to be paid for out of a narrow screen, so unlike the whole table the three
- * columns are capped and the name wraps inside them; a step column keeps the table's own
- * width, because what is worth scrolling to must be worth reading when it arrives.
- *
- * fit-content, not auto: a grid box narrower than its tracks clamps sticky cells to their
- * own column, and the pin below stops holding.
+ * Reading a card that will not fit. The three places name where things are on the
+ * screen - what you have just done, what you are doing, what comes next - so they are
+ * fixed to it and never scroll. Next is narrower than a column on purpose: a card that
+ * runs on has to say so.
  */
-.walk .grid {
+.places {
+  background: var(--ground);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+}
+
+.place {
+  align-items: center;
+  color: var(--grey);
+  display: flex;
+  flex: none;
+  height: 22px;
+  letter-spacing: 0.06em;
+  overflow: hidden;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.place + .place {
+  border-left: 1px solid var(--line);
+}
+
+.place.now {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/*
+ * Every column keeps its own width; nothing is evened out. What is fixed is the Done
+ * place, which is as wide as the widest column there is - the ingredient block - and
+ * everything standing in it is flush with its right edge. A step narrower than that
+ * comes to rest against the Done line with the column before it still sliding out to
+ * its left, which is what the space is for.
+ *
+ * No step may be wider than the block, or it would be the thing that overflows; capping
+ * them at the block's width is what makes the block the widest by construction.
+ *
+ * The ingredient column keeps its three fields but caps the name, because the pin has to
+ * be paid for out of a narrow screen; a name wraps rather than pushing a step off it.
+ */
+.reading .grid {
   --amount: min(12vw, 58px);
   --unit: min(10vw, 54px);
   --names: min(28vw, 200px);
 
   grid-template-columns:
     var(--amount) var(--unit) var(--names)
-    repeat(var(--columns), minmax(150px, 240px));
-  width: fit-content;
+    repeat(var(--columns), fit-content(var(--cap, 240px)))
+    var(--tail, 0px);
+  /* fit-content will shrink to the room it is given, unlike a fixed width, so the card
+     has to be told to take the width it wants and let the scroller do the rest. */
+  width: max-content;
 }
 
-.walk .grid .name {
+/*
+ * Sideways is ours, up and down is the page's. Without this the browser takes the gesture
+ * over on the first move and cancels the pointer, and a flick is never worth one step.
+ */
+.reading .scroll {
+  touch-action: pan-y;
+}
+
+.reading .grid .name {
   overflow-wrap: anywhere;
   white-space: normal;
 }
 
 /* A qualifier takes its own line rather than being broken across one. */
-.walk .grid .name .aside {
+.reading .grid .name .aside {
   display: block;
   margin-left: 0;
 }
 
 /*
- * The pinned column. It needs a background to hide what passes beneath and a layer above
- * the cells drawn after it.
+ * A step column may not be narrower than 120 px. The floor is not about how a card
+ * looks when it fits - drawn whole, the columns come out wider than it anyway - it is
+ * what makes a card that cannot fit overflow rather than be squeezed. Without it a small
+ * card is crushed towards its longest word and, because overflowing is how a card asks
+ * to be read a step at a time, it is then judged to fit and never asks.
+ *
+ * 120 is the widest floor that still draws Erdkruste whole on a 1440 screen; at 130 it
+ * misses by 21 px. Reading a card sets its own widths and does not use this.
  */
-.walk .grid > .amount,
-.walk .grid > .unit,
-.walk .grid > .name,
-.walk .grid > .words,
-.walk .grid > .heading,
-.walk .grid > .standing {
-  position: sticky;
-  z-index: 1;
-}
-
-.walk .grid > .amount,
-.walk .grid > .words,
-.walk .grid > .heading,
-.walk .grid > .standing {
-  left: 0;
-}
-
-.walk .grid > .unit {
-  left: var(--amount);
-}
-
-.walk .grid > .name {
-  left: calc(var(--amount) + var(--unit));
-}
-
-.walk .grid > .amount,
-.walk .grid > .unit,
-.walk .grid > .name,
-.walk .grid > .words,
-.walk .grid > .standing {
-  background: var(--white);
-}
-
-/*
- * Its right edge is the pin's edge, so it is drawn whatever the cell would otherwise do.
- * It is centred down its band the way a step is centred down the rows it merges, but
- * stays left across, because it is sitting where names sit.
- */
-.walk .grid > .standing {
-  align-content: center;
-  border-right: 1px solid var(--line);
-  display: grid;
-}
-
-/* Still laid out, so its row keeps its height; the band above it does the talking. */
-.covered {
-  visibility: hidden;
-}
-
-/* A step standing in the ingredient column for what it consumed. It is a step, so it
-   carries the weight of one; it sits where a name sits, so it is not centred. */
-.carried {
-  font-weight: 600;
-}
-
-/* The note beside it is a note, not part of the verb. */
-.carried .aside {
-  font-weight: 450;
-}
-
-/* A qualifier takes its own line rather than being broken across one. */
-.slice .grid .name .aside {
-  display: block;
-  margin-left: 0;
-}
-
-/*
- * A name here wraps, and a word with no break in it is broken anyway. An ingredient
- * column two columns wide has no room for `Roggenvollkornmehl`, and a name painted over
- * the step beside it is worse than one split across two lines.
- */
-.slice .grid .name,
-.slice .grid .words {
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-
-.tick {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  padding: 8px 0 4px;
-}
-
-/* The only control reached over and over with wet hands, so it is a real target. */
-.tick button {
-  background: var(--white);
-  border: 1px solid var(--line);
-  color: var(--ink);
-  cursor: pointer;
-  font: inherit;
-  min-height: 44px;
-  min-width: 64px;
-}
-
-.tick button:disabled {
-  border-color: var(--accent-pale);
-  color: var(--grey);
-  cursor: default;
-}
-
 .grid {
   display: grid;
   font-variant-numeric: tabular-nums;
   grid-auto-columns: minmax(44px, auto);
   grid-auto-rows: minmax(21px, auto);
-  grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(150px, 240px));
+  grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(120px, 240px));
 }
 
 /*
- * The editor puts a column of checkboxes in front and a column for `+ Step` after, and
- * only it has either, so only it shifts. Both are named here rather than left implicit
- * so that a band spanning `1 / -1` still spans the whole table.
+ * The editor puts a column for `+ Step` after the last one, and only it has that, so
+ * only it is longer. It is named here rather than left implicit so that a band spanning
+ * `1 / -1` still spans the whole table.
  */
 .grid.choosing {
   grid-template-columns:
-    32px 58px 54px max-content repeat(var(--columns), minmax(150px, 240px)) 46px;
+    58px 54px max-content repeat(var(--columns), minmax(120px, 240px)) 46px;
 }
 
 /*
@@ -427,26 +379,77 @@ button.quiet:hover {
 }
 
 .grid.choosing.flat {
-  grid-template-columns: 32px 58px 54px max-content 46px;
+  grid-template-columns: 58px 54px max-content 46px;
 }
 
-.grid > * {
+/*
+ * A cell sits in a slot rather than directly in the table. The slot is the run of
+ * columns the cell reaches - its own, and everything it waits through - so a cell may
+ * hold the left edge while its slot is crossing it and no longer. Slots carry no ink of
+ * their own; the cell inside does, which is why the free area to the right of a waiting
+ * ingredient has no rules across it.
+ */
+.hold,
+.holds {
+  display: grid;
+  grid-template-columns: subgrid;
+}
+
+.grid > *,
+.hold > *,
+.holds > * {
   border-bottom: 1px solid var(--line);
   border-right: 1px solid var(--line);
   padding: 1px 6px;
 }
 
+.hold,
+.holds {
+  border: 0;
+  padding: 0;
+}
+
+/* The slot is what the table places, so the edge classes land on it; the ink is on the
+   cell inside, so that is where they have to be spent. */
 .grid > .rightmost,
 .grid > .free.open,
-.grid > .amount,
-.grid > .unit,
-.grid > .words {
+.hold > .amount,
+.hold > .unit,
+.hold > .words,
+.holds.rightmost > * {
   border-right: 0;
 }
 
-.grid > .lowest {
+.grid > .lowest,
+.hold.lowest > *,
+.holds.lowest > * {
   border-bottom: 0;
 }
+
+/*
+ * Holding the left edge. Every cell is sticky and stops at the end of its own slot, so
+ * what stands at the edge is always the last thing that happened to those rows: the
+ * ingredients until something takes them, then the step that took them, then the step
+ * after that. The counter is the table, held still, rather than a second column kept in
+ * step with it.
+ */
+.reading .hold > .amount,
+.reading .hold > .unit,
+.reading .hold > .name,
+.reading .hold > .words,
+.reading .holds > .step {
+  background: var(--white);
+  position: sticky;
+  z-index: 1;
+}
+
+/* Scoped to reading because a card drawn whole, and the editor above all, has no edge to
+   hold: a pinned cell there only slides over the free areas as the table is scrolled. */
+.reading .hold > .amount,
+.reading .hold > .words,
+.reading .holds > .step { left: 0; }
+.reading .hold > .unit { left: var(--amount, 58px); }
+.reading .hold > .name { left: calc(var(--amount, 58px) + var(--unit, 54px)); }
 
 .label {
   background: var(--ground);
@@ -732,30 +735,23 @@ button.go:disabled {
  * Choosing rows.
  *
  * A row already means something when tapped - it opens the ingredient - so choosing it
- * needs a target of its own rather than a second meaning for the same tap. The box sits
- * in a column before the amount, and the cell around it is what is clicked, so the
- * target is the full height of the row and not 18 px of checkbox.
+ * is a hold, or a shift or command click, rather than a second meaning for the same tap.
+ * That leaves the row itself as the target, the full height of it, and costs the card no
+ * column it would otherwise have had to make room for.
  */
-.grid > .choose {
-  align-items: center;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  padding: 0;
-}
-
-.grid > .choose:hover {
+.hold.chosen > * {
   background: var(--preparation);
 }
 
-.grid > .choose input {
-  accent-color: var(--accent);
-  height: 16px;
-  margin: 0;
-  /* The cell handles the click; the box only shows the answer. */
-  pointer-events: none;
-  width: 16px;
+.hold.pickable {
+  cursor: pointer;
+  /* A long press is how a row is chosen with a thumb, and a long press on text raises the
+     selection callout over the row it has just taken. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
+
 
 /* Where the next ingredient goes, and where the next step goes. */
 .grid > .add {
@@ -827,10 +823,8 @@ button.go:disabled {
   .sheet,
   .compose,
   .faults,
-  .choose,
   .add,
-
-  .tick,
+  .places,
   button {
     display: none;
   }
@@ -849,8 +843,13 @@ button.go:disabled {
     overflow-x: visible;
   }
 
-  .grid {
+  /* `.reading .grid` wins over `.grid` inside this block as well, so the printed card
+     would keep its capped tracks, its tail and its `max-content` width and run off the
+     page. Paper has no scroller and needs neither. */
+  .grid,
+  .reading .grid {
     grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(0, 1fr));
+    width: auto;
   }
 
   .row {
