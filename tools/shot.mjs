@@ -47,7 +47,7 @@ const CARD = `# Pfannkuchen (12 Stück)
 const SCENES = `
 import { parseCard } from './card.js'
 import { renderCard } from './render.js'
-import { renderWalk } from './walk.js'
+import { renderReading } from './read.js'
 import { buildEditor } from './editor.js'
 import { toDraft, addIngredient } from './edit.js'
 
@@ -61,7 +61,10 @@ const editor = () =>
   })
 
 scene('Card view', wrap(renderCard(parseCard(TEXT), 1)))
-scene('Step view - the walk', renderWalk(parseCard(TEXT), 1, 1, () => {}))
+
+// The same card in a box too narrow for it, which is the only way the reading
+// affordances appear: they are not a mode to be asked for.
+scene('Reading, a card wider than its box', narrow(renderReading(parseCard(TEXT), 1, 0, () => {})))
 
 // The two states a card passes through before it has a single step, which is where
 // the table has no step columns at all.
@@ -85,6 +88,14 @@ function scene(name, body) {
   head.className = 'band'
   head.textContent = name.toUpperCase()
   screen.append(head, body)
+}
+
+/** A box that no card of this size fits, so the card has somewhere to scroll to. */
+function narrow(view) {
+  const box = document.createElement('div')
+  box.style.width = '320px'
+  box.append(view)
+  return box
 }
 
 function wrap(table) {
