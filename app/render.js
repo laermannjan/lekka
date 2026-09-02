@@ -10,9 +10,9 @@ export function renderCard(card, scale = 1, edit = null) {
 }
 
 /**
- * Any grid as a table, whole or a slice of one. Split out from `renderCard` because the
- * editor draws a grid it built itself, from several strands, and the walk draws a slice
- * of one; both must go through this code to be the card rather than a picture of it.
+ * Any grid as a table. Split out from `renderCard` because the editor draws a grid it
+ * built itself, from several strands; it must go through this code to be the card rather
+ * than a picture of it.
  *
  * `edit` is what makes the table editable, and it is all the editor needs the drawing to
  * give it. Layout keeps, for every row and every cell, the node it came from; handing
