@@ -342,13 +342,13 @@ button.quiet:hover {
 }
 
 /*
- * The editor puts a column of checkboxes in front and a column for `+ Step` after, and
- * only it has either, so only it shifts. Both are named here rather than left implicit
- * so that a band spanning `1 / -1` still spans the whole table.
+ * The editor puts a column for `+ Step` after the last one, and only it has that, so
+ * only it is longer. It is named here rather than left implicit so that a band spanning
+ * `1 / -1` still spans the whole table.
  */
 .grid.choosing {
   grid-template-columns:
-    32px 58px 54px max-content repeat(var(--columns), fit-content(240px)) 46px;
+    58px 54px max-content repeat(var(--columns), fit-content(240px)) 46px;
 }
 
 /*
@@ -361,7 +361,7 @@ button.quiet:hover {
 }
 
 .grid.choosing.flat {
-  grid-template-columns: 32px 58px 54px max-content 46px;
+  grid-template-columns: 58px 54px max-content 46px;
 }
 
 /*
@@ -715,30 +715,18 @@ button.go:disabled {
  * Choosing rows.
  *
  * A row already means something when tapped - it opens the ingredient - so choosing it
- * needs a target of its own rather than a second meaning for the same tap. The box sits
- * in a column before the amount, and the cell around it is what is clicked, so the
- * target is the full height of the row and not 18 px of checkbox.
+ * is a hold, or a shift or command click, rather than a second meaning for the same tap.
+ * That leaves the row itself as the target, the full height of it, and costs the card no
+ * column it would otherwise have had to make room for.
  */
-.grid > .choose {
-  align-items: center;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  padding: 0;
-}
-
-.grid > .choose:hover {
+.hold.chosen > * {
   background: var(--preparation);
 }
 
-.grid > .choose input {
-  accent-color: var(--accent);
-  height: 16px;
-  margin: 0;
-  /* The cell handles the click; the box only shows the answer. */
-  pointer-events: none;
-  width: 16px;
+.hold.pickable {
+  cursor: pointer;
 }
+
 
 /* Where the next ingredient goes, and where the next step goes. */
 .grid > .add {
@@ -810,7 +798,6 @@ button.go:disabled {
   .sheet,
   .compose,
   .faults,
-  .choose,
   .add,
   .places,
   button {

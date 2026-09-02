@@ -53,18 +53,15 @@ const submit = () => {
   sheet().close()
 }
 
-/* Ticking rows. A row is the ingredient; the checkbox cell beside it is the target. */
+/* Choosing rows. The row itself is the target: shift-click with a mouse, long press
+   with a thumb. There is no column of checkboxes to aim at any more. */
 
-const rows = (screen) =>
-  all(screen).filter(byClass('choose')).slice(0)
-
-/** Tick the row whose ingredient name matches, in the order the tables are drawn. */
+/** Choose the row whose ingredient name matches, in the order the tables are drawn. */
 function tick(screen, name, shift = false) {
   const grid = onlyTable(screen)
   const at = named(grid).indexOf(name)
   if (at === -1) throw new Error(`no row named ${name}`)
-  // The first choose cell is the header, which takes every row at once.
-  return tap(all(grid).filter(byClass('choose'))[at + 1], { shiftKey: shift })
+  return tap(all(grid).filter(byClass('hold'))[at], { shiftKey: shift, ctrlKey: !shift })
 }
 
 const process = (screen) => click(screen, 'Process in step')
@@ -456,15 +453,15 @@ test('naming the last ingredient of a step warns that the step goes too', () => 
   assert.deepEqual(shown(screen).sort(), ['braten', 'mischen', 'schmelzen', 'verrühren'])
 })
 
-test('the header box takes the whole strand, and lets it go again', () => {
+test('the heading takes the whole strand, and lets it go again', () => {
   const { screen } = open(WITH_BUTTER)
-  const grid = all(screen).filter(byClass('grid')).at(-1)
-  const header = all(grid).filter(byClass('choose'))[0]
+  const heading = () =>
+    all(all(screen).filter(byClass('grid')).at(-1)).filter(byClass('heading'))[0]
 
-  tap(header)
+  tap(heading(), { ctrlKey: true })
   assert.equal(takes(screen), 'braten')
 
-  tap(all(all(screen).filter(byClass('grid')).at(-1)).filter(byClass('choose'))[0])
+  tap(heading(), { ctrlKey: true })
   assert.equal(all(screen).filter(byClass('takes')).length, 0)
 })
 
