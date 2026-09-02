@@ -322,6 +322,14 @@ button.quiet:hover {
   width: max-content;
 }
 
+/*
+ * Sideways is ours, up and down is the page's. Without this the browser takes the gesture
+ * over on the first move and cancels the pointer, and a flick is never worth one step.
+ */
+.reading .scroll {
+  touch-action: pan-y;
+}
+
 .reading .grid .name {
   overflow-wrap: anywhere;
   white-space: normal;
@@ -415,21 +423,23 @@ button.quiet:hover {
  * after that. The counter is the table, held still, rather than a second column kept in
  * step with it.
  */
-.hold > .amount,
-.hold > .unit,
-.hold > .name,
-.hold > .words,
-.holds > .step {
+.reading .hold > .amount,
+.reading .hold > .unit,
+.reading .hold > .name,
+.reading .hold > .words,
+.reading .holds > .step {
   background: var(--white);
   position: sticky;
   z-index: 1;
 }
 
-.hold > .amount,
-.hold > .words,
-.holds > .step { left: 0; }
-.hold > .unit { left: var(--amount, 58px); }
-.hold > .name { left: calc(var(--amount, 58px) + var(--unit, 54px)); }
+/* Scoped to reading because a card drawn whole, and the editor above all, has no edge to
+   hold: a pinned cell there only slides over the free areas as the table is scrolled. */
+.reading .hold > .amount,
+.reading .hold > .words,
+.reading .holds > .step { left: 0; }
+.reading .hold > .unit { left: var(--amount, 58px); }
+.reading .hold > .name { left: calc(var(--amount, 58px) + var(--unit, 54px)); }
 
 .label {
   background: var(--ground);
@@ -725,6 +735,11 @@ button.go:disabled {
 
 .hold.pickable {
   cursor: pointer;
+  /* A long press is how a row is chosen with a thumb, and a long press on text raises the
+     selection callout over the row it has just taken. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 
@@ -818,8 +833,13 @@ button.go:disabled {
     overflow-x: visible;
   }
 
-  .grid {
+  /* `.reading .grid` wins over `.grid` inside this block as well, so the printed card
+     would keep its capped tracks, its tail and its `max-content` width and run off the
+     page. Paper has no scroller and needs neither. */
+  .grid,
+  .reading .grid {
     grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(0, 1fr));
+    width: auto;
   }
 
   .row {

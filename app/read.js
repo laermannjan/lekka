@@ -43,14 +43,20 @@ export function renderReading(card, scale, at, onAt) {
   let doneAt = () => 0
 
   const settle = () => {
+    /* Measured as the card is drawn when it is drawn whole. The reading tracks are wider
+       than the card needs - the tail is a real track, the cap a real width, and the whole
+       table is laid out at `max-content` - so a card still wearing the ones the last pass
+       gave it can never be found to fit again, and reading is a one-way door. */
+    box.classList.remove('reading')
+    table.style.removeProperty('--cap')
+    table.style.removeProperty('--tail')
+
     const room = scroll.clientWidth
     const whole = table.scrollWidth <= room + 1
 
     box.classList.toggle('reading', !whole)
     places.hidden = whole
     if (whole) {
-      table.style.removeProperty('--cap')
-      table.style.removeProperty('--tail')
       for (const cell of table.querySelectorAll('.holds > .step')) cell.style.removeProperty('left')
       stops = [0]
       return
@@ -103,7 +109,9 @@ export function renderReading(card, scale, at, onAt) {
   const dress = (index) => {
     const widths = getComputedStyle(table).gridTemplateColumns.split(' ').map(Number.parseFloat)
     const here = doneAt(index)
-    const next = widths[3 + index] || 0
+    // The track after the last step is the tail, which is blank room rather than a step,
+    // so at the last stop there is nothing to be doing and Next has the rest.
+    const next = index >= countOf(table) ? 0 : widths[3 + index] || 0
     done.style.width = here + 'px'
     now.style.width = next + 'px'
     nextPlace.style.width = Math.max(0, scroll.clientWidth - here - next) + 'px'
@@ -189,7 +197,14 @@ export function renderReading(card, scale, at, onAt) {
     settle()
     if (at > 0 && stops[at] !== undefined) scroll.scrollLeft = stops[at]
   })
-  window.addEventListener('resize', settle)
+  /* A card is drawn afresh on every scale, every source, every step back from the editor,
+     and the old view is thrown away without being told. Being out of the document is what
+     being replaced looks like from here, so that is when this one lets go of the window. */
+  const onResize = () => {
+    if (!table.isConnected) return window.removeEventListener('resize', onResize)
+    settle()
+  }
+  window.addEventListener('resize', onResize)
 
   return box
 }

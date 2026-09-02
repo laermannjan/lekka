@@ -67,7 +67,9 @@ export function renderGrid(grid, scale = 1, edit = null) {
       if (edit.onPick) edit.onPick(node)
     }
     let holding = null
-    box.addEventListener?.('pointerdown', () => {
+    let from = null
+    box.addEventListener?.('pointerdown', (event) => {
+      from = { x: event?.clientX ?? 0, y: event?.clientY ?? 0 }
       holding = setTimeout(() => {
         holding = null
         took = true
@@ -77,12 +79,25 @@ export function renderGrid(grid, scale = 1, edit = null) {
     const drop = () => { if (holding) clearTimeout(holding); holding = null }
     box.addEventListener?.('pointerup', drop)
     box.addEventListener?.('pointercancel', drop)
-    box.addEventListener?.('pointermove', drop)
+    // No thumb is still. Only a drag calls the press off, and a drag is six pixels here
+    // as it is in the reading view; a pixel of drift used to lose the row.
+    box.addEventListener?.('pointermove', (event) => {
+      if (!holding || !from) return
+      const moved = Math.max(Math.abs((event?.clientX ?? 0) - from.x), Math.abs((event?.clientY ?? 0) - from.y))
+      if (moved > 6) drop()
+    })
+    // A long press on a phone raises the selection callout over the row it has just
+    // chosen. The row is a control while the editor is open, so it carries no selection.
+    box.addEventListener?.('contextmenu', (event) => event.preventDefault())
     return box
   }
 
   const table = element('div', 'grid')
   table.style.setProperty('--columns', grid.columns)
+  // The editor's table is one column longer, for `+ Step`. The class is what gives that
+  // column a track of its own; without it the column is implicit and a band drawn
+  // `1 / -1` stops where the named tracks do.
+  if (edit?.onStep) table.classList.add('choosing')
   // Classes, not counts: `repeat(0, …)` is not a valid track list, and a browser that
   // rejects one throws the whole template away and lays the table out in implicit
   // tracks - every cell present, every one the wrong width. A card with no step yet is

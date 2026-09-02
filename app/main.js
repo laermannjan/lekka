@@ -578,6 +578,8 @@ function element(tag, className = '', text, children = []) {
   const node = document.createElement(tag)
   node.className = className
   if (text !== undefined) node.textContent = text
-  node.append(...children)
+  // A part that is not there is left out. Several of the toolbar's controls answer with
+  // nothing on a card nobody may change, and `append(null)` writes the word "null".
+  node.append(...children.filter(Boolean))
   return node
 }
