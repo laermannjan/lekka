@@ -100,7 +100,9 @@ async function showCard(id, key, state = {}) {
   show(
     bar(
       back(),
-      label('Scale'),
+      // No "Scale" label. STYLE.md gives each group of the toolbar one, but that was
+      // written when there were three groups to tell apart; with the view switch gone
+      // there is only this one, and half a dozen multipliers say what they are.
       scales(id, key, here),
       keeper(id, key, here),
       composer(id, key, card),
@@ -157,7 +159,9 @@ function showEditor(id, key, draft) {
 
 function source(id, key, state) {
   if (!key) return null
-  const button = element('button', 'quiet', state.editing ? 'Close source' : 'Edit source')
+  // Not "Edit source": two buttons a word apart, both beginning "Edit", read as one
+  // thing done twice rather than the two different editors they are.
+  const button = element('button', 'quiet', state.editing ? 'Close' : 'Source')
   button.onclick = () => showCard(id, key, { ...state, editing: !state.editing })
   return button
 }
@@ -242,7 +246,7 @@ async function describe(list) {
 function keeper(id, key, state) {
   const held = collection()
   if (!held) {
-    const create = element('button', 'quiet', 'Save to a new collection')
+    const create = element('button', 'quiet', 'Save to collection')
     create.onclick = async () => {
       const made = await attempt(
         () => api.createCollection([{ id, ...(key ? { key } : {}) }]),
@@ -257,7 +261,12 @@ function keeper(id, key, state) {
 
   const list = rows()
   const found = list.find((row) => row.id === id)
-  if (found && (found.key || !key)) return label('In your collection')
+  /*
+   * Nothing at all when the card is already kept. A status has no business in a row of
+   * actions - it read as the heading of the buttons beside it - and the absence of a
+   * save is the answer to the question it was asking: there is nothing left to do.
+   */
+  if (found && (found.key || !key)) return null
 
   const save = element('button', 'quiet', found ? 'Keep the edit link' : 'Save to collection')
   save.onclick = async () => {
