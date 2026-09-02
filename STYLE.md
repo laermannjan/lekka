@@ -160,3 +160,11 @@ aligned, weight 600.
 
 Drop the toolbar and every editing affordance, thin the card frame to 1 px, and
 let the grid stand without its scroll container.
+
+Paper is one page wide and cannot be scrolled, so a printed card is fitted to
+the page rather than measured: the ingredient block takes only what its content
+needs, and the steps divide what is left over, evenly. Where that leaves a
+column narrower than the word standing in it, the word breaks. It is the one
+place where a word may be broken - on screen a card that does not fit says so by
+overflowing, and there is somewhere to scroll to; on paper there is not, and a
+word that will not break draws over the cell beside it instead.

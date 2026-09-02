@@ -843,13 +843,42 @@ button.go:disabled {
     overflow-x: visible;
   }
 
-  /* `.reading .grid` wins over `.grid` inside this block as well, so the printed card
-     would keep its capped tracks, its tail and its `max-content` width and run off the
-     page. Paper has no scroller and needs neither. */
+  /*
+   * Paper is one page wide, so its tracks are shared out rather than measured. The
+   * ingredient block takes what its content needs instead of the widths a screen gives
+   * it - the amount and the unit are two or three characters and were holding 112 px
+   * between them - and the steps divide what is left. The name is capped because one
+   * long qualifier would otherwise take a third of the page off the steps.
+   *
+   * `.reading .grid` and `.grid.choosing` win over `.grid` inside this block as well, so
+   * the printed card would keep its screen tracks - the reading cap and its tail, the
+   * editor's 120 px floor - and run off the page. Paper has no scroller and needs none.
+   */
   .grid,
+  .grid.choosing,
   .reading .grid {
-    grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(0, 1fr));
+    grid-template-columns:
+      max-content max-content fit-content(150px) repeat(var(--columns), minmax(0, 1fr));
     width: auto;
+  }
+
+  /*
+   * A track sharing out what is left can come out narrower than the word standing in it,
+   * and a word that cannot break draws over the cell beside it - in the last column, over
+   * the edge of the page. Paper has nowhere to scroll to, so the word is what gives way:
+   * it breaks only where a whole one would not fit, and only in the cells whose width the
+   * page decides. The amount and the unit are never broken; their columns are their own.
+   *
+   * `anywhere` rather than `break-word`, which looks like the gentler of the two and does
+   * nothing here: a cell is itself a grid item, and its automatic minimum size is the
+   * longest word it holds, which `break-word` leaves standing. So the cell would be wider
+   * than its track whatever its text was then allowed to do inside it.
+   */
+  .grid .name,
+  .grid .step,
+  .grid .preparation {
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
   .row {
