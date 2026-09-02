@@ -881,6 +881,16 @@ button.go:disabled {
     white-space: normal;
   }
 
+  /*
+   * Small print. 11 px is where the narrow columns of an eight-column card hold whole
+   * words again; below that the gain is small and the card stops being readable at arm's
+   * length on a worktop, which is the only place it is read. The title keeps its own size
+   * - it is one line and never the thing that does not fit.
+   */
+  body.small-print .card {
+    font-size: 11px;
+  }
+
   .row {
     break-inside: avoid;
   }

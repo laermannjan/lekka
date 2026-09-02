@@ -2,6 +2,7 @@ const CURRENT = 'lekka:collection'
 const KNOWN = 'lekka:collections'
 const ROWS = 'lekka:rows'
 const CARD = 'lekka:card:'
+const PRINT = 'lekka:print'
 
 const load = (key, fallback) => JSON.parse(localStorage.getItem(key) ?? fallback)
 const save = (key, value) => localStorage.setItem(key, JSON.stringify(value))
@@ -36,4 +37,17 @@ export function cache(id, text) {
 
 export function cached(id) {
   return localStorage.getItem(CARD + id)
+}
+
+/**
+ * Whether this browser prints a card in small type. A preference of the device and not
+ * of the card: it says nothing about the recipe and nothing a link should carry, so it
+ * lives here beside the collection rather than in the state a card is drawn from.
+ */
+export function smallPrint() {
+  return load(PRINT, 'false')
+}
+
+export function setSmallPrint(small) {
+  save(PRINT, small)
 }
