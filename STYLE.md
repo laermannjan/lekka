@@ -160,3 +160,19 @@ aligned, weight 600.
 
 Drop the toolbar and every editing affordance, thin the card frame to 1 px, and
 let the grid stand without its scroll container.
+
+Paper is one page wide and cannot be scrolled, so a printed card is fitted to
+the page rather than measured: the ingredient block takes only what its content
+needs, and the steps divide what is left over, evenly. Where that leaves a
+column narrower than the word standing in it, the word breaks. It is the one
+place where a word may be broken - on screen a card that does not fit says so by
+overflowing, and there is somewhere to scroll to; on paper there is not, and a
+word that will not break draws over the cell beside it instead.
+
+One button, `Print small`, prints the card in 11 px instead of 14. It is the
+answer to a question the app cannot settle - how dense a card may be depends on
+the printer, the paper and the eyes reading it - so it is asked rather than
+guessed. Like `Source` it says what it will do and not what is set, because a
+setting that shows only on paper has nothing on the screen to be pressed
+against; and it is one button, not a group, so the toolbar still has a single
+group and needs no labels.

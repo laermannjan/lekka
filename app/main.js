@@ -5,7 +5,16 @@ import * as api from './api.js'
 import { editable, wrapInStep } from './source.js'
 import { toDraft, titleFault } from './edit.js'
 import { buildEditor } from './editor.js'
-import { cache, cached, collection, rows, setRows, useCollection } from './library.js'
+import {
+  cache,
+  cached,
+  collection,
+  rows,
+  setRows,
+  setSmallPrint,
+  smallPrint,
+  useCollection,
+} from './library.js'
 import { svg } from './qr.js'
 
 const SCALES = [
@@ -107,6 +116,7 @@ async function showCard(id, key, state = {}) {
       keeper(id, key, here),
       composer(id, key, card),
       source(id, key, here),
+      printing(),
     ),
     body(card, id, key, here),
     editing ? panel(id, key, text, here) : null,
@@ -119,6 +129,33 @@ function body(card, id, key, state) {
   return renderReading(card, state.scale, state.at, (at) => {
     state.at = at
   })
+}
+
+/**
+ * Type for the page rather than for the screen.
+ *
+ * Paper cannot be scrolled, so a printed card is fitted to it, and a card with eight
+ * columns has to break words to fit at reading size. Smaller type buys the columns back:
+ * Roggenquarkbrot comes off the press 506 px tall instead of 750, with whole words in
+ * most of its cells. Which of the two is wanted is a question about the printer and the
+ * eyes reading it, so it is asked of the person and not guessed at.
+ *
+ * The button says what it will do rather than what is set, as `Source` does, because a
+ * setting that shows only on paper has nothing on the screen to be pressed against.
+ */
+function printing() {
+  const button = element('button', 'quiet')
+  const set = (small) => {
+    document.body.classList.toggle('small-print', small)
+    button.textContent = small ? 'Print normal' : 'Print small'
+  }
+  set(smallPrint())
+  button.onclick = () => {
+    const small = !document.body.classList.contains('small-print')
+    setSmallPrint(small)
+    set(small)
+  }
+  return button
 }
 
 function composer(id, key, card) {
