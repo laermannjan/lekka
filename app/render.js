@@ -33,6 +33,16 @@ export function renderGrid(grid, scale = 1, edit = null) {
   const numbers = grid.numbers ?? Array.from({ length: grid.columns }, (_, index) => index + 1)
   const lead = edit?.onChoose ? 1 : 0
   const put = (node, spec) => place(node, grid, spec, lead)
+
+  /*
+   * What takes each ingredient, so its cell can be given the columns it waits through.
+   * A step always sits one column after the step that takes it (`place` in `grid.js`
+   * hands every child `column - 1`), so a step never waits; only an ingredient does.
+   */
+  const takenBy = new Map()
+  for (const cell of grid.cells)
+    for (const child of cell.node.children)
+      if (child.kind === 'ingredient') takenBy.set(child, cell.column)
   const pick = (box, node) => {
     if (!edit?.onPick) return box
     box.classList.add('pickable')
@@ -97,21 +107,48 @@ export function renderGrid(grid, scale = 1, edit = null) {
       table.append(put(one, { column: 0, columnSpan: 1, row, rowSpan: 1, last }))
     }
     // Every field of a row leads to the same ingredient: the amount, the unit and the
-    // name are one line of the card split into three columns, not three things.
+    // name are one line of the card split into three columns, not three things. They sit
+    // in a slot of their own, which runs from the ingredient column to whatever takes
+    // this ingredient - the free area to its right, drawn as the reach of the cell that
+    // is waiting rather than as a rectangle worked out separately.
+    const waits = (takenBy.get(node) ?? grid.columns + 1) - 1
+    const hold = element('div', 'hold')
+    hold.style.gridArea = `${row} / ${1 + lead} / span 1 / span ${NAME_COLUMN + waits}`
+    if (last) hold.classList.add('lowest')
     for (const field of ingredientFields(node, scale)) {
-      // The walk hides these a row at a time as steps take them over.
+      // The reading view hides these a row at a time as steps take them over.
       field.node.dataset.row = String(index)
-      table.append(put(pick(field.node, node), { ...field, row, rowSpan: 1, last }))
+      area(field.node, field.column, field.columnSpan, 1, 1)
+      hold.append(pick(field.node, node))
     }
+    table.append(hold)
   })
 
-  for (const cell of grid.cells)
-    table.append(put(pick(stepField(cell.node), cell.node), {
+  /*
+   * A step in a slot of its own. The slot is one column wide, which is all a step ever
+   * needs, and it is what stops the cell from holding the left edge for the whole card:
+   * a sticky cell may not leave its own slot, so the next step pushes it out exactly as
+   * it arrives. That is the roll.
+   */
+  for (const cell of grid.cells) {
+    const box = pick(stepField(cell.node), cell.node)
+    const holder = element('div', 'holds')
+    area(box, 1, 1, 1, 1)
+    holder.append(box)
+    table.append(put(holder, {
       column: NAME_COLUMN + cell.column, columnSpan: 1,
       row: head + 2 + cell.row, rowSpan: cell.rowSpan,
       last: head + 1 + cell.row + cell.rowSpan === bottom,
     }))
+  }
 
+  /*
+   * The free rectangles still carry the ink. A cell reaching as far as the step that
+   * takes it gives the blank space its shape, but not its edges: where two runs of
+   * blank meet and are not the same width, a rule has to be drawn or a line that is
+   * visible on both sides of them stops in the middle of the card. That is rule 3 in
+   * `LAYOUT.md`, and it is why this cannot be worked out from the cells alone.
+   */
   for (const free of grid.frees) {
     const box = element('div', free.into ? 'free open' : 'free')
     table.append(put(box, {

@@ -1,6 +1,5 @@
 import { parseCard, ParseError } from './card.js'
-import { renderCard } from './render.js'
-import { renderWalk } from './walk.js'
+import { renderReading } from './read.js'
 import { renderOverview } from './overview.js'
 import * as api from './api.js'
 import { editable, wrapInStep } from './source.js'
@@ -14,11 +13,6 @@ const SCALES = [
   [1, '1×'],
   [1.5, '1½×'],
   [2, '2×'],
-]
-
-const VIEWS = [
-  ['card', 'Whole'],
-  ['slice', 'Step'],
 ]
 
 const title = document.getElementById('title')
@@ -88,8 +82,8 @@ async function showCollection(id, key) {
 }
 
 async function showCard(id, key, state = {}) {
-  const { scale = 1, editing = false, view = firstView(), at = 1 } = state
-  const here = { scale, editing, view, at }
+  const { scale = 1, editing = false, at = 0 } = state
+  const here = { scale, editing, at }
 
   const text = await load(id)
   if (text === null) return fail('No card under this link.')
@@ -108,8 +102,6 @@ async function showCard(id, key, state = {}) {
       back(),
       label('Scale'),
       scales(id, key, here),
-      label('View'),
-      views(id, key, here),
       keeper(id, key, here),
       composer(id, key, card),
       source(id, key, here),
@@ -120,24 +112,11 @@ async function showCard(id, key, state = {}) {
 }
 
 function body(card, id, key, state) {
-  // Walking is a scroll, not a redraw: the state is only kept so that changing the scale
+  // Reading is a scroll, not a redraw: the place is only kept so that changing the scale
   // or opening the source comes back to the step the cook was standing on.
-  if (state.view === 'slice')
-    return renderWalk(card, state.scale, state.at, (at) => {
-      state.at = at
-    })
-  const scroll = element('div', 'scroll')
-  scroll.append(renderCard(card, state.scale))
-  return scroll
-}
-
-/**
- * The whole table is as wide as the recipe is long, which a phone cannot show: its
- * ingredient column alone can fill the screen. A narrow screen therefore starts on one
- * step at a time, which is the same table with the columns in between dropped.
- */
-function firstView() {
-  return matchMedia('(max-width: 640px)').matches ? 'slice' : 'card'
+  return renderReading(card, state.scale, state.at, (at) => {
+    state.at = at
+  })
 }
 
 function composer(id, key, card) {
@@ -573,17 +552,6 @@ function scales(id, key, state) {
     const button = element('button', '', text)
     button.setAttribute('aria-pressed', factor === state.scale)
     button.onclick = () => showCard(id, key, { ...state, scale: factor })
-    group.append(button)
-  }
-  return group
-}
-
-function views(id, key, state) {
-  const group = element('span', 'switch')
-  for (const [name, text] of VIEWS) {
-    const button = element('button', '', text)
-    button.setAttribute('aria-pressed', name === state.view)
-    button.onclick = () => showCard(id, key, { ...state, view: name })
     group.append(button)
   }
   return group
