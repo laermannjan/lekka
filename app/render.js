@@ -29,10 +29,16 @@ export function renderCard(card, scale = 1, edit = null) {
  *   `onChoose(...)`    a row was chosen, or a run of them
  *   `onAdd()`          draw a row under the last ingredient that adds one
  *
- * Choosing happens in a column of boxes down the left, drawn only while writing. It was
- * once a shift-click and a long press instead, to save the column - but the column is
- * only ever spent on a table being written, where the editor already spends one on
- * `+ Step`, and what it bought was two gestures nobody could see.
+ * Choosing happens in boxes, and a box stands for an **input** rather than for a row.
+ * A step takes whole strands, so unticking one row of a strand it swallowed is not a
+ * move the format has: what goes into `vermengen` is `abkühlen`, not the Roggenschrot
+ * three steps inside it. So the box for an ingredient sits in its row and the box for a
+ * step sits in that step's cell, and only the things this step may actually take are
+ * given one.
+ *
+ * The column they sit in is drawn for as long as the recipe is being written, even while
+ * it holds nothing: appearing only when a step is opened, it would shift the whole table
+ * sideways under the hand.
  */
 export function renderGrid(grid, scale = 1, edit = null) {
   // A slice of the card numbers its columns with the places they hold in the whole of
@@ -48,6 +54,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
    * column: it is a control nobody uses.
    */
   const ticks = edit?.onChoose ? 1 : 0
+  const boxed = (node) => Boolean(edit?.boxFor?.(node))
   const lead = NAME_COLUMN + ticks
   const put = (node, spec) => place(node, grid, spec, lead)
 
@@ -182,20 +189,14 @@ export function renderGrid(grid, scale = 1, edit = null) {
   })
 
   /*
-   * The box at the head of the tick column takes every row, which is what choosing all
-   * of them means. It used to be the heading itself, on a modifier click - the same
-   * invisible gesture the rows had, and it goes the same way.
+   * The head of the tick column is empty. It held a box that took every row, back when a
+   * box stood for a row; a box stands for an input now, and "every input" is what a step
+   * already has when it is opened.
    */
-  if (ticks && grid.rows.length > 0) {
-    const all = element('div', 'ticker label')
-    const input = document.createElement('input')
-    input.type = 'checkbox'
-    input.className = 'tick'
-    input.checked = grid.rows.every((row) => edit.chosen?.(row))
-    input.onclick = () => edit.onChoose(grid.rows, input.checked, false)
-    all.append(input)
-    area(all, 1, 1, 1, 1)
-    table.append(all)
+  if (ticks) {
+    const head = element('div', 'ticker label')
+    area(head, 1, 1, 1, 1)
+    table.append(head)
   }
 
   // The reading view puts steps in this column too, so it names it for what it holds.
@@ -260,7 +261,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
     const open = edit?.openAt === cell.node
     const box = open
       ? stepTarget(writableStep(cell.node, edit), cell.node, false)
-      : stepTarget(pick(stepField(cell.node), cell.node), cell.node, true)
+      : stepTarget(pick(stepField(cell.node, edit), cell.node), cell.node, true)
     const holder = element('div', 'holds')
     area(box, 1, 1, 1, 1)
     holder.append(box)
@@ -446,16 +447,21 @@ function ingredientFields(node, scale, edit, ticks = 0) {
  * long press that stood in for this went with it, so there is one way to tick a row and
  * it is drawn. Shift still extends from the last box touched, which is what shift is for.
  */
-function tickBox(node, edit) {
-  const box = element('div', 'ticker')
+/**
+ * The box an input is chosen with. Only the things the open step may take have one, so
+ * the column is empty until a step is opened and holds nothing that would be a lie.
+ */
+function tickBox(node, edit, className = 'ticker') {
+  const box = element('div', className)
+  if (!edit?.boxFor?.(node)) return box
   const input = document.createElement('input')
   input.type = 'checkbox'
   input.className = 'tick'
-  input.checked = Boolean(edit.chosen?.(node))
-  // A row that could not go into the step being written is not offered: the box is there,
-  // so the column still reads as a column, and it cannot be ticked into a loop.
-  input.disabled = edit.tickable ? !edit.tickable(node) : false
-  input.onclick = (event) => edit.onChoose([node], input.checked, Boolean(event?.shiftKey))
+  input.checked = Boolean(edit.ticked?.(node))
+  input.onclick = (event) => {
+    event?.stopPropagation?.()
+    edit.onChoose(node, input.checked)
+  }
   box.append(input)
   return box
 }
@@ -465,8 +471,9 @@ function preparationsOf(node) {
   return (node.children ?? []).filter((child) => child.kind === 'preparation')
 }
 
-function stepField(node) {
+function stepField(node, edit) {
   const cell = element('div', 'step')
+  if (edit?.boxFor?.(node)) cell.append(tickBox(node, edit, 'ticker inline'))
   for (const prep of preparationsOf(node)) cell.append(preparationField(prep))
   cell.append(marked('verb', node.verb))
   if (node.aside) cell.append(element('div', 'note', bind(node.aside)))

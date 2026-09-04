@@ -274,26 +274,32 @@ inside them. A qualifier drops to its own line.
   says it.
 - A tappable cell is marked by the cursor and by the amber wash under the
   pointer - never by a colour of its own.
-- **A row is chosen in a box**, in a column of its own in front of the table,
-  drawn only while writing. Shift on a box extends the run from the last one
-  touched, and the box at the head of the column takes every row.
-  A **chosen row** takes the amber across all of its fields.
-  The column was left out once, to save the horizontal space a table being read
-  is short of - but it is never drawn there, and the editor already spends a
-  column on `+ Step`. What the saving bought was a shift-click and a long press,
-  and a control nobody can see is not cheaper than a column: it is a control
-  nobody uses.
-- Ticking a row and opening it are different targets, so neither has to ask what
-  modifier was held.
-- **Opening a step ticks what goes into it**, and a box is the change: unticking
-  one hands that row back at once, ticking one takes it in. There is nothing to
-  press and nothing to read back - the boxes and the amber already say what the
-  step holds, so a bar repeating it in words would be saying it twice.
-- A row that could not go into the step being written - one already inside a step
-  this one is part of - has its box **disabled**. The column still reads as a
-  column, and nothing can be ticked into a loop.
-- A step is deleted from the bar under the table while its cell is open; a row is
-  deleted from the bar its own box raises.
+- **A box stands for an input, not for a row.** A step takes whole strands, so
+  unticking one row of a strand it swallowed is not a move the format has: what
+  goes into `vermengen` is `abkühlen`, not the Roggenschrot three steps inside
+  it. So an ingredient's box sits in its row and a step's box sits in that step's
+  cell, and only what the open step may actually take is given one.
+- **Boxes appear only while a step's cell is open.** The column they sit in is
+  drawn for as long as the recipe is being written, even when it holds nothing:
+  appearing with the boxes, it would shift the whole table sideways under the
+  hand.
+- Every row **under** something ticked takes the amber, so the reach of a choice
+  is visible even where there is no box to tick.
+- Ticking a box and opening a cell are different targets, so neither has to ask
+  what modifier was held.
+- **Opening a step ticks what goes into it**, and **nothing moves until `Apply`**.
+  A row that leaves a step becomes a strand of its own and is drawn somewhere
+  else; having the table rearrange itself under every tick is no way to decide
+  anything. There is nothing to read back either - the boxes and the amber
+  already say what the step holds, so a bar repeating it in words says it twice.
+- `Apply` leaves the cell open: saying what goes in is a step in writing the
+  step, not the end of it.
+- **`+ Step` guesses**, and the boxes show the guess: every ingredient still
+  waiting for a step, or - when none is waiting - the ends of the strands, which
+  is how two of them are joined.
+- **What can be done to the open cell** is a bar of its own, below `Save` and
+  `Cancel`: those are about the whole recipe, this is about the one cell. It
+  carries `Apply` for a step and `Delete <the thing>` for either.
 - **Everything that comes and goes is drawn below the row of buttons** - the bar
   the ticked rows raise, the faults, the messages. One appearing above the table
   pushes the table down under the hand that is working in it.

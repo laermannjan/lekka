@@ -252,21 +252,31 @@ pinned to the visible part of the table and centred in that, so they stay where
 the eye is while the table scrolls under them. Whichever view drew the table
 measures that width into `--room`.
 
-**A step is built by choosing rows**, ticked in a column of boxes in front of the
-table and drawn only while writing. Shift on a box extends the run from the last
-one touched; the box at the head of the column takes every row. Ticking a row and
-opening it are different targets, so neither has to ask what modifier was held.
+**A step is built by ticking boxes, and a box stands for an input.** A step takes
+whole strands, so unticking one row of a strand it swallowed is not a move the
+format has - what goes into `vermengen` is `abkühlen`, not the Roggenschrot three
+steps inside it. An ingredient's box therefore sits in its row and a step's box
+sits in that step's cell, and the set offered is exactly `candidates`: the step's
+own inputs plus whatever is still loose. Every row *under* something ticked takes
+the amber, so the reach of a choice is visible where there is no box.
 
-That column was left out once, to save horizontal space - but it is never drawn
-while reading, which is where space is short, and the editor already spends a
-column on `+ Step`. What the saving bought was two gestures nobody could see, and
-a control nobody can see is not cheaper than a column: it is a control nobody
-uses.
+Boxes appear only while a step's cell is open. The column they sit in is drawn
+for as long as the recipe is being written, even empty: appearing with the boxes,
+it would shift the table sideways under the hand.
 
-Ticked rows raise a bar saying what they came to, and `Process in step`
-makes an unnamed step from them and puts the caret in its verb. Deleting is in
-that bar too, where the cascade is already spelled out, and it takes the rows
-themselves rather than what holds them.
+**Nothing moves until `Apply`.** A row that leaves a step becomes a strand of its
+own and is drawn somewhere else, and a table that rearranges itself under every
+tick is no way to decide anything. `Apply` leaves the cell open, because saying
+what goes in is a step in writing the step rather than the end of it.
+
+`+ Step` makes an unnamed step, puts the caret in its verb, and guesses what it
+takes: every ingredient still waiting, or - when none is waiting - the ends of the
+strands, which is how two of them are joined.
+
+One thing this costs: a strand already inside a step cannot be handed to another
+one, because it is neither a root nor an input of the step being written, so it is
+offered no box. Deleting the step that holds it frees it first. `upheaval` still
+guards that move in `edit.js`, and its tests are there.
 
 **A step's inputs are the boxes, while its cell is open.** Opening a step ticks
 what it holds; unticking a box hands that row back at once and ticking one takes

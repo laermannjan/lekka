@@ -1207,6 +1207,13 @@ textarea:focus {
   padding: 0;
 }
 
+/* A step's own box sits above what it says, where a row's sits beside it. */
+.step > .ticker.inline {
+  display: block;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+
 .tick {
   accent-color: var(--accent);
   cursor: pointer;
