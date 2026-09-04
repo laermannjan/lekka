@@ -220,8 +220,18 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   /** What the open step may take: its own inputs, plus whatever is still loose. */
   const offered = () => (openAt?.kind === 'step' ? candidates(current, openAt) : [])
 
-  /** Every row under something ticked, which is what the table shades. */
-  const shaded = () => new Set([...chosen].flatMap(beneath))
+  /**
+   * Everything a ticked input brings with it, which is what the table shades: the input
+   * itself, every step between it and the rows, and the rows. A strand goes in whole, so
+   * the whole of it is what is coming.
+   */
+  function within(node, into = []) {
+    into.push(node)
+    for (const child of node.children ?? []) within(child, into)
+    return into
+  }
+
+  const shaded = () => new Set([...chosen].flatMap((node) => within(node)))
 
   function paint() {
     const faults = validate(current)

@@ -283,8 +283,11 @@ inside them. A qualifier drops to its own line.
   drawn for as long as the recipe is being written, even when it holds nothing:
   appearing with the boxes, it would shift the whole table sideways under the
   hand.
-- Every row **under** something ticked takes the amber, so the reach of a choice
-  is visible even where there is no box to tick.
+- **A ticked strand is shaded whole**: the input itself, every step between it
+  and the rows, and the rows. A strand goes in whole, so the whole of it is what
+  is coming, and the amber shows the reach of a choice where there is no box to
+  tick. The step being written is not shaded - the shading says what is coming
+  *in*.
 - Ticking a box and opening a cell are different targets, so neither has to ask
   what modifier was held.
 - **Opening a step ticks what goes into it**, and **nothing moves until `Apply`**.

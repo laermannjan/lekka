@@ -257,8 +257,10 @@ whole strands, so unticking one row of a strand it swallowed is not a move the
 format has - what goes into `vermengen` is `abkühlen`, not the Roggenschrot three
 steps inside it. An ingredient's box therefore sits in its row and a step's box
 sits in that step's cell, and the set offered is exactly `candidates`: the step's
-own inputs plus whatever is still loose. Every row *under* something ticked takes
-the amber, so the reach of a choice is visible where there is no box.
+own inputs plus whatever is still loose. A ticked strand is then shaded whole -
+the input, every step between it and the rows, and the rows - because a strand
+goes in whole and the amber has to show the reach of a choice where there is no
+box. The step being written stays unshaded: the shading says what is coming in.
 
 Boxes appear only while a step's cell is open. The column they sit in is drawn
 for as long as the recipe is being written, even empty: appearing with the boxes,

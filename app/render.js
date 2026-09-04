@@ -473,6 +473,8 @@ function preparationsOf(node) {
 
 function stepField(node, edit) {
   const cell = element('div', 'step')
+  // A ticked strand comes in whole, so every step of it is shaded, not only its rows.
+  if (edit?.chosen?.(node)) cell.classList.add('chosen')
   if (edit?.boxFor?.(node)) cell.append(tickBox(node, edit, 'ticker inline'))
   for (const prep of preparationsOf(node)) cell.append(preparationField(prep))
   cell.append(marked('verb', node.verb))

@@ -537,6 +537,22 @@ test('a card is one table at every stage of being written', () => {
   assert.deepEqual(named(screen), ['Reis', 'Hähnchen'])
 })
 
+test('a ticked strand is shaded whole, steps between it and the rows included', () => {
+  const { screen } = open(WITH_BUTTER)
+  openStep(screen, 'braten')
+
+  // braten takes verrühren and schmelzen. Both are shaded, and so is every row under
+  // them: what is coming in is the strand, not the boxes that name it.
+  const shadedSteps = stepCells(screen)
+    .filter(byClass('chosen'))
+    .map((cell) => says(cell, 'verb'))
+  assert.deepEqual(shadedSteps.sort(), ['schmelzen', 'verrühren'])
+  assert.equal(holdsOf(screen).filter(byClass('chosen')).length, named(screen).length)
+
+  // The step being written is not shaded: the shading says what is coming in.
+  assert.ok(!byClass('chosen')(cellNamed(screen, 'braten')))
+})
+
 test('a step being edited starts from what it takes, not from what it contains', () => {
   const { screen } = open(WITH_BUTTER)
   openStep(screen, 'braten')

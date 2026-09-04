@@ -1185,7 +1185,8 @@ textarea:focus {
   background: var(--amber);
 }
 
-.hold.chosen > * {
+.hold.chosen > *,
+.step.chosen {
   background: var(--amber);
 }
 
