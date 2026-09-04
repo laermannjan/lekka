@@ -139,6 +139,20 @@ const spare = boxes().find((box) => !box.checked)
 spare.click()
 check('ticking one shades what it brings with it', shadedRows() === 2, String(shadedRows()))
 check('and still moves no column', tracks() === before.columns)
+
+/*
+ * Chosen has to beat hover. \`:hover\` is the more specific selector, so a shaded row
+ * turned grey when the pointer crossed it - and grey is what a row that is *not* going
+ * into the step looks like, so a sweep of the pointer read as unchoosing.
+ */
+const shadedRow = editor.querySelector('.grid > .hold.chosen')
+const amber = getComputedStyle(shadedRow).backgroundColor
+const painted = (rule) => {
+  const sheetOf = [...document.styleSheets].flatMap((one) => [...one.cssRules])
+  return sheetOf.some((one) => one.selectorText?.split(',').some((part) => part.trim() === rule))
+}
+check('a chosen row is amber', amber === 'rgb(251, 238, 181)', amber)
+check('and stays amber under the pointer', painted('.hold.chosen.pickable:hover'))
 button('Close').click()
 check('closing takes the shading away', shadedRows() === 0, String(shadedRows()))
 

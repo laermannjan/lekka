@@ -1099,8 +1099,16 @@ textarea:focus {
  * the row it was waiting in stayed white: a row half shaded, which is exactly the part
  * of it that says it is still waiting.
  */
+/*
+ * Chosen beats hover, which needs saying because `:hover` is the more specific
+ * selector and won on its own. Pointing at a row that is going into the open step
+ * turned it grey, which is what a row *not* going in looks like - so sweeping the
+ * pointer across the table read as unchoosing whatever it touched.
+ */
 .hold.chosen,
-.step.chosen {
+.step.chosen,
+.hold.chosen.pickable:hover,
+.step.chosen.pickable:hover {
   background: var(--amber);
 }
 
