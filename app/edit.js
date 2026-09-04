@@ -146,16 +146,6 @@ export function sweptBy(draft, node) {
   return upheaval(draft, [node]).emptied
 }
 
-/**
- * What is wrong with a title on its own, before there is a card to put it in. `/new`
- * stores one straight away, so it has to ask the same question the editor would.
- */
-export function titleFault(title) {
-  const faults = []
-  if ((title ?? '').trim() === '') faults.push({ message: 'A card needs a title.' })
-  storable(null, faults, false, ['title', title])
-  return faults[0]?.message ?? null
-}
 
 /** A new ingredient, waiting to be used. */
 export function addIngredient(draft, fields) {
@@ -299,7 +289,7 @@ export function fieldsOf(node) {
  */
 export function validate(draft) {
   const faults = []
-  if ((draft.title ?? '').trim() === '') faults.push({ kind: 'title', message: 'The card needs a title' })
+  if ((draft.title ?? '').trim() === '') faults.push({ kind: 'title', message: 'The recipe needs a name' })
   storable(null, faults, false, ['title', draft.title], ['yield', draft.yields])
   for (const prep of draft.preparations) walk(prep, faults)
 
@@ -308,7 +298,7 @@ export function validate(draft) {
     faults.push({ kind: 'unused', node, message: `${label(node)} goes into no step` })
 
   const ends = draft.strands.filter((strand) => strand.kind === 'step')
-  if (draft.strands.length === 0) faults.push({ kind: 'empty', message: 'The card has no steps' })
+  if (draft.strands.length === 0) faults.push({ kind: 'empty', message: 'The recipe has no steps' })
   else if (ends.length > 1)
     faults.push({
       kind: 'unjoined',

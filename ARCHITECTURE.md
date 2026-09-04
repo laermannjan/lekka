@@ -114,11 +114,19 @@ editor changes a cell on screen and has to write it into the right node.
 collection is a thing on the server; what is local is only which collection you
 are using and a copy of what was in it, so the list still opens with no network.
 
-It is not a list of cards on the server, because there cannot be one. Each row:
-the name links to reading, a badge says whether you can edit it, `Remove` drops
-the link, `Delete` drops the card for everyone who holds one.
+It is not a list of cards on the server, because there cannot be one. It is a
+table of three columns: the name, which links to reading, and the two acts that
+are not the same act - `Remove` drops the link, `Delete` drops the card for
+everyone who holds one, so only the second needs a key. The last row is where
+the table grows: `Import` for a recipe that exists somewhere already, `Create`
+for one that does not.
 
-`Link for another device` opens a dialog: the full link written out, a copy
+The collection's own name is stamped into the masthead, beside the app's. A
+person holds one collection, so it belongs to the app rather than to a screen and
+is said once. It is also the way to the code that carries the collection onto
+another device, so it is drawn as a control and says so before it is pressed.
+
+That stamp opens a dialog: the full link written out, a copy
 button, and the same link as a QR code to scan with a phone. It was once an
 anchor to `/c/<name>/<key>`, which on the device that already holds the
 collection meant adopting what it had, replacing the address with `/`, and
@@ -136,14 +144,29 @@ Holding no collection, the overview offers to make one. Opening `/c/<name>`
 without its key shows somebody else's list and does **not** adopt it, since a
 device that cannot write to a collection has no business calling it its own.
 
-**Writing at `/new`.** A title, and then the editor. A card with only a title
-parses, so it is stored at once and written in. `Write as text` is still there,
-a textarea holding a card as text, which parses before it sends: a card that
-cannot be drawn is never stored.
+**Writing at `/new`.** The editor on an empty draft, with the name field waiting.
+Nothing is sent until the first save: a recipe nobody finished writing never
+reaches the server at all.
 
-**Card at `/r/…`.** Header with title, yield and notes. Below it a bar with
-scale (½× 1× 1½× 2×), the actions, and `Save to collection` when the card is not
-in yours yet. Then the card.
+**Card at `/r/…`.** The name, then the table, and the specification under it.
+
+Controls are sorted by what each one touches, which is the rule that says where
+anything goes. `Print small` acts on the page, so it stands in the masthead
+beside the app's name. The scale (½× 1× 1½× 2×) changes how the recipe is drawn,
+so it sits above the table, beside what it changes. `Edit` and `Save to
+collection` change the recipe itself, so they sit below it, out of the way of
+reading.
+
+The **specification** is what the app knows about the recipe that the recipe does
+not say in one place: how long it takes end to end, what the dough weighs, what
+it yields, its notes. The time is scattered across a dozen step verbs and the
+weight is a sum nobody wants to do at the counter, so `app/facts.js` does both.
+Only a step's verb is read for a duration - a note holds asides like "rotate
+every 20 min" and second opinions like "gesamt 70-80 min", and counting those
+either doubles a step or invents work that is not a step - and a range is taken
+at its upper bound. A row with no answer for this recipe is left out rather than
+filled with a dash: ribs are measured in racks and cups, and a weight of nothing
+is noise.
 
 There is one view, because there is one card. `STYLE.md` already says what to do
 about a table wider than the screen, and that rule is the interface: **a card
@@ -177,11 +200,17 @@ travelled.
 
 ## Editing
 
-Only with a key in the path. Two ways in, for two different jobs.
+Only with a key in the path, and one way in.
 
-**The editor** is where a card is written. `Edit` on a card opens it, and `/new`
-starts in it: a new card is a title and nothing else, which parses, so it can be
-stored at once and filled in here rather than typed as text.
+**The editor** is where a recipe is written. `Edit` opens it, and `Create` starts
+in it on an empty draft. It draws the whole screen and not only the table,
+because everything a person wrote is opened at once: the name above the table,
+and the yield, the notes and the preparations as fields in the specification
+below it. There is no separate form for the recipe itself, and so no second place
+where its name can be changed.
+
+`Save` and `Cancel` sit under the table, where `Edit` stood a moment ago, so the
+button that leaves writing is in the place the button that entered it was.
 
 It has one button that adds, in the table rather than over it. `+ Ingredient`
 sits under the last ingredient, always in the same place, because a button that
@@ -249,12 +278,12 @@ round trip can catch that, only knowing what the punctuation means. Saving still
 formats, re-parses and compares the card structurally as a backstop, and fails
 shut.
 
-**The text panel** stays for the rare job the editor is clumsy at: re-indenting
-a subtree by hand. It parses before it saves, and the card above redraws while
-the panel stays open. Tab and shift-tab move the selected lines, enter keeps the
-current indentation, and **wrap in step** takes the line under the cursor
-together with everything indented below it, which is exactly one subtree, and
-hangs it under a new step.
+**Text comes in through `Import`** rather than through an editor of its own.
+There was a second editor - a textarea holding the card as text, with tab to
+indent and a wrap-in-step button - and it was two ways of doing one job, each
+with its own bar, its own save and its own idea of what a card is. Pasting a
+recipe in is the part of it worth keeping, so that is what stayed: the text
+parses before it is sent, and one that cannot be drawn is never stored.
 
 Changes are collected, not sent: a dirty flag decides whether saving does
 anything, and leaving with one set asks first. Live-saving every keystroke would

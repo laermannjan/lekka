@@ -1,9 +1,9 @@
 import { label, beneath } from './edit.js'
 
 /**
- * One form at a time, over the card, from the bottom of the screen.
+ * One form at a time, over the recipe, from the bottom of the screen.
  *
- * A phone in a kitchen has room for the card or for a form, never both, and the card is
+ * A phone in a kitchen has room for the table or for a form, never both, and the table is
  * what the form is about: you want to see the strand you are joining while you say what
  * joins it. So the form comes up over the card rather than beside it, and goes away
  * again the moment it is done.
@@ -135,32 +135,7 @@ function taken(form, { inputs, moved, emptied }) {
   return []
 }
 
-/** The card itself: what it is called, what it makes, and what holds for the whole of it. */
-export function cardSheet({ fields = {}, heading, save }) {
-  return sheet(
-    heading,
-    (form) => {
-      const title = field(form, 'Title', fields.title, { hint: 'Pfannkuchen' })
-      const yields = field(form, 'Makes', fields.yields, { hint: '12 Stück' })
-      const notes = area(form, 'Notes', (fields.notes ?? []).join('\n'), { hint: 'one per line' })
-      const preps = area(form, 'Preparations', (fields.preparations ?? []).join('\n'), {
-        hint: 'one per line, each done before anything else',
-      })
-      return () => ({
-        title: title.value,
-        yields: yields.value,
-        notes: lines(notes.value),
-        preparations: lines(preps.value),
-      })
-    },
-    { save },
-  )
-}
-
-function lines(text) {
-  return text.split('\n').map((line) => line.trim()).filter(Boolean)
-}
-
+/** The list of things a step may take, as checkboxes. */
 function inputList(form, options, chosen) {
   if (!options) return []
   const wrap = element('div', 'row wide')

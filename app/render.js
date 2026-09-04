@@ -45,6 +45,9 @@ export function renderGrid(grid, scale = 1, edit = null) {
       if (child.kind === 'ingredient') takenBy.set(child, cell.column)
   const pick = (box, node) => {
     if (!edit?.onPick) return box
+    // A cell with no form behind it is not offered as a tap. A preparation the recipe
+    // owns is the one such cell: it is written in the specification, not in a sheet.
+    if (edit.pickable && !edit.pickable(node)) return box
     box.classList.add('pickable')
     box.onclick = () => edit.onPick(node)
     return box
@@ -139,6 +142,18 @@ export function renderGrid(grid, scale = 1, edit = null) {
   const adds = edit?.onAdd ? 1 : 0
   const bottom = head + 1 + grid.rows.length + adds
 
+  /*
+   * Preparations go under the head of the table, not over it.
+   *
+   * The column numbers say when a column happens; a preparation that happens before
+   * column four was being drawn above the line that says which column four is, which put
+   * the first thing printed on the card outside the table it belongs to. Under the head
+   * it reads as what it is: a row of the table that brings no ingredient, so its three
+   * left-hand fields stand empty.
+   *
+   * So the head is row 1, the band is rows 2 to `head + 1`, and the rows of the card go
+   * on starting where they always did.
+   */
   grid.band.forEach((entries, index) => {
     const ends = new Set(entries.map((entry) => entry.column + entry.columnSpan - 1))
     for (const entry of entries) {
@@ -146,8 +161,8 @@ export function renderGrid(grid, scale = 1, edit = null) {
       if (ends.has(entry.column - 1)) box.classList.add('joined')
       if (entry.column === 0) {
         box.style.gridColumn = '1 / -1'
-        box.style.gridRow = String(index + 1)
-      } else area(box, NAME_COLUMN + entry.column, entry.columnSpan, index + 1, 1)
+        box.style.gridRow = String(index + 2)
+      } else area(box, NAME_COLUMN + entry.column, entry.columnSpan, index + 2, 1)
       table.append(box)
     }
   })
@@ -155,7 +170,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
   // The reading view puts steps in this column too, so it names it for what it holds.
   const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
   label.style.gridColumn = `1 / ${NAME_COLUMN + 1}`
-  label.style.gridRow = String(head + 1)
+  label.style.gridRow = '1'
   // The heading takes the whole strand, which is what choosing every row of it means;
   // it is where the header checkbox used to be.
   if (grid.rows.length > 0) takes(label, () => grid.rows)
@@ -173,7 +188,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
         .filter((cell) => cell.column === column)
         .flatMap((cell) => grid.rows.slice(cell.row, cell.row + cell.rowSpan)))
     table.append(put(box, {
-      column: NAME_COLUMN + column, columnSpan: 1, row: head + 1, rowSpan: 1,
+      column: NAME_COLUMN + column, columnSpan: 1, row: 1, rowSpan: 1,
     }))
   }
 
@@ -255,11 +270,12 @@ export function renderGrid(grid, scale = 1, edit = null) {
   if (edit?.onStep) {
     const box = element('div', 'add step', '+ Step')
     box.onclick = edit.onStep
+    // Everything under the head: the band, every row, and the row that adds one.
     table.append(put(box, {
       column: NAME_COLUMN + grid.columns + 1,
       columnSpan: 1,
-      row: head + 1,
-      rowSpan: 1 + grid.rows.length + adds,
+      row: 2,
+      rowSpan: bottom - 1,
       last: true,
     }))
   }

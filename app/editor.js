@@ -1,15 +1,15 @@
 import { splitAside } from './card.js'
 import { buildForest } from './grid.js'
+import { nameSection, specification } from './page.js'
 import { renderGrid } from './render.js'
-import { ingredientSheet, stepSheet, cardSheet } from './sheet.js'
+import { ingredientSheet, stepSheet } from './sheet.js'
 import {
   candidates, parentOf, fieldsOf, validate, label, storedForm, beneath,
   addIngredient, addStep, editIngredient, editStep, removeNode, claim, upheaval, sweptBy,
 } from './edit.js'
 
 /**
- * Writing a card: two buttons that add, a table you can tap, and a list of what is
- * still wrong.
+ * Writing a recipe: its name, a table you can tap, and a list of what is still wrong.
  *
  * The screen is the draft made visible. A finished card is one tree, so it draws as one
  * table; half-written it is several strands, so it draws as several, and joining them is
@@ -18,8 +18,13 @@ import {
  * asks the model a question and draws the answer.
  *
  * It owns its own redraw. Everything else in the app rebuilds the screen from the link,
- * which would mean re-reading the card from the server and losing the draft, so the
- * editor is one element that repaints itself and hands back a card only when saved.
+ * which would mean re-reading the recipe from the server and losing the draft, so the
+ * editor is one element that repaints itself and hands back a recipe only when saved.
+ *
+ * It draws the whole screen and not only the table, because everything a person wrote is
+ * opened at once: the name above the table, and what it yields, its notes and what has
+ * to be done before it in the specification below. There is no separate form for the
+ * recipe itself, and so no second place where its name can be changed.
  */
 export function buildEditor({ draft, onSave, onClose, onChange }) {
   let current = draft
@@ -51,6 +56,11 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     paint()
   }
 
+  /** A field of the heading or the specification, committed when the caret leaves it. */
+  const amend = (fields) => change({ ...current, ...fields })
+
+  const rename = (title) => amend({ title })
+
   /** Ticking a row, or a run of them from the last row touched. */
   function choose(nodes, on, extend) {
     const order = rowOrder()
@@ -75,22 +85,40 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     const faults = validate(current)
     const across = scroller?.scrollLeft ?? 0
     box.replaceChildren(
-      ...[toolbar(faults), report(faults), selection(), table(), hint(faults)].filter(Boolean),
+      ...[
+        nameSection(current.title, rename),
+        report(faults),
+        selection(),
+        table(),
+        actions(faults),
+        hint(faults),
+        specification(current, {
+          onYields: (text) => amend({ yields: text.trim() === '' ? null : text.trim() }),
+          onNotes: (notes) => amend({ notes }),
+          onPreparations: (lines) => amend({ preparations: lines.map(asPreparation) }),
+        }),
+      ].filter(Boolean),
     )
     // Only once it is on the page does it have anything to scroll.
     if (scroller) scroller.scrollLeft = across
   }
 
-  function toolbar(faults) {
-    const head = button('Card', openCard)
-
+  /**
+   * `Save` and `Cancel`, under the table, where `Edit` stood a moment ago: the button
+   * that leaves writing is in the place the button that entered it was.
+   *
+   * There was a bar above the table with `Write` on it. The label named a mode that
+   * every outlined cell on the screen was already announcing, and it sat between the
+   * cook and the thing they came to change.
+   */
+  function actions(faults) {
     const save = element('button', 'go', 'Save')
     save.disabled = faults.length > 0 || !dirty || saving
     save.onclick = async () => {
       if (saving) return
       saving = true
       // The draft this write is of. The page stays live while it is in flight, so what
-      // comes back can be an answer about a card that has since been edited.
+      // comes back can be an answer about a recipe that has since been edited.
       const sent = current
       paint()
 
@@ -105,7 +133,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
         saving = false
       }
       // A write that arrives is said as plainly as one that does not: without a word
-      // either way there is no telling a saved card from a card the server refused.
+      // either way there is no telling a saved recipe from one the server refused.
       notice = failed
         ? { text: failed, bad: true }
         : current === sent
@@ -114,14 +142,12 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       paint()
     }
 
-    const leave = button('Close', () => {
+    const leave = button('Cancel', () => {
       if (dirty && !confirm('Leave without saving? The changes are lost.')) return
       onClose()
     })
 
-    return element('div', 'bar', undefined, [
-      element('span', 'label', 'Write'), head, save, leave,
-    ])
+    return element('div', 'bar after', undefined, [save, leave])
   }
 
   /**
@@ -218,6 +244,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     box.append(
       renderGrid(grid, 1, {
         onPick: open,
+        pickable,
         onChoose: choose,
         chosen: (node) => chosen.has(node),
         onAdd: () => openIngredient(null),
@@ -233,7 +260,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       'div',
       'band',
       faults.some((fault) => fault.kind === 'title')
-        ? 'Give the card a title, then add the first ingredient.'
+        ? 'Give the recipe a name, then add the first ingredient.'
         : 'Add an ingredient, then a step that takes it.',
     )
   }
@@ -243,9 +270,16 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   function open(node) {
     if (node.kind === 'ingredient') return openIngredient(node)
     if (node.kind === 'step') return openStep(node)
-    // A preparation is not a thing of its own: it belongs to a step, or to the card.
+    // A preparation is not a thing of its own: it belongs to a step, and is edited in
+    // that step's form. One belonging to the recipe rather than to any step is written
+    // in the specification, where the rest of what a person wrote is.
     const owner = parentOf(current, node)
-    return owner ? openStep(owner) : openCard()
+    if (owner) openStep(owner)
+  }
+
+  /** A preparation the recipe owns has no form to open, so it is not offered as a tap. */
+  function pickable(node) {
+    return node.kind !== 'preparation' || Boolean(parentOf(current, node))
   }
 
   function openIngredient(node) {
@@ -309,31 +343,6 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       moved: moved.map(({ node, from }) => `${label(node)} comes out of ${label(from)}`),
       emptied: emptied.map((step) => `${label(step)} is left empty, so it goes too`),
     }
-  }
-
-  function openCard() {
-    cardSheet({
-      heading: 'The card',
-      fields: {
-        title: current.title,
-        yields: current.yields,
-        notes: current.notes,
-        preparations: current.preparations.map((prep) =>
-          prep.aside ? `${prep.text} (${prep.aside})` : prep.text,
-        ),
-      },
-      save: {
-        text: 'Save',
-        run: (fields) =>
-          change({
-            ...current,
-            title: fields.title.trim(),
-            yields: fields.yields.trim() === '' ? null : fields.yields.trim(),
-            notes: fields.notes,
-            preparations: fields.preparations.map(asPreparation),
-          }),
-      },
-    })
   }
 
   paint()

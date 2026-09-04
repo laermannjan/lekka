@@ -36,6 +36,20 @@ function open(text, refuse = null, throws = false) {
 }
 
 const sheet = () => one(body, (node) => node.tag === 'dialog', 'sheet')
+
+/**
+ * A field of the specification, found by the label beside it. The specification is a
+ * flat grid of label and value cells, so the value is the cell after the label.
+ */
+function type(screen, name, value) {
+  const spec = one(screen, byClass('spec'), 'specification')
+  const at = spec.children.findIndex((node) => byClass('label')(node) && node.textContent === name)
+  assert.notEqual(at, -1, `no "${name}" row`)
+  const input = one(spec.children[at + 1], (node) => node.tag === 'input', `${name} field`)
+  input.value = value
+  input.onchange?.()
+}
+
 const click = (root, text) => tap(one(root, byText(text), `"${text}"`))
 const field = (form, name) =>
   one(form, (node) => node.tag === 'label' && node.children[0]?.textContent === name, name)
@@ -314,7 +328,7 @@ test('brackets in a name are refused too, and the note is offered instead', () =
   )
 })
 
-test('the card sheet writes the title, the yield and the preparations', () => {
+test('the specification writes the yield, the notes and the preparations', () => {
   const { screen } = open('# Neu\n')
 
   click(screen, '+ Ingredient')
@@ -325,22 +339,23 @@ test('the card sheet writes the title, the yield and the preparations', () => {
   fill({ Instruction: 'backen' })
   submit()
 
-  click(screen, 'Card')
-  fill({ Title: 'Brot', Makes: '1 Laib', Preparations: 'Ofen vorheizen (240 °C)' })
-  submit()
+  type(screen, 'Yield', '1 Laib')
+  type(screen, 'Before', 'Ofen vorheizen (240 °C)')
 
-  // A preparation for the whole card is the band across the top of the table itself.
+  // A preparation for the whole recipe is a row of the table that brings no ingredient.
   const band = one(onlyTable(screen), byClass('preparation'), 'preparation')
   assert.equal(plain(band), 'Ofen vorheizen240 °C')
   assert.deepEqual(faults(screen), [])
 })
 
-test('a card with no title cannot be saved, and the fault says which', () => {
+test('the name is a field of the editor, and an empty one is a fault', () => {
   const { screen } = open('# x\n')
-  click(screen, 'Card')
-  fill({ Title: '  ' })
-  submit()
-  assert.ok(all(screen).some((node) => node.textContent.includes('The card needs a title')))
+  const name = one(screen, (node) => node.tag === 'input' && byClass('title')(node), 'name field')
+  assert.equal(name.value, 'x')
+
+  name.value = '  '
+  name.onchange?.()
+  assert.ok(all(screen).some((node) => node.textContent.includes('The recipe needs a name')))
 })
 
 test('the sheet is taken off the page when it closes', () => {
@@ -600,8 +615,8 @@ test('the table has square edges: the add row and the step column reach them', (
 
   // The add row starts at the very left, across the checkbox column, or it leaves a notch.
   assert.equal(add.column, 1)
-  // The step column runs from the header to the same last row as the add row.
-  assert.equal(step.row, 1)
+  // The step column runs from under the header to the same last row as the add row.
+  assert.equal(step.row, 2)
   assert.equal(step.row + step.rows - 1, add.row)
   // And the rest of the add row is drawn, so the bottom edge runs the whole width.
   const along = all(grid)

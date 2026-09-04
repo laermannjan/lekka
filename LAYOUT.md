@@ -94,16 +94,22 @@ the grid is simply blank.
 
 Above the ingredient rows, in this order:
 
-1. the **preparations**. One that belongs to a step sits in that step's column;
+1. a **header row**: a label over the ingredient column, then the columns
+   numbered from `01`.
+2. the **preparations**. One that belongs to a step sits in that step's column;
    one written at the outermost level spans the full width, so it travels along
    when the grid is scrolled sideways. Preparations whose columns do not touch
    share a band row, otherwise a new row opens below.
-2. a **header row**: a label over the ingredient column, then the columns
-   numbered from `01`.
 
-Notes about the card do **not** go into the grid. They belong to the card's
-header, next to the title, because they describe the whole recipe rather than a
-point in it.
+The header comes first because the column numbers say *when* a column happens: a
+preparation that happens before column four, drawn above the line that says which
+column four is, sits outside the table it belongs to. Under the header it reads
+as what it is - a row of the table that brings no ingredient, so the three
+ingredient fields beside it stand empty.
+
+Notes about the recipe do **not** go into the grid, and neither does what it
+yields. They describe the whole recipe rather than a point in it, so they belong
+to the specification under the table.
 
 Step columns share the remaining width equally and never fall below a minimum;
 the ingredient column takes what its content needs. The whole grid scrolls

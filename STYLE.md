@@ -2,51 +2,146 @@
 
 Colours, type and placement. What is drawn where is in `LAYOUT.md`.
 
+The page is a datasheet: a white sheet with a hard edge, laid on a grey ground,
+holding tables of numbers. Nothing is coloured to look important, nothing is
+enlarged to look important, and every device on the page means one thing.
+
 ## Colours
 
 | Name | Value | Used for |
 |---|---|---|
-| ink | `#1B1B19` | body text |
-| grey | `#7A7A72` | qualifiers, notes, labels, secondary buttons, anything secondary |
-| accent | `#1E6B4C` | header bar, card frame, active switch, links, focus |
-| accent pale | `#A9C6B6` | text on the accent bar that is not the title, disabled borders |
-| line | `#4E9067` | every rule: grid, toolbar, list separators, button outlines |
-| ground | `#F2F1EC` | page, toolbar, separators inside the step and shopping views |
-| white | `#FFFFFF` | cells, ingredient rows, free areas, controls |
-| preparation | `#E6EFE9` | preparation band, message band, "editable" badge |
-| warning | `#8C2F1E` | error text |
-| warning ground | `#F6E3DF` | background of an error message |
+| ink | `#14140F` | text, and every border round a control |
+| grey | `#6D6D64` | units, qualifiers, notes, anything secondary |
+| faint | `#9C9C93` | a value that is absent, the edge of a box you cannot change |
+| rule | `#D3D2CB` | every hairline: cells of a table, rows of a list, the recess in a field |
+| dashed | `#4A4A43` | the rule under a section heading |
+| paper | `#FFFFFF` | the sheet, cells, fields |
+| ground | `#E4E3DE` | outside the sheet |
+| shade | `#F4F3EF` | the head of a places bar, the row a table grows by |
+| wash | `#E8EFE9` | a preparation row |
+| accent | `#14724B` | the recipe's left edge, and `Create` |
+| link | `#1B3FBF` | a link, and the act that commits |
+| gold | `#F0A81E` | what is set, where you stand, and `Import` |
+| amber | `#FBEEB5` | a chosen row, a callout |
+| warning | `#A8331D` | `Delete`, `Remove`, and anything that went wrong |
+
+**Every colour has one job.**
+
+| | |
+|---|---|
+| **blue** | a link, and the act that commits what you have done - `Save`, `Add`, `Import` in its own dialog |
+| **gold** | what is set, and where you are standing - the scale in force, the `Now` column |
+| **green** | the edge of a recipe, and making one that did not exist |
+| **red** | this destroys something, or something went wrong |
+| **black** | the pointer is on it, and only while it is |
+
+Black is the heaviest fill the page has, so it is spent on the one state that
+lasts no longer than the hand does. What stays chosen is gold, which can sit on
+the page all day without shouting. This was learnt the hard way: a black block
+for the current tab pulled the eye off the recipe every time.
+
+Colour never encodes what a step *is*. Steps are not coloured by kind. That was
+tried and dropped: classifying cost more than it gave.
 
 ## Type
 
 | | |
 |---|---|
-| face | IBM Plex Sans, self-hosted, antialiased |
-| size | 14 px everywhere, buttons and inputs included |
-| weights | 450 body, 600 verbs, preparation, card titles in lists, 700 the page title |
-| line height | 1.3, notes 1.25, the structure editor 1.5 |
-| upper case | page title and the small labels in the toolbar, both letter-spaced 0.06 em |
-| figures | tabular in every column that holds numbers |
+| face | JetBrains Mono, self-hosted, variable weight, antialiased |
+| size | 14 px for everything a recipe is made of |
+| weights | 400 body, 600 verbs, names, preparations, column headings; 700 the wordmark |
+| line height | 1.35, notes 1.25 |
+| figures | monospaced by the face, so every column of numbers lines up |
 
-Two deliberate exceptions to the single size:
+One face throughout. A recipe is a table of quantities, so what lines up is what
+matters, and a machine face is what the subject is: amounts, temperatures,
+durations, ids.
 
-- the **structure editor** is 13 px monospace, because it shows a file, not a card
-- the **role badge** in the overview is 12 px
+Three sizes exist, and only three:
+
+- **18 px** the wordmark
+- **16 px** the name of what is on the page
+- **14 px** everything else
+
+The first two answer "what is this page holding", which a recipe itself never has
+to answer. Inside the table there is no second size, no italics, and no underline
+outside links.
+
+Small capitals with letter-spacing are kept for **machine-readable values only** -
+a collection's name, a version. A column heading is not one of those: it is set
+bold at body size, in the case it was written in. `Ingredient` over a column of
+ingredients does not need announcing twice, once by what it says and once by how
+it is set.
 
 ## Hierarchy without size
 
 Rank comes from three means only:
 
-1. **weight** - a verb is 600, its note 450
+1. **weight** - a verb is 600, its note 400
 2. **colour** - a name is ink, its qualifier grey
 3. **position** - the verb above, the note below
 
-No second size in the card, no italics, no underline outside links.
+## Depth
 
-**Colour does not encode content.** Steps are not coloured by kind. That was
-tried and dropped: classifying cost more than it gave.
+**Depth is an offset block, never a blur.** A control casts ink out of the page;
+a field is pressed into it with the same shadow turned round. That direction is
+the whole of the difference between a thing you push and a thing you fill.
 
-## Inside the card
+| | |
+|---|---|
+| a control | `2px 2px 0` in ink, and it moves into its own shadow when pressed |
+| a box | `3px 3px 0` at 13% ink - the sheet, a table, a dialog |
+| a field | `inset 2px 2px` in the rule colour |
+
+## Rules
+
+Three weights, and each one means something:
+
+| | |
+|---|---|
+| 1 px dashed `dashed` | divides sections of the page, under a heading, 6 on 5 |
+| 1 px solid `rule` | divides cells of a table, rows of a list |
+| 1 px solid `ink` | draws round anything you can press, and closes the head of a table |
+
+The dashed rule is drawn as a gradient rather than `border-style: dashed`,
+because the dash a browser picks is 3 px on 3 px and reads as a row of specks.
+
+## Controls
+
+- **Every control is a box**: 1 px of ink, square, filled white, tight padding.
+  There is no borderless button - a thing you may press says so by being drawn.
+- **Hover** inverts it to solid ink. **Pressed**, it translates into its shadow.
+- **Filled** buttons say what kind of act they are: blue commits, green makes,
+  gold brings in, red destroys. A filled button carries a trailing `→` when it
+  leads somewhere.
+- **Switches** are segments sharing one outline, cut by single lines, the one in
+  force filled gold.
+- **Fields** are the inverse: ink border, white ground, the shadow inward, the
+  text sitting low and left of centre. Focus is a 2 px blue outline, inset.
+
+## Where a control goes
+
+Sorted by what it touches, which settles every question of placement:
+
+| touches | goes |
+|---|---|
+| the page | the masthead, beside the name - `Print small` |
+| how the recipe is drawn | above the table, beside what it changes - the scale |
+| the recipe itself | below the table, out of the way of reading - `Edit`, `Save`, `Cancel` |
+
+## Tags
+
+A tag carries an identifier and carries it **whole**: the id, the key, the
+version. Never a word standing in for the value - a box reading `KEY` says
+nothing the column heading above it has not already said, and hides the one thing
+the row was asked for.
+
+Mono small capitals, a dotted border - a value that was generated rather than
+typed should not be drawn with the same edge as a control - and a tint that says
+what kind of identifier it is, so a recipe is told from a collection before either
+is read.
+
+## Inside the table
 
 - Ingredients left aligned, steps **centred**. Centring is what makes a merge
   visible: a cell spanning four rows sits at their middle.
@@ -55,124 +150,105 @@ tried and dropped: classifying cost more than it gave.
 - An amount without a number (`nach Geschmack`) is grey, left aligned, and takes
   the amount and unit columns together.
 - Notes sit under their verb, centred, grey, balanced across lines.
-- Nothing wraps in the ingredient column; the grid scrolls sideways instead.
-- Preparation lines span the full width, centred, weight 600, on the preparation
-  colour. Card notes likewise but grey on white.
-- Column headers sit on the ground colour in grey upper case.
+- Nothing wraps in the ingredient column; the table scrolls sideways instead.
+- The head of the table is white and closed by a line of ink. Weight separates
+  it from the body, not a fill.
+- Preparation rows sit **under** the head, on the wash colour, spanning the
+  columns they come before, with the three ingredient fields beside them empty.
+- The recipe's left edge is 3 px of accent. It is the one place a colour names
+  what a box is rather than what state it is in.
 
-Column widths: amount 58 px, unit 54 px, a step column between 150 and 240 px.
-Rows are at least 21 px with 1 px of vertical padding.
+Column widths: amount 58 px, unit 54 px, a step column between 120 and 240 px.
+Rows are at least 21 px with 2 px of vertical padding.
 
-The card is **as wide as it needs to be**, up to the width of the screen. A card
-that fits is drawn whole, however large the screen; only one that does not fit
-scrolls sideways. The cap on a step column is what stops a short card from
-stretching into a few enormous cells.
+The table is **as wide as it needs to be**, up to the width of the sheet. One
+that fits is drawn whole; only one that does not scrolls sideways.
 
-## Frame and bars
+## The sheet
 
-- The page is one card on the ground colour, bordered 2 px in the accent.
-- **Header bar** in the accent, no rule below it: title upper case 700 on the
-  left; yield and card notes on the right in accent pale.
-- **Toolbar** below it on the ground colour, closed by a 1 px line: scale left,
-  actions right. It holds actions only - a status among buttons reads as their
-  heading. There is no group label while there is only one group to name. Too
-  narrow to hold everything in one line, it wraps: a control moves down whole,
-  never breaking its own label.
-- **Switches** are segmented: buttons sharing one outline, separated by 1 px
-  lines, the active one filled with the accent and white on it.
-- **Buttons** are outlined in the line colour on white and invert to accent on
-  hover. Secondary ones drop the outline until hovered and are grey. Disabled
-  ones are grey with a pale accent outline.
-- **Message band** under the toolbar, on the preparation colour, closed by a
-  line; an error swaps it for the warning ground and warning text. Empty, it
-  disappears entirely.
+One sheet, at most 1080 px, always the same width, with a 1 px ink edge. The
+table inside it may be wider than the screen and scroll; the sheet never moves,
+so the page keeps its edges however long the recipe is.
+
+- **Masthead**: the app's name at 18 px 700, which is the way home; the
+  collection stamped beside it; page actions on the right. Closed by a rule of
+  ink.
+- **Section heading**: a name at 16 px 600 with a dashed rule the full width
+  under it. It closes the heading and opens the block.
+- **Foot**: the path of the page, and the version, over a hairline. Pushed to the
+  bottom, so a short recipe still has a page under it.
+- **Message band**: a callout, double framed - a thick edge, a gap, then a dashed
+  line inside it. Two frames is how a printed page says "read this one thing
+  first" without a second size or a heavier weight. It sits under the masthead
+  and above the heading, because it is about the page, not about the recipe.
 
 ## The other screens
 
-**Overview.** A list, separated above and below each row by 1 px lines. The card
-name is weight 600 and links to reading; a badge follows it, 12 px 600, in
-accent on preparation when this device can edit, grey on ground when it cannot.
-The actions sit right aligned in the same row.
+**Overview.** A table of three columns: `Recipe`, `Delete`, `Remove`. The last
+row is where the table grows - `Import` in gold, `Create` in green - on the shade
+colour, the way `+ Ingredient` sits at the foot of the editor's table.
 
-**Sharing dialog.** A small card in the middle of a dimmed page, framed like the
-page itself: 2 px accent, at most 320 px wide, no radius. Its heading sits on
-the preparation colour and reads as a sentence, not a label. Under it the code
-on white, at most 240 px, quiet zone included; then the note in grey; then the
-link in full, in the editor's monospace, wrapped rather than cut, because a link
-one cannot read is a link one cannot type. The actions sit right aligned in a
-bar of their own, like every other bar.
+**Specification.** A label and value grid, two pairs to a line. Rows a person
+wrote are fields while the recipe is being written; rows worked out from it stay
+text, because there is nothing to type into a sum.
 
-**Step and shopping views.** At most 70 characters wide. Rows separated by 1 px
-in the **ground** colour, not the line colour: these are lists, not a grid. A
-step shows its number in a 24 px grey tabular column, the verb 600, ingredients
-and note grey. A shopping line shows the amount in a 96 px column, right
-**Reading a card that will not fit.** The whole table, scrolled sideways, with
+**Sharing dialog.** A small box in the middle of a dimmed page, framed like
+everything else: 1 px ink, at most 320 px, no radius. Its heading sits on the
+shade colour and reads as a sentence, not a label. Under it the code on white, at
+most 240 px, quiet zone included; then the note in grey; then the link in full,
+wrapped rather than cut, because a link one cannot read is a link one cannot
+type.
+
+**Reading a recipe that will not fit.** The whole table, scrolled sideways, with
 every cell **held at the left edge** until the step that takes it arrives and
 pushes it out. That hold is what the reading is for: the edge always says what is
-standing on the counter rather than what was bought. An ingredient nothing has
-reached yet stays where it is, however long it waits; only a step replaces it,
-never a blank.
+standing on the counter rather than what was bought.
 
 Rows never move, because a step stands on exactly the rows it took, and a row that
-has been taken over keeps the height its ingredient asked for. The card holds one
-height throughout.
-
-A step standing at the edge is weight 600, like any verb, and centred down its
-band the way a step is centred down the rows it merges. Its note stays 450 and
-grey.
+has been taken over keeps the height its ingredient asked for.
 
 Above it, three places name where things are on the screen rather than which
-column they are: `Done`, `Now`, `Next`, in the toolbar's grey upper case with
-`Now` in the accent. They are fixed to the screen and never scroll, and `Next` is
-narrower than a column on purpose - a card that runs on has to say so. Everything
-standing in `Done` is flush with its right edge, so the boundary between `Done`
-and `Now` is a hard line the card is measured against. `Done` is a whole
-ingredient column wide while one may still be standing there, and no wider than
-the step itself after that.
+column they are: `Done`, `Now`, `Next`, bold, with `Now` filled gold. They are
+fixed to the screen and never scroll, and `Next` is narrower than a column on
+purpose - a recipe that runs on has to say so.
 
 The hold has to be paid for out of a narrow screen, so the three ingredient
 columns are capped there rather than fixed at 58 and 54 px, and the name wraps
-inside them, breaking a word with no break in it rather than pushing the step
-column off the screen. A qualifier drops to its own line. No step column is wider
-than the ingredient column, which is what keeps the ingredient column the widest
-and stops anything overflowing the place it stands in.
-
-**Shopping view.** Not built. A line shows the amount in a 96 px column, right
-aligned, weight 600.
+inside them. A qualifier drops to its own line.
 
 ## Editing
 
-- Editable fields get a 2 px radius and, on focus, a 1 px accent ring drawn as a
-  shadow instead of an outline, so it hugs the text.
-- Everything else - buttons, links, the textarea - shows the ordinary focus
-  ring: a 2 px accent outline, offset 1 px.
-- In edit mode, an empty amount, unit or qualifier shows a faint placeholder
-  (`–`, `–`, `…`) permanently, so an empty field can be found and hit.
-- An empty note is invisible until the cell is hovered or focused, then it
-  appears with the word "Hinweis". Notes are rare; placeholders on every cell
-  would be noise.
-- A **chosen row** takes the preparation colour across all three of its fields.
-  There is no column of checkboxes: a row is chosen by holding it, or by shift or
-  command clicking it, so writing costs the card no column that reading has to
-  make room for.
+- A tappable cell is marked by the cursor and by the amber wash under the
+  pointer - never by a colour of its own.
+- A **chosen row** takes the amber across all three of its fields. There is no
+  column of checkboxes: a row is chosen by holding it, or by shift or command
+  clicking it, so writing costs the table no column that reading has to make room
+  for.
+- The name of the recipe is a field in the heading; its yield, notes and
+  preparations are fields in the specification. A preparation that belongs to a
+  step is edited in that step's form, and one that belongs to the recipe has no
+  form to open, so it is not offered as a tap.
 
 ## Print
 
-Drop the toolbar and every editing affordance, thin the card frame to 1 px, and
-let the grid stand without its scroll container.
+Drop the masthead, the foot, every bar and every editing affordance, and let the
+table stand without its scroll container.
 
-Paper is one page wide and cannot be scrolled, so a printed card is fitted to
+Paper is one page wide and cannot be scrolled, so a printed recipe is fitted to
 the page rather than measured: the ingredient block takes only what its content
-needs, and the steps divide what is left over, evenly. Where that leaves a
-column narrower than the word standing in it, the word breaks. It is the one
-place where a word may be broken - on screen a card that does not fit says so by
-overflowing, and there is somewhere to scroll to; on paper there is not, and a
-word that will not break draws over the cell beside it instead.
+needs, and the steps divide what is left over, evenly. Where that leaves a column
+narrower than the word standing in it, the word breaks. It is the one place where
+a word may be broken - on screen there is somewhere to scroll to; on paper there
+is not, and a word that will not break draws over the cell beside it instead.
 
-One button, `Print small`, prints the card in 11 px instead of 14. It is the
-answer to a question the app cannot settle - how dense a card may be depends on
-the printer, the paper and the eyes reading it - so it is asked rather than
-guessed. Like `Source` it says what it will do and not what is set, because a
-setting that shows only on paper has nothing on the screen to be pressed
-against; and it is one button, not a group, so the toolbar still has a single
-group and needs no labels.
+One button, `Print small`, prints at 11 px instead of 14. It is the answer to a
+question the app cannot settle - how dense a recipe may be depends on the printer,
+the paper and the eyes reading it - so it is asked rather than guessed. It says
+what it will do and not what is set, because a setting that shows only on paper
+has nothing on the screen to be pressed against.
+
+## Words
+
+The thing on the screen is a **recipe**. The card is how it is drawn, and
+`.lekka` files, the format and the code still say card, because that is what they
+are about: a table where rows are ingredients and columns are time.

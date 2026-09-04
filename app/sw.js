@@ -12,16 +12,17 @@ const SHELL = [
   '/render.js',
   '/edit.js',
   '/editor.js',
+  '/facts.js',
+  '/page.js',
   '/sheet.js',
   '/read.js',
   '/overview.js',
   '/library.js',
-  '/source.js',
   '/id.js',
   '/qr.js',
   '/manifest.webmanifest',
   '/icon.svg',
-  '/fonts/plex.woff2',
+  '/fonts/jetbrains.woff2',
 ]
 
 self.addEventListener('install', (event) => {
