@@ -240,103 +240,90 @@ inside them. A qualifier drops to its own line.
 
 ## Editing
 
-- **Every part of a recipe is written where it is drawn.** No form is put over
-  the table: a row's four values are its three cells opened as fields, a step's
-  verb, note and preparations are fields in its cell, and what the recipe
-  yields, its notes and the preparations belonging to it are fields in the
-  specification.
-- **One cell is open at a time.** Everything else stays exactly as it is read.
-  A field is one line and cuts where a cell wraps, so a table of nothing but
-  fields is a table that cannot be read while it is being written in - which is
-  the one thing the editor must not cost.
-- **A tap opens the cell it lands on**, with the caret in that cell and its text
-  selected, so typing replaces it. Tapping a row opens all four of its fields,
-  because they are one line of the recipe split across three cells and tab should
-  run along them. Tapping a step opens that step's cell alone.
-- A cell commits when the caret leaves it, or on enter, **and stays open**. The
-  browser fires the commit while the caret is still in the field it is leaving
-  and only then puts it in the next one, so a cell that closed on its own commit
-  threw the caret away on the first tab along a row. The fields keep the cell's
-  own alignment and colour, and a step's fields wrap and grow the way the cell
-  they replaced does.
-- **A field in the table is a field like any other in the app**: one border, one
-  hard shadow, pressed in rather than cast out. Drawn fainter than the rest, it
-  is a field you have to look for, and the point of opening a cell in place is
-  that you can see it is open.
-- An empty amount, unit or qualifier shows a faint placeholder (`–`, `–`, `…`)
-  in the row that is open, so an empty field can be found and hit.
-- `+ Ingredient` adds an empty row and puts the caret in it, and `Process in
-  step` makes an unnamed step and puts the caret in that. There is no form to
-  fill in first: the thing is made and then named, and a blank one is simply a
-  fault until it is not.
-- **A step's preparations are fields in its cell.** Read, a preparation attached
-  to a step is drawn over that step's column, which is when it happens. Written,
-  it belongs with the step - it is one of the things the step says about itself,
-  and a band cell has nothing to say about which step it is attached to. So the
-  band holds nothing while writing.
-- **Every field of the open cell is drawn**, empty or not, in the order the
-  things happen: what comes before the step, then the step, then its note. Only
-  one cell is open at a time, so there is room for all of them, and a field that
-  has to be discovered says nothing about what it is for.
-- **A step's fields are named above them, not inside them.** They are three boxes
-  of the same shape stacked one on another, and a placeholder is the one piece of
-  text that goes away exactly when the field has something in it: filled, the
-  three were identical. A row's four fields need no names - they stand in the
-  columns that name them, and only an empty one shows a faint placeholder (`–`,
-  `–`, `…`) so it can be found and hit.
+- **A table being written is the table it is read as, to the pixel.** Same
+  columns, same rows, same cells, not one field in it - and the only thing that
+  ever differs is colour. Everything you can type is in the form, which is a
+  layer over the page.
+
+  It was not always so. Cells opened where they stood, and a field is not the
+  words it replaces: it has a border and a padding they do not, so it wraps at a
+  different width and the one piece of text being looked at reflowed as it was
+  reached for. Measured on `roggenquarkbrot`, opening `backen` left every column
+  and every row exactly where it was and moved the words inside that one cell by
+  13px, 2px narrower and 16px shorter - which is small, and is at the precise
+  point the eye is on. A column of boxes that came and went beside it moved the
+  rest.
+- **The form is docked to the foot of the window, not centred**, so the head of
+  the table stays above it, and it is as tall as it needs to be. That is what a
+  layer buys over a panel in the page: a panel has to fit the room left over, and
+  how much room is left over depends on how long the recipe is - which is not a
+  thing the place a control lives should depend on. On a narrow screen it is
+  where a thumb already is.
+- **It is modal, and the page behind it is dimmed.** The cost is real and was
+  chosen: the table is dimmed, not hidden - the form is 640px at the foot of a
+  wider window - so the shading still reads, but the list of inputs also says on
+  its own what each one brings.
+- **The table says two things, in two colours.** Blue rings the one row or step
+  the form is open on. Amber shades what goes into it. A cell can be both, so
+  the ring is a ring and not a fill.
+- **A row is painted whole.** A row reaches as far as the step that takes it, so
+  `250 g Mehl` waiting through two columns is one row six columns wide with
+  fields in the first three and blank after. Painted through its cells only, the
+  blank part - which is exactly the part that says it is still waiting - stayed
+  white, and shading a step lit an L with its corner missing. Free area is drawn
+  over that blank to carry the rules; it is ink and nothing else, with no fill
+  and no target, so a tap there reaches the row.
 - A tappable cell is marked by the cursor and by a wash under the pointer, in
   grey and never in amber: amber is what a row going into the open step is
   painted, and a hover in the same colour would claim the row had been chosen by
   pointing at it.
+- **A tap opens the whole of what it lands on.** A row is one line of the recipe
+  split across three cells, not three things, so tapping any of them opens the
+  line; tapping a step opens that step.
+- **The form says what kind of thing it holds and where it stands** - `Step`,
+  `column 03` - and not its name. The name is in a field two lines below, and a
+  heading that repeats the field under it is one more thing to read and one more
+  thing to keep in step. It is also what took the name off the button: `Delete`
+  used to carry it, which made a button as wide as the step was long.
+- **Every field is named above it, not inside it.** A placeholder is the one
+  piece of text that goes away exactly when the field has something in it, so
+  three stacked fields that had all been filled were three identical boxes. Every
+  field is drawn, empty or not, in the order the things happen: what comes before
+  the step, then the step, then its note.
+- **Nothing moves until `Apply`.** Typing writes nothing, ticking writes nothing;
+  a row that leaves a step becomes a strand of its own and is drawn somewhere
+  else, and having the table rearrange itself under every keystroke is no way to
+  decide anything.
 - **A box stands for an input, not for a row.** A step takes whole strands, so
   unticking one row of a strand it swallowed is not a move the format has: what
   goes into `vermengen` is `abkühlen`, not the Roggenschrot three steps inside
-  it. So an ingredient's box sits in its row and a step's box sits in that step's
-  cell, and only what the open step may actually take is given one.
-- **Boxes appear only while a step's cell is open.** The column they sit in is
-  drawn for as long as the recipe is being written, even when it holds nothing:
-  appearing with the boxes, it would shift the whole table sideways under the
-  hand.
+  it. The boxes are in the form, which is also what let the table keep the same
+  number of columns while a recipe is being written as while it is read.
+- **An input says what it brings, where that is worth saying.** A step brings
+  everything under it and how much cannot be seen from its name, so it says
+  `4 ingredients`; an ingredient brings its own one row, and a list that said so
+  on every line would be a column of the word `row`.
 - **A ticked strand is shaded whole**: the input itself, every step between it
-  and the rows, and the rows. A strand goes in whole, so the whole of it is what
-  is coming, and the amber shows the reach of a choice where there is no box to
-  tick. The step being written is not shaded - the shading says what is coming
-  *in*.
-- Ticking a box and opening a cell are different targets, so neither has to ask
-  what modifier was held.
-- **Opening a step ticks what goes into it**, and **nothing moves until `Apply`**.
-  A row that leaves a step becomes a strand of its own and is drawn somewhere
-  else; having the table rearrange itself under every tick is no way to decide
-  anything. There is nothing to read back either - the boxes and the amber
-  already say what the step holds, so a bar repeating it in words says it twice.
-- `Apply` leaves the cell open: saying what goes in is a step in writing the
-  step, not the end of it.
-- **What can be done to the open cell is its own row, and it says what it acts
-  on**: the kind of thing, then its name, then `Apply` and `Delete`. It sits
-  under `Save` and `Cancel`, which act on the whole recipe. It was a filled amber
-  band - not an arbitrary colour, since amber is what the rows going into that
-  step are painted, but a filled band the width of the page is how this app says
-  *read this one thing first*, and a row of controls is not a message. Writing
-  the name on the bar is also what took it off the button: `Delete` used to carry
-  it, which made a button as wide as the step was long.
+  and the rows, and the rows. The step being written is not shaded - the shading
+  says what is coming *in*.
 - **`+ Step` guesses**, and the boxes show the guess: every ingredient still
   waiting for a step, or - when none is waiting - the ends of the strands, which
   is how two of them are joined.
-- **What can be done to the open cell** is a bar of its own, below `Save` and
-  `Cancel`: those are about the whole recipe, this is about the one cell. It
-  carries `Apply` for a step and `Delete <the thing>` for either.
-- **Everything that comes and goes is drawn below the row of buttons** - the bar
-  the ticked rows raise, the faults, the messages. One appearing above the table
-  pushes the table down under the hand that is working in it.
-- **Deleting is done from the bar the ticked rows raise**, where what else would
-  go is already spelled out. It takes the rows themselves rather than what holds
-  them: `Process in step` asks what these rows belong to, because that is what a
-  new step would take, and deleting asks nothing. A step is deleted from the same
-  bar while its inputs are being chosen.
+- `+ Ingredient` adds an empty row and opens the form on it. There is no form to
+  fill in first: the thing is made and then named, and a blank one is simply a
+  fault until it is not.
+- **`Save` and `Cancel` are the only buttons on the page**, under the table where
+  `Edit` stood a moment ago. What can be done to one row or one step is done in
+  the form, where that row or step is.
+- **Everything that comes and goes is drawn below the row of buttons** - the
+  faults, the messages. One appearing above the table pushes the table down under
+  the hand that is working in it.
+- **Deleting says what else it would take** before it does it, because there is
+  no undo: a step left holding nothing goes too, and so can the step above it.
 - The name of the recipe is a field in the heading; its yield, notes and
   preparations are fields in the specification. A preparation that belongs to a
-  step is edited in that step's form, and one that belongs to the recipe has no
-  form to open, so it is not offered as a tap.
+  step is a field in that step's sheet, and one that belongs to the recipe is
+  written in the specification, so a band cell is not offered as a tap.
 
 ## Fitting
 

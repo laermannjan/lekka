@@ -564,39 +564,6 @@ button.quiet.warn:hover {
  * the table instead, where `Edit` stood a moment ago, so the button that leaves
  * writing is in the place the button that entered it was.
  */
-/*
- * The row of things that can be done to the cell that is open. It sits under `Save` and
- * `Cancel`, which act on the whole recipe, and it comes and goes with the cell.
- *
- * It was a filled amber band. Amber is what a row going into the open step is painted,
- * so the colour was not arbitrary - but a filled band the width of the page is how this
- * app says "read this one thing first", and a row of controls is not a message. It read
- * as a warning under a row of buttons. What ties it to the table now is what it says.
- */
-.editor > .bar.chosen {
-  border-top: 1px dashed var(--rule);
-  margin: 0;
-  padding: 7px 0 0;
-}
-
-/* What is open: the kind of thing, then its own name. The name is what the `Delete`
-   button used to carry, which made a button as wide as the step was long. */
-.bar.chosen .holding {
-  display: flex;
-  gap: 6px;
-  margin-right: 4px;
-  min-width: 0;
-}
-
-.bar.chosen .named {
-  color: var(--ink);
-  font-weight: 600;
-  max-width: 34ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* ---- fields -------------------------------------------------------------- */
 
 /*
@@ -876,7 +843,7 @@ textarea:focus {
  */
 .grid.choosing {
   grid-template-columns:
-    26px 58px 54px max-content repeat(var(--columns), minmax(120px, 240px)) 46px;
+    58px 54px max-content repeat(var(--columns), minmax(120px, 240px)) 46px;
 }
 
 .grid.flat {
@@ -884,7 +851,7 @@ textarea:focus {
 }
 
 .grid.choosing.flat {
-  grid-template-columns: 26px 58px 54px max-content 46px;
+  grid-template-columns: 58px 54px max-content 46px;
 }
 
 .hold,
@@ -1116,150 +1083,33 @@ textarea:focus {
 
 /* ---- writing ------------------------------------------------------------ */
 
+/* ---- writing ------------------------------------------------------------ */
+
 /*
- * A field inside the table keeps the cell it replaced: the same alignment, the same
- * colour, the same height. A row being written should look like the row it will be,
- * so it is drawn as a recess in the cell rather than as a control laid over it.
+ * A table being written is the table it is read as, to the pixel.
  *
- * Only the cell being written is a field. Everything else stays as it is read, because
- * a field is one line and cuts where a cell wraps: a table of nothing but fields is a
- * table that cannot be read while it is being written in.
- */
-/*
- * The same recess as every other field in the app, not a fainter one. A field drawn in
- * `--rule` on `--shade` is a field you have to look for, and the whole point of opening
- * a cell in place is that you can see it is open.
- */
-.grid .field {
-  background: var(--paper);
-  border: 1px solid var(--edge);
-  box-shadow: inset 2px 2px var(--rule);
-  color: inherit;
-  font: inherit;
-  height: auto;
-  min-width: 0;
-  padding: 1px 3px 1px 4px;
-  top: 0;
-  width: 100%;
-}
-
-.grid .field:focus {
-  border-color: var(--link);
-  outline: 1px solid var(--link);
-  outline-offset: -2px;
-}
-
-.grid .field::placeholder {
-  color: var(--faint);
-  opacity: 1;
-}
-
-.grid .field.amount {
-  text-align: right;
-}
-
-.grid .field.unit,
-.grid .field.aside,
-.grid .field.note {
-  color: var(--grey);
-}
-
-/* The name and its qualifier sit side by side, as they are read. */
-.grid .names {
-  display: flex;
-  gap: 3px;
-  min-width: 0;
-}
-
-.grid .names .field.name {
-  flex: 3;
-}
-
-.grid .names .field.aside {
-  flex: 2;
-}
-
-/*
- * A step being written stacks its fields, each under its own name: what has to happen
- * before it, what it does, and its note. They wrap and grow, because a verb is often
- * longer than the column it stands in and a cell being read wraps it too.
+ * There is not one field in it. Cells used to open where they stood, and a field is not
+ * the words it replaces - it has a border and a padding they do not, so it wraps at a
+ * different width and the one piece of text being looked at reflowed as it was reached
+ * for. A column of boxes came and went beside it and moved the rest. Everything you can
+ * type is in the sheet, which is a layer over the page.
  *
- * The name is written above the field rather than inside it. A placeholder is the one
- * piece of text that goes away exactly when the field has something in it, so three
- * stacked fields that had all been filled were three identical boxes.
+ * So the only thing that ever differs is colour, and there are three of them.
  */
-.grid .wrote {
-  display: block;
-  text-align: left;
-}
-
-.grid .wrote + .wrote {
-  margin-top: 3px;
-}
-
-.grid .wrote > .what {
-  color: var(--faint);
-  display: block;
-  font-size: 11px;
-  line-height: 1.2;
-}
-
-/* A run of preparations is named once, at its head. Repeating the name down the column
-   says nothing the shape has not already said. */
-.grid .wrote > .what:empty {
-  display: none;
-}
-
-.grid .step .field {
-  display: block;
-  line-height: 1.35;
-  margin: 0 auto;
-  overflow: hidden;
-  resize: none;
-  text-align: center;
-  width: calc(100% - 2px);
-}
-
-.grid .field.verb {
-  font-weight: 600;
-}
-
-.grid .field.before {
-  background: var(--wash);
-  color: var(--grey);
-}
-
-/*
- * Every field of the open cell is drawn, empty or not. Only one cell is open at a time,
- * so there is room for all of them; hidden, they were three things a cook had to know
- * were there, and a field that has to be discovered says nothing about what it is for.
- * The placeholder is what says it.
- */
-
-.step .field {
-  -webkit-touch-callout: default;
-  -webkit-user-select: text;
-  user-select: text;
-}
-
 .pickable {
   cursor: pointer;
 }
 
-/*
- * What a tap would open. A step's cell lights up whole; a row lights its cells, because
- * the row is a container the cells sit in and a colour on it is drawn under them.
- *
- * Grey, not amber. Amber is what a row that is going into the open step is painted, and
- * a hover that used the same colour would say the row had been chosen by pointing at it.
- */
-.step.pickable:hover,
-.step.pickable:focus-visible {
-  background: var(--amber);
+/* What a tap would open. Grey, not amber: amber is what a row going into the open step
+   is painted, and a hover in the same colour would say the row had been chosen by
+   pointing at it. */
+.hold.pickable:hover,
+.step.pickable:hover {
+  background: var(--shade);
 }
 
 /*
- * A row is painted whole, not cell by cell.
+ * What goes into the step the sheet is open on, painted whole.
  *
  * A row reaches as far as the step that takes it - `250 g Mehl` waiting through two
  * columns is one row six columns wide, with fields in the first three and blank after.
@@ -1267,39 +1117,16 @@ textarea:focus {
  * the row it was waiting in stayed white: a row half shaded, which is exactly the part
  * of it that says it is still waiting.
  */
-.hold.pickable:hover {
-  background: var(--shade);
-}
-
 .hold.chosen,
 .step.chosen {
   background: var(--amber);
 }
 
-/*
- * The box a row is chosen with. It sits in a column of its own in front of the table,
- * so it is a target the width of a finger and not a modifier nobody can see.
- */
-.ticker {
-  align-items: center;
-  display: flex;
-  justify-content: center;
-  padding: 0;
-}
-
-/* A step's own box sits above what it says, where a row's sits beside it. */
-.step > .ticker.inline {
-  display: block;
-  justify-content: center;
-  margin-bottom: 2px;
-}
-
-.tick {
-  accent-color: var(--accent);
-  cursor: pointer;
-  height: 15px;
-  margin: 0;
-  width: 15px;
+/* And the one thing the sheet is open on. A cell can be both this and shaded, so this
+   cannot be a fill: it is a ring, drawn inside the cell so it takes up no room. */
+.hold.here,
+.step.here {
+  box-shadow: inset 0 0 0 2px var(--link);
 }
 
 .grid > .add {
@@ -1342,14 +1169,6 @@ textarea:focus {
 
 .faults .fault:hover {
   font-weight: 600;
-}
-
-.bar.chosen .takes {
-  color: var(--accent);
-  flex: 1;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-  white-space: normal;
 }
 
 /* A form field that takes a whole line of the sheet. */
@@ -1459,7 +1278,9 @@ textarea:focus {
   width: 16px;
 }
 
-.compose .choice.step .what {
+/* A strand goes in whole, so a step's name is set as the thing it is: one input that
+   brings everything under it. */
+.compose .choice.strand .what {
   font-weight: 600;
 }
 
@@ -1469,11 +1290,11 @@ textarea:focus {
   text-align: right;
 }
 
+/* Ticked, and painted the colour the table paints what is coming in - so what the list
+   said is what you come back to. It used to mean something else here, and said so with
+   `display: block`, which flattened the line it was on. */
 .compose .choice.taken {
-  display: block;
-  font-weight: 600;
-  min-height: 0;
-  padding: 6px 8px;
+  background: var(--amber);
 }
 
 .compose .actions {
@@ -1490,6 +1311,110 @@ textarea:focus {
 
 .compose .actions .warn {
   margin-left: auto;
+}
+
+/* ---- the sheet a row or a step is written in ----------------------------- */
+
+/*
+ * One row or one step, in a sheet over the page.
+ *
+ * It is docked to the foot of the window rather than centred, so the head of the table
+ * stays above it, and it is as tall as it needs to be. That is what a layer buys over a
+ * panel in the page: a panel has to fit the room left over, and how much room is left
+ * over depends on how long the recipe is - which is not a thing a panel should depend on.
+ */
+.compose .at {
+  align-items: baseline;
+  border-bottom: 1px dashed var(--rule);
+  display: flex;
+  gap: 8px;
+  padding-bottom: 8px;
+  width: 100%;
+}
+
+.compose .at > .kind {
+  font-weight: 600;
+}
+
+.compose .at > .spring {
+  flex: 1;
+}
+
+.compose .at > .place {
+  color: var(--grey);
+}
+
+/*
+ * The fields, each under its own name.
+ *
+ * The name is written above the field, not inside it. A placeholder is the one piece of
+ * text that goes away exactly when the field has something in it, so three stacked
+ * fields that had all been filled were three identical boxes.
+ */
+.compose .rows {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 96px 74px minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+}
+
+.compose .rows.forStep {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+}
+
+.compose .rows > label {
+  display: block;
+  min-width: 0;
+}
+
+/* `.said`, not `.name`: `name` is the class an ingredient's own field carries, and a
+   caption rule that also matched the field styled the two as one thing. */
+.compose .rows > label > .said {
+  color: var(--grey);
+  display: block;
+  padding-bottom: 2px;
+}
+
+/* A run of preparations is named once, at its head: repeating `Before it` down a column
+   of them says nothing their shape has not. */
+.compose .rows > label > .said:empty {
+  visibility: hidden;
+}
+
+/* An amount is read against the column of amounts above it, so it is set as one. */
+.compose .rows input.amount {
+  text-align: right;
+}
+
+/* `Close` is not one of the two acts; it is the way out, so it sits away from them. */
+.compose .actions .spring {
+  flex: 1;
+}
+
+.compose .rows textarea {
+  height: 3.2rem;
+  resize: none;
+}
+
+/*
+ * On a narrow screen the fields stack. Three columns of a phone's width are three fields
+ * none of which can hold a line, and the sheet is the one place on the page with room to
+ * spare - it is as tall as it needs to be.
+ */
+@media (max-width: 620px) {
+  .compose .rows,
+  .compose .rows.forStep {
+    grid-template-columns: 1fr;
+  }
+
+  .compose .rows textarea {
+    height: 2.6rem;
+  }
+
+  /* What an input brings is the first thing to go when its name needs the width. */
+  .compose .choice .aside {
+    display: none;
+  }
 }
 
 /* ---- sharing dialog ------------------------------------------------------ */
@@ -1673,7 +1598,6 @@ textarea:focus {
   }
 
   .bar,
-  .ticker,
   .badge,
   .sheet,
   .compose,

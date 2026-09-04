@@ -54,7 +54,8 @@ import { parseCard } from './card.js'
 import { renderCard } from './render.js'
 import { renderReading } from './read.js'
 import { buildEditor } from './editor.js'
-import { toDraft, addIngredient } from './edit.js'
+import { buildForm } from './form.js'
+import { toDraft, addIngredient, candidates } from './edit.js'
 
 const TEXT = ${JSON.stringify(CARD)}
 const LONG = ${JSON.stringify(LONG)}
@@ -83,28 +84,78 @@ scene('Editor, ingredients but no step', buildEditor({
 
 scene('Editor, at rest', editor())
 
-// A step opened, which is the only state in which the boxes hold anything: they stand
-// for what this step may take, ticked where it already takes it.
+/*
+ * A step selected. This is the whole of what the table does while a recipe is being
+ * written: a ring on the one thing the form holds, and a shading on what goes into it.
+ * There is not a field in it, and not one column that was not there a moment ago.
+ */
 const opened = editor()
-scene('Editor, a step open with its boxes', opened)
-for (const cell of opened.querySelectorAll('.grid .holds > .step'))
-  if (cell.textContent.startsWith('verrühren')) cell.onclick()
-
-// A row opened. Its four fields need no names: they stand in the columns that name them.
-const row = editor()
-scene('Editor, a row open', row)
-row.querySelector('.grid > .hold .name').click()
+scene('Editor, a step selected', opened)
+tapStep(opened, 'verrühren')
 
 // A step whose inputs wait through two columns, which is where a row is wider than its
 // own fields and the shading has to reach as far as the row does.
-const wide = buildEditor({
-  draft: toDraft(parseCard(LONG)),
-  onSave: async () => null,
-  onClose: () => {},
-})
+const wide = buildEditor({ draft: toDraft(parseCard(LONG)), onSave: async () => null, onClose: () => {} })
 scene('Editor, a step whose rows wait', wide)
-for (const cell of wide.querySelectorAll('.grid .holds > .step'))
-  if (cell.textContent.startsWith('vermengen')) cell.onclick()
+tapStep(wide, 'vermengen')
+
+/*
+ * The form, drawn where it can be seen rather than over the page. It is a dialog: on
+ * the real screen it is docked to the foot of the window with the page dimmed behind
+ * it, which a picture of the whole page cannot show and a picture of the form can.
+ */
+const draft = toDraft(parseCard(LONG))
+const vermengen = holds(draft.strands[0], 'vermengen')
+scene('The form, on a step', inline(buildForm({
+  node: vermengen,
+  place: 'column 03',
+  offers: candidates(draft, vermengen),
+  onChoose: () => {},
+  onApply: () => {},
+  onDrop: () => {},
+  onClose: () => {},
+})))
+
+const mehl = rowsOf(draft.strands[0]).find((one) => one.name === 'Roggenvollkornmehl')
+scene('The form, on a row', inline(buildForm({
+  node: mehl,
+  place: '',
+  onApply: () => {},
+  onDrop: () => {},
+  onClose: () => {},
+})))
+
+/** A tap on the step whose verb starts with this. */
+function tapStep(view, verb) {
+  for (const cell of view.querySelectorAll('.grid .holds > .step'))
+    if (cell.textContent.startsWith(verb)) cell.onclick()
+  // The form it opens is a modal dialog, and a modal dialog in a picture of the page
+  // covers the page. The table is the subject here, so it is shut again at once.
+  for (const box of document.querySelectorAll('dialog.compose')) box.remove()
+}
+
+/** A dialog drawn as a block, so it appears in a picture of the page at all. */
+function inline(box) {
+  box.style.position = 'static'
+  box.style.display = 'block'
+  box.style.maxWidth = '640px'
+  box.style.margin = '0'
+  return box
+}
+
+function holds(node, verb) {
+  if (node.verb?.startsWith(verb)) return node
+  for (const child of node.children ?? []) {
+    const found = holds(child, verb)
+    if (found) return found
+  }
+  return null
+}
+
+function rowsOf(node) {
+  if (node.kind === 'ingredient') return [node]
+  return (node.children ?? []).flatMap(rowsOf)
+}
 
 function scene(name, body) {
   const head = document.createElement('div')

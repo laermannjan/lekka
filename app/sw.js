@@ -12,6 +12,7 @@ const SHELL = [
   '/render.js',
   '/edit.js',
   '/editor.js',
+  '/form.js',
   '/facts.js',
   '/page.js',
   '/read.js',

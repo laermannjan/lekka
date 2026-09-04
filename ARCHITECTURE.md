@@ -218,61 +218,90 @@ where its name can be changed.
 `Save` and `Cancel` sit under the table, where `Edit` stood a moment ago, so the
 button that leaves writing is in the place the button that entered it was.
 
-**A cell is written where it is drawn, one at a time.** A tap opens the cell it
-lands on, with the caret in it and its text selected; everything else stays
-exactly as it is read. That last part is the whole design: a field is one line
-and cuts where a cell wraps, so a table of nothing but fields is a table nobody
-can read while writing in it. Opening every cell at once was tried first and was
-the thing that made it unusable.
+**Nothing is written in the table.** A tap on a row or on a step opens the form,
+which is a layer over the page; the table itself is the table it is read as, to
+the pixel - same columns, same rows, same cells, not one field in it - and the
+only thing that ever differs is colour.
 
-An ingredient's four values already have three cells drawn for them, so a tap on
-any of them opens all four - they are one line of the recipe split across three
-cells, and tab should run along them. A cell commits when the caret leaves it, or
-on enter, and goes back to being read.
+That is the third arrangement and the first robust one. Dialogs came first and
+were taken out, because a dialog covers the table you are writing against. Cells
+opening where they stood replaced them, and a field is not the words it replaces:
+it has a border and a padding they do not, so it wraps at a different width. On
+`roggenquarkbrot`, opening `backen` left every column and every row exactly where
+it was and moved the words *inside that one cell* by 13px, 2px narrower and 16px
+shorter. Small, and at the precise point the eye was on. A column of tick boxes
+that came and went beside it moved the rest.
+
+So the dialog came back, built properly this time: docked to the foot of the
+window rather than centred, so the head of the table stays above it, and as tall
+as it needs to be. That last part is what a layer buys over a panel in the page.
+A panel has to fit the room left over, and how much room is left over depends on
+how long the recipe is - measured at 500px wide, a console under the table sat at
+y=290 for a thirteen-row card and would walk off the bottom of a phone for a
+longer one. A layer is in the same place whatever the recipe does. `tools/check.mjs`
+holds the whole claim down: it reads `grid-template-columns` and
+`grid-template-rows` before a cell is touched and after it is opened, typed into
+and applied, and fails if a single track moved.
+
+The form is modal and the page behind it is dimmed. The cost is real and was
+chosen: the table is dimmed, not hidden - the form is 640px at the foot of a
+wider window - so the shading still reads, and the list of inputs also says on
+its own what each one brings.
+
+**The table says two things, in two colours.** Blue rings the one row or step the
+form is open on; amber shades what goes into it. A cell can be both, so the ring
+is a ring and not a fill.
+
+**A row is painted whole.** A row reaches as far as the step that takes it, so
+`250 g Mehl` waiting through two columns is one row six columns wide with fields
+in the first three and blank after. Painted through its cells only, the blank
+part - which is exactly the part that says it is still waiting - stayed white,
+and shading a step lit an L with its corner missing. Free area is drawn over that
+blank to carry the rules where two runs of it meet at different widths; it is ink
+and nothing else, with no fill and no target, so a tap there reaches the row.
 
 `+ Ingredient` sits under the last ingredient, always in the same place, because
 a button that moves about is a button nobody finds twice. It adds an empty row
-and puts the caret in it; there is no form to fill in first.
-
-**A step is written in its cell too** - what comes before it, what it does, and
-its note, in that order, as fields that wrap and grow the way the cells they
-replaced do. Every one is drawn, empty or not: only one cell is open at a time,
-so there is room, and a field that has to be discovered says nothing about what
-it is for.
+and opens the form on it; there is no form to fill in first.
 
 **A preparation belongs to a step, not to a column.** It is drawn inside that
-step's cell, above its verb, in both views. A band over the step's column said
-instead that it belonged to the column, which is not a thing the format can
-express and not a thing that would survive editing: a column is
-`max(column(input)) + 1`, so inserting a step upstream moves every column after
-it, and the preparation would silently move to a different moment. The step it
-precedes does not move. The band now holds only the preparations belonging to the
-recipe, which genuinely do span everything - though their words do not: they are
-pinned to the visible part of the table and centred in that, so they stay where
-the eye is while the table scrolls under them. Whichever view drew the table
-measures that width into `--room`.
+step's cell, above its verb, when the recipe is read, and is a field of that
+step's form when it is written. A band over the step's column said instead that
+it belonged to the column, which is not a thing the format can express and not a
+thing that would survive editing: a column is `max(column(input)) + 1`, so
+inserting a step upstream moves every column after it, and the preparation would
+silently move to a different moment. The step it precedes does not move. The band
+holds only the preparations belonging to the recipe, which genuinely do span
+everything - though their words do not: they are pinned to the visible part of
+the table and centred in that, so they stay where the eye is while the table
+scrolls under them. Whichever view drew the table measures that width into
+`--room`.
 
 **A step is built by ticking boxes, and a box stands for an input.** A step takes
 whole strands, so unticking one row of a strand it swallowed is not a move the
 format has - what goes into `vermengen` is `abkühlen`, not the Roggenschrot three
-steps inside it. An ingredient's box therefore sits in its row and a step's box
-sits in that step's cell, and the set offered is exactly `candidates`: the step's
-own inputs plus whatever is still loose. A ticked strand is then shaded whole -
-the input, every step between it and the rows, and the rows - because a strand
-goes in whole and the amber has to show the reach of a choice where there is no
-box. The step being written stays unshaded: the shading says what is coming in.
+steps inside it. The set offered is exactly `candidates`: the step's own inputs
+plus whatever is still loose. A ticked strand is shaded whole - the input, every
+step between it and the rows, and the rows - because a strand goes in whole. The
+step being written stays unshaded: the shading says what is coming in.
 
-Boxes appear only while a step's cell is open. The column they sit in is drawn
-for as long as the recipe is being written, even empty: appearing with the boxes,
-it would shift the table sideways under the hand.
+The boxes are in the form. That is also what let the table keep the same number
+of columns while a recipe is being written as while it is read: they used to
+stand in a column of their own, which had to be drawn empty for the whole session
+so that opening a step would not shift the table sideways under the hand.
 
-**Nothing moves until `Apply`.** A row that leaves a step becomes a strand of its
-own and is drawn somewhere else, and a table that rearranges itself under every
-tick is no way to decide anything. `Apply` leaves the cell open, because saying
-what goes in is a step in writing the step rather than the end of it.
+Each box says what it brings, where that is worth saying. A step brings
+everything under it and how much cannot be seen from its name, so it says
+`4 ingredients`; an ingredient brings its own one row, and a list that said so on
+every line would be a column of the word `row`.
 
-`+ Step` makes an unnamed step, puts the caret in its verb, and guesses what it
-takes: every ingredient still waiting, or - when none is waiting - the ends of the
+**Nothing moves until `Apply`.** Typing writes nothing and ticking writes
+nothing. A row that leaves a step becomes a strand of its own and is drawn
+somewhere else, and a table that rearranges itself under every keystroke is no
+way to decide anything.
+
+`+ Step` makes an unnamed step, opens the form on it, and guesses what it takes:
+every ingredient still waiting, or - when none is waiting - the ends of the
 strands, which is how two of them are joined.
 
 One thing this costs: a strand already inside a step cannot be handed to another
@@ -280,26 +309,22 @@ one, because it is neither a root nor an input of the step being written, so it 
 offered no box. Deleting the step that holds it frees it first. `upheaval` still
 guards that move in `edit.js`, and its tests are there.
 
-**A step's inputs are the boxes, while its cell is open.** Opening a step ticks
-what it holds; unticking a box hands that row back at once and ticking one takes
-it in, so there is nothing to press and nothing to read back. What the boxes
-cannot do they do not offer: a row already inside a step this one is part of has
-its box disabled, so a loop cannot be ticked in and then refused after the fact.
-
 What the ticked rows come to is asked of the step's *candidates* - its own inputs
 plus whatever is still loose outside it - and not of `claim`, which answers "what
 holds these rows" and would climb past the step being edited: from inside a step,
 every row of it is also every row of the step above.
 
-Everything that comes and goes - that bar, the faults, the messages - is drawn
-below the row of buttons. One appearing above the table pushes the table down
-under the hand that is working in it. That question is asked of the step's
-*candidates* - its own inputs, plus whatever is still loose outside it - and not
-of `claim`, which answers "what holds these rows" and would climb past the step
-being edited: from inside a step, every row of it is also every row of the step
-above. A row that belongs to no candidate is refused by name rather than dropped.
+Everything that comes and goes - the faults, the messages - is drawn below the
+row of buttons. One appearing above the table pushes the table down under the
+hand that is working in it.
 
-There are no dialogs left in the editor. `app/sheet.js` is gone.
+A row that belongs to no candidate is refused by name rather than dropped.
+
+The editor's one dialog is `app/form.js`. It builds the form and nothing else:
+the fields of one row or one step, the boxes of what a step may take, and three
+buttons. It decides nothing - `edit.js` still answers every question about what
+may go into what - and it never touches the draft, it hands back what it was
+told and `Apply` is where that lands.
 
 What a row *means* is not the ingredient on it. It is whatever currently holds
 that ingredient - the rightmost cell in the row, which by right alignment is the
@@ -310,8 +335,8 @@ which then have to come out of it. Choose every row of two strands and you have
 said both roots, which is how strands are joined.
 
 The second half of that move is the half nobody pointed at, so it is said before
-it happens, in the bar and again in the form: *"250 g Mehl comes out of
-verrühren"*. And a step left holding nothing is not a shape the format has
+it happens: *"250 g Mehl comes out of verrühren"*. And a step left holding
+nothing is not a shape the format has
 (`FORMAT.md` rule 5), so it goes with what was taken out of it, and that is
 said too. The same cascade runs when an ingredient is deleted.
 
@@ -437,10 +462,10 @@ work.
   is tested as arithmetic: the candidates are the roots, taking one hides it,
   editing a step sees its own inputs and never the strand it sits in.
 
-- **The editor's wiring, against a stub DOM** (`test/dom.js`, ~120 lines). It
+- **The editor's wiring, against a stub DOM** (`test/dom.js`, ~140 lines). It
   walks what a person does - enter two ingredients, join them in a step, tap a
-  cell, tick a box, drop an input - and checks what the table then says, what the
-  boxes offer and what the save would write. A stub proves none of that is
+  row, tick a box, delete an input - and checks what the table then says, what
+  the form offers and what the save would write. A stub proves none of that is
   *visible*; it proves the right node reached the right field, which is where the
   rules live.
 
@@ -453,17 +478,17 @@ work.
   element present and every column the wrong width. Two of these side by side
   is what caught it.
 
-- **A dozen checks in a real browser, from `node tools/check.mjs`.** Same
+- **Twenty-one checks in a real browser, from `node tools/check.mjs`.** Same
   machinery as the picture - own server, headless Chrome - but it drives the
   editor and reports `PASS`/`FAIL` per line, and exits non-zero.
 
-  It exists because the stub has no caret. `change` fires while the caret is
-  still in the field it is leaving and only then does the focus land, so
-  "committing a field throws the caret out of the row" is not a question a stub
-  can be asked: it has no focus to lose and no event ordering to get wrong. Three
-  bugs lived exactly there - a commit that closed its own cell, a repaint that
-  took the focus off the box that caused it, and a band centred in a width `zoom`
-  had already shrunk - and all three were green under `node --test`.
+  It exists because the stub has no layout and no caret. The claim the whole
+  editor rests on - that the table does not move while a recipe is written in it
+  - is a claim about `grid-template-columns`, which a stub does not compute, so
+  the checks read the tracks before a cell is touched and after it is opened,
+  typed into and applied, and fail if one moved. The same for what `zoom` does to
+  the width a band is centred in, and for whether a rectangle drawn only to carry
+  a rule is swallowing the taps aimed at the row beneath it.
 
   So the rule is not "no browser tests". It is: assert in `node --test` whatever
   can be asserted about what the app *builds*, and keep the browser for the three

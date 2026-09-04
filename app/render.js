@@ -25,36 +25,27 @@ export function renderCard(card, scale = 1, edit = null) {
  * that node back on a click is the whole back-reference, so the editor never has to work
  * out from a position in the DOM what was clicked.
  *
- *   `onOpen(node, field)`  a cell was tapped, and which of its fields
- *   `onChoose(node, on)`   a box was ticked or unticked
- *   `onAdd()`              draw a row under the last ingredient that adds one
+ *   `onPick(node)`   a row or a step was tapped
+ *   `here(node)`     it is the one being written, and is ringed
+ *   `chosen(node)`   it goes into the one being written, and is shaded
+ *   `onAdd()`        draw a row under the last ingredient that adds one
+ *   `onStep()`       draw a column after the last step that adds one
  *
- * Choosing happens in boxes, and a box stands for an **input** rather than for a row.
- * A step takes whole strands, so unticking one row of a strand it swallowed is not a
- * move the format has: what goes into `vermengen` is `abkühlen`, not the Roggenschrot
- * three steps inside it. So the box for an ingredient sits in its row and the box for a
- * step sits in that step's cell, and only the things this step may actually take are
- * given one.
+ * Nothing here writes. A table being written is the table it is read as, to the pixel:
+ * the same columns, the same rows, the same cells, and the only thing that ever differs
+ * is colour. Every field is in the form, which is a layer over the page - so a recipe
+ * cannot change shape under the hand that is writing it, because nothing about the hand
+ * is in the table at all.
  *
- * The column they sit in is drawn for as long as the recipe is being written, even while
- * it holds nothing: appearing only when a step is opened, it would shift the whole table
- * sideways under the hand.
+ * That was not the first arrangement. Cells opened where they stood, and a field is not
+ * the words it replaces: it wraps at a different width, so the text reflowed in the one
+ * cell being looked at. The column of boxes went the same way. Both are in the form now.
  */
 export function renderGrid(grid, scale = 1, edit = null) {
   // A slice of the card numbers its columns with the places they hold in the whole of
   // it, so the header still says when this is.
   const numbers = grid.numbers ?? Array.from({ length: grid.columns }, (_, index) => index + 1)
-  /*
-   * A column of checkboxes, in front of the table and only while it is being written.
-   *
-   * It was taken out once, on the grounds that a column costs horizontal space and space
-   * is what this table is short of. That is true of a table being read, and this column
-   * is never drawn there - it belongs to the editor, like `+ Step`. What replaced it was
-   * a shift-click and a long press, and a control nobody can see is not cheaper than a
-   * column: it is a control nobody uses.
-   */
-  const ticks = edit?.onChoose ? 1 : 0
-  const lead = NAME_COLUMN + ticks
+  const lead = NAME_COLUMN
   const put = (node, spec) => place(node, grid, spec, lead)
 
   /*
@@ -66,11 +57,13 @@ export function renderGrid(grid, scale = 1, edit = null) {
   for (const cell of grid.cells)
     for (const child of cell.node.children)
       if (child.kind === 'ingredient') takenBy.set(child, cell.column)
-  /* A step, as a target: a tap opens its cell, and opening it ticks what goes into it. */
-  const stepTarget = (box, node, open) => {
-    if (!edit?.onOpen || !open) return box
+  /* A row or a step, as a target: a tap on it opens the form on that one thing. */
+  const target = (box, node) => {
+    if (!edit?.onPick) return box
     box.classList.add('pickable')
-    box.onclick = () => edit.onOpen(node, 'verb')
+    if (edit.here?.(node)) box.classList.add('here')
+    if (edit.chosen?.(node)) box.classList.add('chosen')
+    box.onclick = () => edit.onPick(node)
     return box
   }
 
@@ -122,20 +115,9 @@ export function renderGrid(grid, scale = 1, edit = null) {
     }
   })
 
-  /*
-   * The head of the tick column is empty. It held a box that took every row, back when a
-   * box stood for a row; a box stands for an input now, and "every input" is what a step
-   * already has when it is opened.
-   */
-  if (ticks) {
-    const head = element('div', 'ticker label')
-    area(head, 1, 1, 1, 1)
-    table.append(head)
-  }
-
   // The reading view puts steps in this column too, so it names it for what it holds.
   const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
-  label.style.gridColumn = `${1 + ticks} / ${lead + 1}`
+  label.style.gridColumn = `1 / ${lead + 1}`
   label.style.gridRow = '1'
   table.append(label)
   /*
@@ -163,17 +145,15 @@ export function renderGrid(grid, scale = 1, edit = null) {
     const hold = element('div', 'hold')
     hold.style.gridArea = `${row} / 1 / span 1 / span ${lead + waits}`
     if (last) hold.classList.add('lowest')
-    if (edit?.chosen?.(node)) hold.classList.add('chosen')
-    for (const field of ingredientFields(node, scale, edit, ticks)) {
+    for (const field of ingredientFields(node, scale)) {
       // The reading view hides these a row at a time as steps take them over.
       field.node.dataset.row = String(index)
       area(field.node, field.column, field.columnSpan, 1, 1)
-      // A tap on a cell opens the row it belongs to, with the caret in that cell.
-      if (edit?.onOpen && field.field) field.node.onclick = () => edit.onOpen(node, field.field)
       hold.append(field.node)
     }
-    if (edit?.onOpen) hold.classList.add('pickable')
-    table.append(hold)
+    // The row is the target, not its three cells: they are one line of the card split
+    // into three columns, and the blank it waits through is as much the row as they are.
+    table.append(target(hold, node))
   })
 
   /*
@@ -183,10 +163,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
    * it arrives. That is the roll.
    */
   for (const cell of grid.cells) {
-    const open = edit?.openAt === cell.node
-    const box = open
-      ? stepTarget(writableStep(cell.node, edit), cell.node, false)
-      : stepTarget(stepField(cell.node, edit), cell.node, true)
+    const box = target(stepField(cell.node), cell.node)
     const holder = element('div', 'holds')
     area(box, 1, 1, 1, 1)
     holder.append(box)
@@ -266,81 +243,13 @@ function preparationField(node, spanning = false) {
   return box
 }
 
-/**
- * A row being written is the row itself, opened.
- *
- * The four values of an ingredient already have three cells drawn for them, so writing
- * one is those cells turned into fields rather than a form put over the table. The
- * fields keep the cell's own alignment and colour, so a row being written looks like the
- * row it will be, and the amount and the unit stay two fields because that is what the
- * line is: a number and what it counts.
- *
- * Only the row being written is opened. Every other row stays as it is read, because a
- * field is one line and cuts where a cell wraps: a table of nothing but fields is a
- * table you cannot read while writing in it.
- */
-function writableFields(node, edit) {
-  const read = () => ({
-    amount: fields.amount.value,
-    unit: fields.unit.value,
-    name: fields.name.value,
-    aside: fields.aside.value,
-  })
-
-  const make = (className, value, placeholder) => {
-    const input = document.createElement('input')
-    input.type = 'text'
-    input.className = `field ${className}`
-    input.value = value
-    input.placeholder = placeholder
-    // On change rather than on input: the draft is told when the caret leaves, so
-    // nothing is rebuilt under it and tabbing along a row is not interrupted.
-    input.onchange = () => edit.onField(node, read())
-    return input
-  }
-
-  const amount = node.amount
-  const fields = {
-    amount: make('amount', amount ? formatAmount({ ...amount, unit: '' }) : '', '–'),
-    unit: make('unit', amount?.unit ?? '', '–'),
-    name: make('name', node.name, 'Name'),
-    aside: make('aside', node.aside ?? '', '…'),
-  }
-
-  // The editor keeps the field a row was drawn with, so a fault about that row can put
-  // the caret in it - which is what "the fault leads to the thing it is about" means
-  // once the thing is a row and not a form.
-  edit.onDrawn?.(node, fields)
-
-  // Name and qualifier sit side by side, as they are read, so a row being written is
-  // the same height as one being read.
-  const names = element('div', 'names')
-  names.append(fields.name, fields.aside)
-
-  return [
-    { node: fields.amount, column: 1, columnSpan: 1 },
-    { node: fields.unit, column: 2, columnSpan: 1 },
-    { node: names, column: NAME_COLUMN, columnSpan: 1 },
-  ]
-}
-
-function ingredientFields(node, scale, edit, ticks = 0) {
-  const shift = (fields) =>
-    ticks
-      // No `field`: the box is not a way into the row, it is how the row is chosen, and
-      // a click on it must not also open the cells beside it.
-      ? [{ node: tickBox(node, edit), column: 1, columnSpan: 1 },
-         ...fields.map((one) => ({ ...one, column: one.column + ticks }))]
-      : fields
-
+function ingredientFields(node, scale) {
   // A slice can put a step where ingredients go, standing for everything it consumed.
   if (node.kind === 'step') {
     const box = element('div', 'carried', node.verb)
     if (node.aside) box.append(element('span', 'aside', node.aside))
-    return shift([{ node: box, column: 1, columnSpan: NAME_COLUMN }])
+    return [{ node: box, column: 1, columnSpan: NAME_COLUMN }]
   }
-
-  if (edit?.openAt === node) return shift(writableFields(node, edit))
 
   const amount = scaleAmount(node.amount, scale)
   const name = element('div', 'name')
@@ -348,38 +257,16 @@ function ingredientFields(node, scale, edit, ticks = 0) {
   if (node.aside) name.append(element('span', 'aside', node.aside))
 
   if (amount?.kind === 'words')
-    return shift([
-      { node: element('div', 'words', amount.text), column: 1, columnSpan: 2, field: 'amount' },
-      { node: name, column: NAME_COLUMN, columnSpan: 1, field: 'name' },
-    ])
+    return [
+      { node: element('div', 'words', amount.text), column: 1, columnSpan: 2 },
+      { node: name, column: NAME_COLUMN, columnSpan: 1 },
+    ]
 
-  return shift([
-    { node: element('div', 'amount', amount ? formatAmount({ ...amount, unit: '' }) : ''), column: 1, columnSpan: 1, field: 'amount' },
-    { node: element('div', 'unit', amount?.unit ?? ''), column: 2, columnSpan: 1, field: 'unit' },
-    { node: name, column: NAME_COLUMN, columnSpan: 1, field: 'name' },
-  ])
-}
-
-/**
- * The box an input is chosen with. Only the things the open step may take have one, so
- * the column is empty until a step is opened and holds nothing that would be a lie.
- */
-function tickBox(node, edit, className = 'ticker') {
-  const box = element('div', className)
-  if (!edit?.boxFor?.(node)) return box
-  const input = document.createElement('input')
-  input.type = 'checkbox'
-  input.className = 'tick'
-  input.checked = Boolean(edit.ticked?.(node))
-  input.onclick = (event) => {
-    event?.stopPropagation?.()
-    edit.onChoose(node, input.checked)
-  }
-  // Handed back like a field: ticking one draws the table again, and the caret has to
-  // be put on the box drawn in this one's place or the keyboard cannot reach the next.
-  edit.onTicked?.(node, input)
-  box.append(input)
-  return box
+  return [
+    { node: element('div', 'amount', amount ? formatAmount({ ...amount, unit: '' }) : ''), column: 1, columnSpan: 1 },
+    { node: element('div', 'unit', amount?.unit ?? ''), column: 2, columnSpan: 1 },
+    { node: name, column: NAME_COLUMN, columnSpan: 1 },
+  ]
 }
 
 /** A step's own preparations: what is done before it, drawn above it. */
@@ -387,100 +274,12 @@ function preparationsOf(node) {
   return (node.children ?? []).filter((child) => child.kind === 'preparation')
 }
 
-function stepField(node, edit) {
+function stepField(node) {
   const cell = element('div', 'step')
-  // A ticked strand comes in whole, so every step of it is shaded, not only its rows.
-  if (edit?.chosen?.(node)) cell.classList.add('chosen')
-  if (edit?.boxFor?.(node)) cell.append(tickBox(node, edit, 'ticker inline'))
   for (const prep of preparationsOf(node)) cell.append(preparationField(prep))
   cell.append(marked('verb', node.verb))
   if (node.aside) cell.append(element('div', 'note', bind(node.aside)))
   return cell
-}
-
-/**
- * A step being written: its verb, its note, and what has to be done before it.
- *
- * A preparation belonging to a step is drawn over that step's column when the recipe is
- * read, which is where it happens. Written, it belongs in the step's own cell - it is
- * one of the things the step says about itself, and a band cell has nothing to say about
- * which step it is attached to.
- *
- * The note and an empty preparation stay out of sight until the cell is reached for.
- * Both are rare, and a field on every cell of every step would be noise on a table whose
- * whole point is that it is dense.
- */
-function writableStep(node, edit) {
-  const written = preparationsOf(node).map((child) =>
-    child.aside ? `${child.text} (${child.aside})` : child.text,
-  )
-
-  const read = () => ({
-    verb: verb.value,
-    aside: note.value,
-    preparations: befores.map((field) => field.value.trim()).filter(Boolean),
-  })
-
-  /*
-   * A textarea and not an input: a step's verb is often longer than the column it stands
-   * in, a cell being read wraps it, and a field that cuts instead would make writing the
-   * one place the card cannot be read. It grows to whatever it holds, and enter commits
-   * rather than adding a line the format has no room for.
-   */
-  const make = (className, value) => {
-    const input = document.createElement('textarea')
-    input.rows = 1
-    input.className = `field ${className}`
-    input.value = value
-    input.onchange = () => edit.onField(node, read())
-    input.oninput = () => fit(input)
-    input.onkeydown = (event) => {
-      if (event?.key !== 'Enter') return
-      event.preventDefault?.()
-      input.blur?.()
-    }
-    return input
-  }
-
-  const verb = make('verb', node.verb)
-  const note = make('note', node.aside ?? '')
-  // One field per preparation, and one more, so another can be added by typing into it.
-  // Above the verb, because that is when they happen.
-  const befores = [...written, ''].map((line) => make('before', line))
-
-  // `all` is what has to be sized; the names are what the caret can be sent to. A cell
-  // may hold several preparations, and every one of them wraps.
-  edit.onDrawn?.(node, {
-    verb,
-    note,
-    before: befores.at(-1),
-    all: [...befores, verb, note],
-  })
-
-  const cell = element('div', 'step')
-  cell.append(
-    ...befores.map((field, index) => named(index === 0 ? 'Before it' : '', field)),
-    named('Step', verb),
-    named('Note', note),
-  )
-  return cell
-}
-
-/**
- * A field with its name written above it, not inside it.
- *
- * These three fields are the same shape stacked one on another, and what told them
- * apart was a placeholder - which is the one piece of text that disappears exactly when
- * the field has something in it. A cook who had filled all three was looking at three
- * identical boxes. The name is written instead, and it stays.
- *
- * All but the last preparation goes unnamed: the name belongs to the group, and
- * repeating `Before it` down a column of them says nothing the shape has not.
- */
-function named(name, field) {
-  const box = element('div', 'wrote')
-  box.append(element('span', 'what', name), field)
-  return box
 }
 
 /** A field as tall as what it holds. Guarded: a stub DOM measures nothing. */

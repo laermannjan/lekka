@@ -81,51 +81,66 @@ const editor = buildEditor({
 document.getElementById('screen').append(editor)
 
 const rows = () => [...editor.querySelectorAll('.grid > .hold')]
-const cellFor = (verb) =>
-  [...editor.querySelectorAll('.grid .holds > .step')].find((cell) => cell.textContent.startsWith(verb))
-const boxes = () => [...editor.querySelectorAll('.grid input.tick')]
+const cells = () => [...editor.querySelectorAll('.grid .holds > .step')]
+const cellFor = (verb) => cells().find((cell) => cell.textContent.startsWith(verb))
+const form = () => document.querySelector('dialog.compose[open]')
+const boxes = () => [...form().querySelectorAll('.choice input')]
 const shadedRows = () => editor.querySelectorAll('.grid > .hold.chosen').length
+const button = (text) =>
+  [...form().querySelectorAll('button')].find((one) => one.textContent === text)
 const specRow = (name) => {
   const kids = [...editor.querySelector('.spec').children]
   const at = kids.findIndex((node) => node.classList.contains('label') && node.textContent === name)
   return at === -1 ? null : kids[at + 1].textContent
 }
 
-// A tap on a cell opens the row it belongs to, with the caret in the cell that was tapped.
-rows()[0].querySelector('.amount').click()
-const amount = rows()[0].querySelector('.field.amount')
-check('a tap opens the row', Boolean(amount))
-check('the caret lands in the cell that was tapped', document.activeElement === amount)
-
 /*
- * Tabbing along the row. The browser fires \`change\` while the caret is still in the
- * field it is leaving and only then puts it in the next one, so a commit that rebuilds
- * the row leaves the caret with nowhere to land - which is what this asks.
+ * The measurement this whole arrangement exists for: what the table looks like before a
+ * cell is touched, and after. Every track, to the pixel.
  */
-const unit = rows()[0].querySelector('.field.unit')
+const grid = () => editor.querySelector('.grid')
+const tracks = () => getComputedStyle(grid()).gridTemplateColumns
+const lines = () => getComputedStyle(grid()).gridTemplateRows
+const before = { columns: tracks(), rows: lines() }
+
+// A tap on a row opens the form on it. Nothing in the table becomes a field.
+rows()[0].click()
+check('a tap on a row opens the form', Boolean(form()))
+check('and the table does not become a form',
+  editor.querySelectorAll('.grid input, .grid textarea').length === 0,
+  String(editor.querySelectorAll('.grid input, .grid textarea').length))
+check('the columns have not moved', tracks() === before.columns)
+check('nor the rows', lines() === before.rows)
+
+const amount = form().querySelector('input.amount')
+check('the caret is in the first field', document.activeElement === amount,
+  document.activeElement?.className)
+
+// Typing moves nothing. \`Apply\` is the only thing that writes.
 amount.value = '300'
 amount.dispatchEvent(new Event('change'))
-unit.focus()
-check('a committed field leaves its row open', rows()[0].querySelectorAll('.field').length === 4)
-check('the field the tab was going to is still the one in the table',
-  rows()[0].querySelector('.field.unit') === unit)
-check('the caret goes on to the next field', document.activeElement === unit,
-  document.activeElement?.className)
-check('and the sums follow the row', specRow('Weight') === '330 g', String(specRow('Weight')))
+check('typing writes nothing on its own', specRow('Weight') === '280 g', String(specRow('Weight')))
+check('and moves no column', tracks() === before.columns)
 
-// Opening a step is what puts boxes on what it may take.
+button('Apply').click()
+check('Apply writes it', specRow('Weight') === '330 g', String(specRow('Weight')))
+check('and closes the form', form() === null)
+check('and the table still has the columns it had', tracks() === before.columns)
+
+// A step: its inputs come up ticked, and what they bring is shaded in the table behind.
 cellFor('schmelzen').click()
 check('opening a step offers boxes', boxes().length === 2, String(boxes().length))
 check('ticked where it already takes it', boxes().filter((box) => box.checked).length === 1)
 check('and the whole of what it takes is shaded', shadedRows() === 1, String(shadedRows()))
+check('and the step it is open on is ringed',
+  editor.querySelectorAll('.grid .holds > .step.here').length === 1)
 
-// Ticking one draws the table again, which throws away the box that was clicked.
 const spare = boxes().find((box) => !box.checked)
-spare.focus()
 spare.click()
-check('a tick keeps the caret on its box', boxes().includes(document.activeElement),
-  document.activeElement?.tagName + '.' + document.activeElement?.className)
-check('and shades what it brought with it', shadedRows() === 2, String(shadedRows()))
+check('ticking one shades what it brings with it', shadedRows() === 2, String(shadedRows()))
+check('and still moves no column', tracks() === before.columns)
+button('Close').click()
+check('closing takes the shading away', shadedRows() === 0, String(shadedRows()))
 
 /*
  * A row that waits. Its fields stop at the ingredient block; the row itself reaches as
@@ -140,14 +155,14 @@ const braten = [...second.querySelectorAll('.grid .holds > .step')].find((one) =
 braten.click()
 
 const waiting = [...second.querySelectorAll('.grid > .hold')].find((one) => one.textContent.includes('Zucker'))
-const fields = [...waiting.children].filter((one) => !one.classList.contains('ticker'))
+const inked = [...waiting.children].at(-1).getBoundingClientRect()
 const wide = waiting.getBoundingClientRect()
-const inked = fields[fields.length - 1].getBoundingClientRect()
 check('a waiting row is wider than its own fields', wide.right - inked.right > 40,
   \`row to \${wide.right.toFixed(0)}, fields to \${inked.right.toFixed(0)}\`)
 check('and is painted all the way across', getComputedStyle(waiting).backgroundColor !== 'rgba(0, 0, 0, 0)',
   getComputedStyle(waiting).backgroundColor)
 
+document.querySelector('dialog.compose[open]')?.close()
 const blank = document.elementFromPoint((inked.right + wide.right) / 2, (wide.top + wide.bottom) / 2)
 check('and a tap in the part it waits through reaches the row',
   blank === waiting || waiting.contains(blank),
