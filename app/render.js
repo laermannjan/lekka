@@ -157,8 +157,10 @@ export function renderGrid(grid, scale = 1, edit = null) {
    * a sticky cell may not leave its own slot, so the next step pushes it out exactly as
    * it arrives. That is the roll.
    */
+  const drawn = new Map()
   for (const cell of grid.cells) {
     const box = target(stepField(cell.node), cell.node)
+    drawn.set(cell, box)
     const holder = element('div', 'holds')
     area(box, 1, 1, 1, 1)
     holder.append(box)
@@ -178,6 +180,22 @@ export function renderGrid(grid, scale = 1, edit = null) {
    */
   for (const free of grid.frees) {
     const box = element('div', free.into ? 'free open' : 'free')
+    /*
+     * Free area is where an ingredient waits, and it is enclosed by the step it is
+     * waiting for - so that is what a tap on it means. It used to reach the row
+     * underneath, which is the other true thing about that rectangle and the wrong one:
+     * you aimed at the blank inside `vermengen` and selected `Magerquark`.
+     *
+     * The cell it reaches is what lights up, not the blank itself. The blank shows
+     * whether the rows under it are coming in, and a fill of its own would cover that.
+     */
+    const reached = free.into && drawn.get(free.into)
+    if (reached && edit?.onPick) {
+      box.classList.add('reaches')
+      box.onclick = () => edit.onPick(free.into.node)
+      box.onpointerenter = () => reached.classList.add('lit')
+      box.onpointerleave = () => reached.classList.remove('lit')
+    }
     table.append(put(box, {
       column: lead + free.column, columnSpan: free.columnSpan,
       row: head + 2 + free.row, rowSpan: free.rowSpan,

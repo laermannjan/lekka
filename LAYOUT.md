@@ -111,6 +111,14 @@ the objection this arrangement was once dropped for: a column is
 preparation *bound* to a column would silently move to a different moment - but
 one bound to its step moves with the step, which is where it belongs.
 
+**Free area is the step's, for pointing at.** The rectangle where an ingredient
+waits is two true things at once: the row is standing in it, and the step it is
+waiting for encloses it. The eye reads it as part of that step's block, so that
+is what a tap on it opens and that is the cell that lights up under the pointer.
+The row is pointed at by its own three cells - and painted whole all the same,
+because what is shaded is what is coming in, and the blank it waits in is part of
+what is coming.
+
 A preparation is deliberately not a step. A step needs a column and a height, and
 something that consumes no ingredient has neither; making one would also make
 `-` mean *flows into* everywhere except there. Keeping it apart costs a line of

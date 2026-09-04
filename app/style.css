@@ -875,14 +875,22 @@ textarea:focus {
 }
 
 /*
- * Free area is the shape of a row that is still waiting, drawn over the row itself to
- * carry the rules where two runs of blank meet at different widths (`LAYOUT.md` rule 3).
- * It is ink and nothing else: no fill, so the row shows through it, and no target, so a
- * tap in the blank part of a row reaches the row rather than stopping on the rectangle
- * that was only ever there to draw a line.
+ * Free area is where an ingredient waits, drawn over the row itself to carry the rules
+ * where two runs of blank meet at different widths (`LAYOUT.md` rule 3). It has no fill,
+ * so the row shows through it and says whether it is coming in.
+ *
+ * What it means to point at it is the step it is waiting for, which is the cell that
+ * encloses it - so that is the cell that lights up, and that is what a tap opens. It
+ * reached the row underneath once, which is the other true thing about the rectangle and
+ * the wrong one: you aimed at the blank inside `vermengen` and got `Magerquark`.
  */
 .grid > .free {
   pointer-events: none;
+}
+
+.grid > .free.reaches {
+  cursor: pointer;
+  pointer-events: auto;
 }
 
 .grid > .rightmost,
@@ -1085,8 +1093,22 @@ textarea:focus {
 /* What a tap would open. Grey, not amber: amber is what a row going into the open step
    is painted, and a hover in the same colour would say the row had been chosen by
    pointing at it. */
+/*
+ * A row takes the pointer on its own cells only. It is painted whole all the same:
+ * `:hover` matches an ancestor of whatever is under the pointer, so hovering a cell
+ * lights the row it belongs to, blank part included.
+ */
+.grid > .hold {
+  pointer-events: none;
+}
+
+.grid > .hold > * {
+  pointer-events: auto;
+}
+
 .hold.pickable:hover,
-.step.pickable:hover {
+.step.pickable:hover,
+.step.lit {
   background: var(--shade);
 }
 

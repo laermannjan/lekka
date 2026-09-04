@@ -177,10 +177,33 @@ check('and is painted all the way across', getComputedStyle(waiting).backgroundC
   getComputedStyle(waiting).backgroundColor)
 
 document.querySelector('dialog.compose[open]')?.close()
-const blank = document.elementFromPoint((inked.right + wide.right) / 2, (wide.top + wide.bottom) / 2)
-check('and a tap in the part it waits through reaches the row',
-  blank === waiting || waiting.contains(blank),
-  blank?.className)
+
+/*
+ * What a tap in the blank means. The rectangle is two true things at once - the row is
+ * waiting in it, and the step it is waiting for encloses it - and the enclosing step is
+ * the one you are aiming at: it is the block your eye reads it as part of.
+ */
+const middle = [(inked.right + wide.right) / 2, (wide.top + wide.bottom) / 2]
+const blank = document.elementFromPoint(...middle)
+check('the blank a row waits in is the free area, not the row',
+  blank?.classList.contains('free'), blank?.className)
+
+blank.click()
+const held = second.querySelector('dialog.compose[open]')
+const kind = held?.querySelector('.kind')?.textContent
+check('and a tap on it opens the step it is waiting for, not the row',
+  document.querySelector('dialog.compose[open] .kind')?.textContent === 'Step',
+  document.querySelector('dialog.compose[open] .kind')?.textContent)
+document.querySelector('dialog.compose[open]')?.close()
+
+/*
+ * A row is still pointed at by its own cells. Found again first: opening the form
+ * repainted the table, so every node measured above is detached now.
+ */
+const again = [...second.querySelectorAll('.grid > .hold')].find((one) => one.textContent.includes('Zucker'))
+const cell = [...again.children].at(-1).getBoundingClientRect()
+const onCell = document.elementFromPoint((cell.left + cell.right) / 2, (cell.top + cell.bottom) / 2)
+check('a row is pointed at by its own cells', again.contains(onCell), onCell?.className)
 
 /*
  * A preparation stands over the column of the step it comes before, above the head of
