@@ -84,6 +84,11 @@ scene('Editor, a step open with its boxes', opened)
 for (const cell of opened.querySelectorAll('.grid .holds > .step'))
   if (cell.textContent.startsWith('verrühren')) cell.onclick()
 
+// A row opened. Its four fields need no names: they stand in the columns that name them.
+const row = editor()
+scene('Editor, a row open', row)
+row.querySelector('.grid > .hold .name').click()
+
 function scene(name, body) {
   const head = document.createElement('div')
   head.className = 'band'
@@ -136,7 +141,7 @@ try {
     '--enable-logging=stderr',
     '--v=0',
     '--virtual-time-budget=4000',
-    '--window-size=1100,2400',
+    '--window-size=1100,3000',
     `--screenshot=${out}`,
     `http://127.0.0.1:${port}/_shot.html`,
   ])

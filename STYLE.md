@@ -253,9 +253,16 @@ inside them. A qualifier drops to its own line.
   selected, so typing replaces it. Tapping a row opens all four of its fields,
   because they are one line of the recipe split across three cells and tab should
   run along them. Tapping a step opens that step's cell alone.
-- A cell commits when the caret leaves it, or on enter, and goes back to being
-  read. The fields keep the cell's own alignment and colour, and a step's fields
-  wrap and grow the way the cell they replaced does.
+- A cell commits when the caret leaves it, or on enter, **and stays open**. The
+  browser fires the commit while the caret is still in the field it is leaving
+  and only then puts it in the next one, so a cell that closed on its own commit
+  threw the caret away on the first tab along a row. The fields keep the cell's
+  own alignment and colour, and a step's fields wrap and grow the way the cell
+  they replaced does.
+- **A field in the table is a field like any other in the app**: one border, one
+  hard shadow, pressed in rather than cast out. Drawn fainter than the rest, it
+  is a field you have to look for, and the point of opening a cell in place is
+  that you can see it is open.
 - An empty amount, unit or qualifier shows a faint placeholder (`–`, `–`, `…`)
   in the row that is open, so an empty field can be found and hit.
 - `+ Ingredient` adds an empty row and puts the caret in it, and `Process in
@@ -269,11 +276,18 @@ inside them. A qualifier drops to its own line.
   band holds nothing while writing.
 - **Every field of the open cell is drawn**, empty or not, in the order the
   things happen: what comes before the step, then the step, then its note. Only
-  one cell is open at a time, so there is room for all of them - and a field that
-  has to be discovered says nothing about what it is for. The placeholder is what
-  says it.
-- A tappable cell is marked by the cursor and by the amber wash under the
-  pointer - never by a colour of its own.
+  one cell is open at a time, so there is room for all of them, and a field that
+  has to be discovered says nothing about what it is for.
+- **A step's fields are named above them, not inside them.** They are three boxes
+  of the same shape stacked one on another, and a placeholder is the one piece of
+  text that goes away exactly when the field has something in it: filled, the
+  three were identical. A row's four fields need no names - they stand in the
+  columns that name them, and only an empty one shows a faint placeholder (`–`,
+  `–`, `…`) so it can be found and hit.
+- A tappable cell is marked by the cursor and by a wash under the pointer, in
+  grey and never in amber: amber is what a row going into the open step is
+  painted, and a hover in the same colour would claim the row had been chosen by
+  pointing at it.
 - **A box stands for an input, not for a row.** A step takes whole strands, so
   unticking one row of a strand it swallowed is not a move the format has: what
   goes into `vermengen` is `abkühlen`, not the Roggenschrot three steps inside
@@ -297,6 +311,14 @@ inside them. A qualifier drops to its own line.
   already say what the step holds, so a bar repeating it in words says it twice.
 - `Apply` leaves the cell open: saying what goes in is a step in writing the
   step, not the end of it.
+- **What can be done to the open cell is its own row, and it says what it acts
+  on**: the kind of thing, then its name, then `Apply` and `Delete`. It sits
+  under `Save` and `Cancel`, which act on the whole recipe. It was a filled amber
+  band - not an arbitrary colour, since amber is what the rows going into that
+  step are painted, but a filled band the width of the page is how this app says
+  *read this one thing first*, and a row of controls is not a message. Writing
+  the name on the bar is also what took it off the button: `Delete` used to carry
+  it, which made a button as wide as the step was long.
 - **`+ Step` guesses**, and the boxes show the guess: every ingredient still
   waiting for a step, or - when none is waiting - the ends of the strands, which
   is how two of them are joined.

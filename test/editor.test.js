@@ -386,11 +386,34 @@ test('a box stands for an input, so what is inside another step has none', () =>
   assert.deepEqual(offered(screen), ['Mehl', 'Milch'])
 })
 
+test('the bar says what is open, so the buttons do not have to', () => {
+  const { screen } = open(PANCAKES)
+
+  openStep(screen, 'braten')
+  const isBar = (node) => byClass('bar')(node) && byClass('chosen')(node)
+  const bar = one(screen, isBar, 'the open cell\'s bar')
+  assert.deepEqual(
+    [...bar.children[0].children].map((node) => node.textContent),
+    ['Step', 'braten'],
+  )
+  // Not `Delete braten`: a step's name can be a sentence, and the button was as wide.
+  assert.ok(all(bar).some((node) => node.tag === 'button' && node.textContent === 'Delete'))
+
+  openRow(screen, 'Mehl')
+  const row = one(screen, isBar, 'the open cell\'s bar')
+  assert.deepEqual(
+    [...row.children[0].children].map((node) => node.textContent),
+    ['Ingredient', '250 g Mehl'],
+  )
+  // A row has nothing to apply: what it holds is what its own fields say.
+  assert.equal(all(row).filter((node) => node.textContent === 'Apply').length, 0)
+})
+
 test('deleting a step frees what it held instead of taking the strand with it', () => {
   const { screen } = open(PANCAKES)
 
   openStep(screen, 'braten')
-  click(screen, 'Delete braten')
+  click(screen, 'Delete')
 
   assert.deepEqual(shown(screen), ['verrühren'])
   assert.deepEqual(faults(screen), [])
@@ -699,7 +722,7 @@ test('deleting says what else it would take, and does nothing if refused', () =>
   globalThis.confirm.answer = false
 
   openRow(screen, 'Mehl')
-  click(screen, 'Delete 250 g Mehl')
+  click(screen, 'Delete')
 
   // Mehl is all verrühren holds and verrühren is all anrichten holds, so deleting one
   // ingredient would take the whole recipe. It says so, and it asks first.
@@ -710,7 +733,7 @@ test('deleting says what else it would take, and does nothing if refused', () =>
   // Answering yes goes through with it. The row is still ticked: a refusal changes
   // nothing, the choice included.
   globalThis.confirm.answer = true
-  click(screen, 'Delete 250 g Mehl')
+  click(screen, 'Delete')
   assert.deepEqual(shown(screen), [])
 })
 
@@ -718,7 +741,7 @@ test('deleting something that empties nothing does not ask', () => {
   const { screen } = open(WITH_BUTTER)
   asked = []
   openRow(screen, 'Mehl')
-  click(screen, 'Delete 250 g Mehl')
+  click(screen, 'Delete')
   assert.deepEqual(asked, [])
   assert.deepEqual(shown(screen).sort(), ['braten', 'schmelzen', 'verrühren'])
 })

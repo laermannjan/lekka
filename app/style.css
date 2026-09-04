@@ -564,12 +564,37 @@ button.quiet.warn:hover {
  * the table instead, where `Edit` stood a moment ago, so the button that leaves
  * writing is in the place the button that entered it was.
  */
+/*
+ * The row of things that can be done to the cell that is open. It sits under `Save` and
+ * `Cancel`, which act on the whole recipe, and it comes and goes with the cell.
+ *
+ * It was a filled amber band. Amber is what a row going into the open step is painted,
+ * so the colour was not arbitrary - but a filled band the width of the page is how this
+ * app says "read this one thing first", and a row of controls is not a message. It read
+ * as a warning under a row of buttons. What ties it to the table now is what it says.
+ */
 .editor > .bar.chosen {
-  background: var(--amber);
-  border-bottom: 0;
-  border-top: 1px solid var(--edge);
+  border-top: 1px dashed var(--rule);
   margin: 0;
-  padding: 6px 10px;
+  padding: 7px 0 0;
+}
+
+/* What is open: the kind of thing, then its own name. The name is what the `Delete`
+   button used to carry, which made a button as wide as the step was long. */
+.bar.chosen .holding {
+  display: flex;
+  gap: 6px;
+  margin-right: 4px;
+  min-width: 0;
+}
+
+.bar.chosen .named {
+  color: var(--ink);
+  font-weight: 600;
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---- fields -------------------------------------------------------------- */
@@ -1089,15 +1114,20 @@ textarea:focus {
  * a field is one line and cuts where a cell wraps: a table of nothing but fields is a
  * table that cannot be read while it is being written in.
  */
+/*
+ * The same recess as every other field in the app, not a fainter one. A field drawn in
+ * `--rule` on `--shade` is a field you have to look for, and the whole point of opening
+ * a cell in place is that you can see it is open.
+ */
 .grid .field {
   background: var(--paper);
-  border: 1px solid var(--rule);
-  box-shadow: inset 1px 1px var(--shade);
+  border: 1px solid var(--edge);
+  box-shadow: inset 2px 2px var(--rule);
   color: inherit;
   font: inherit;
   height: auto;
   min-width: 0;
-  padding: 0 3px;
+  padding: 1px 3px 1px 4px;
   top: 0;
   width: 100%;
 }
@@ -1138,9 +1168,37 @@ textarea:focus {
   flex: 2;
 }
 
-/* A step being written stacks its fields: what it does, its note, and what has to
-   happen before it. They wrap and grow, because a verb is often longer than the column
-   it stands in and a cell being read wraps it too. */
+/*
+ * A step being written stacks its fields, each under its own name: what has to happen
+ * before it, what it does, and its note. They wrap and grow, because a verb is often
+ * longer than the column it stands in and a cell being read wraps it too.
+ *
+ * The name is written above the field rather than inside it. A placeholder is the one
+ * piece of text that goes away exactly when the field has something in it, so three
+ * stacked fields that had all been filled were three identical boxes.
+ */
+.grid .wrote {
+  display: block;
+  text-align: left;
+}
+
+.grid .wrote + .wrote {
+  margin-top: 3px;
+}
+
+.grid .wrote > .what {
+  color: var(--faint);
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+/* A run of preparations is named once, at its head. Repeating the name down the column
+   says nothing the shape has not already said. */
+.grid .wrote > .what:empty {
+  display: none;
+}
+
 .grid .step .field {
   display: block;
   line-height: 1.35;

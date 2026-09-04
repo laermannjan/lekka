@@ -427,12 +427,11 @@ function writableStep(node, edit) {
    * one place the card cannot be read. It grows to whatever it holds, and enter commits
    * rather than adding a line the format has no room for.
    */
-  const make = (className, value, placeholder) => {
+  const make = (className, value) => {
     const input = document.createElement('textarea')
     input.rows = 1
     input.className = `field ${className}`
     input.value = value
-    input.placeholder = placeholder
     input.onchange = () => edit.onField(node, read())
     input.oninput = () => fit(input)
     input.onkeydown = (event) => {
@@ -443,11 +442,11 @@ function writableStep(node, edit) {
     return input
   }
 
-  const verb = make('verb', node.verb, 'Step')
-  const note = make('note', node.aside ?? '', 'Note')
+  const verb = make('verb', node.verb)
+  const note = make('note', node.aside ?? '')
   // One field per preparation, and one more, so another can be added by typing into it.
   // Above the verb, because that is when they happen.
-  const befores = [...written, ''].map((line) => make('before', line, 'Before it'))
+  const befores = [...written, ''].map((line) => make('before', line))
 
   // `all` is what has to be sized; the names are what the caret can be sent to. A cell
   // may hold several preparations, and every one of them wraps.
@@ -459,8 +458,29 @@ function writableStep(node, edit) {
   })
 
   const cell = element('div', 'step')
-  cell.append(...befores, verb, note)
+  cell.append(
+    ...befores.map((field, index) => named(index === 0 ? 'Before it' : '', field)),
+    named('Step', verb),
+    named('Note', note),
+  )
   return cell
+}
+
+/**
+ * A field with its name written above it, not inside it.
+ *
+ * These three fields are the same shape stacked one on another, and what told them
+ * apart was a placeholder - which is the one piece of text that disappears exactly when
+ * the field has something in it. A cook who had filled all three was looking at three
+ * identical boxes. The name is written instead, and it stays.
+ *
+ * All but the last preparation goes unnamed: the name belongs to the group, and
+ * repeating `Before it` down a column of them says nothing the shape has not.
+ */
+function named(name, field) {
+  const box = element('div', 'wrote')
+  box.append(element('span', 'what', name), field)
+  return box
 }
 
 /** A field as tall as what it holds. Guarded: a stub DOM measures nothing. */

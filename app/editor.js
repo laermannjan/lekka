@@ -353,7 +353,21 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    */
   function selection() {
     if (!openAt) return null
-    const acts = []
+
+    /*
+     * What is open, said in words. The bar used to be filled amber, which is the colour
+     * a row going into the open step is painted - but a filled band the width of the
+     * page is how this app says "read this one thing first", and a row of controls is
+     * not a message. So the bar is a bar, and what it acts on is written on it: the kind
+     * of thing, then its own name, which is also what the buttons no longer have to
+     * repeat. `Delete Stockgare 20-30 min` was a button as wide as the step was long.
+     */
+    const said = element('span', 'holding', undefined, [
+      element('span', 'what', openAt.kind === 'step' ? 'Step' : 'Ingredient'),
+      element('span', 'named', label(openAt)),
+    ])
+
+    const acts = [said]
 
     if (openAt.kind === 'step') {
       const go = element('button', 'go', 'Apply')
@@ -361,7 +375,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       acts.push(go)
     }
 
-    const erase = element('button', 'quiet danger', `Delete ${label(openAt)}`)
+    const erase = element('button', 'quiet danger', 'Delete')
     erase.onclick = () => drop(openAt)
     acts.push(erase)
 
