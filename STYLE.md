@@ -263,13 +263,11 @@ inside them. A qualifier drops to its own line.
 - **The table says two things, in two colours.** Blue rings the one row or step
   the form is open on. Amber shades what goes into it. A cell can be both, so
   the ring is a ring and not a fill.
-- **A row is painted whole.** A row reaches as far as the step that takes it, so
-  `250 g Mehl` waiting through two columns is one row six columns wide with
-  fields in the first three and blank after. Painted through its cells only, the
-  blank part - which is exactly the part that says it is still waiting - stayed
-  white, and shading a step lit an L with its corner missing. Free area is drawn
-  over that blank to carry the rules; it is ink and nothing else, with no fill
-  and no target, so a tap there reaches the row.
+- **A step is an L, and takes one colour.** Its cell stands at the right of the
+  rows it takes, and the blank those rows wait in reaches back under them. Both
+  halves are the step: shaded, lit and tapped as one, or it is an L with its
+  corner missing. A row is its three cells and stops there - the blank is not the
+  row's, it is the space the row is standing in while it waits.
 - A tappable cell is marked by the cursor and by a wash under the pointer, in
   grey and never in amber: amber is what a row going into the open step is
   painted, and a hover in the same colour would claim the row had been chosen by

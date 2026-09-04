@@ -44,16 +44,19 @@ const CARD = `# Pfannkuchen (12 Stück)
     - Butter: 30 g
 `
 
-/* A card whose rows wait: `Zucker` stands through a column before the step that takes
-   it, so its row is wider than its own three fields and the free area is drawn over the
-   part it is waiting in. That overlap is the one this file exists to measure. */
+/*
+ * A card whose rows wait. `Zucker` goes straight into `vermengen`, which stands in
+ * column 02, so it waits through column 01 - and that blank is the rest of `vermengen`'s
+ * L. Opening `servieren` makes `vermengen` a thing coming in, which is the one state
+ * where the whole L has to take the colour at once.
+ */
 const WAITING = `# Waiting
 
-- braten
-  - verrühren
-    - Mehl: 250 g
-    - Milch: 500 ml
-  - Zucker: 2 EL
+- servieren
+  - vermengen
+    - kneten
+      - Mehl: 250 g
+    - Zucker: 2 EL
 `
 
 /**
@@ -141,18 +144,21 @@ check('ticking one shades what it brings with it', shadedRows() === 2, String(sh
 check('and still moves no column', tracks() === before.columns)
 
 /*
- * Chosen has to beat hover. \`:hover\` is the more specific selector, so a shaded row
- * turned grey when the pointer crossed it - and grey is what a row that is *not* going
- * into the step looks like, so a sweep of the pointer read as unchoosing.
+ * Chosen has to beat lit. \`:hover\` was the more specific selector, so a shaded thing
+ * turned grey when the pointer crossed it - and grey is what something *not* coming in
+ * looks like, so a sweep of the pointer read as unchoosing.
  */
+const AMBER = 'rgb(251, 238, 181)'
+const painted = (node) => getComputedStyle(node).backgroundColor
 const shadedRow = editor.querySelector('.grid > .hold.chosen')
-const amber = getComputedStyle(shadedRow).backgroundColor
-const painted = (rule) => {
-  const sheetOf = [...document.styleSheets].flatMap((one) => [...one.cssRules])
-  return sheetOf.some((one) => one.selectorText?.split(',').some((part) => part.trim() === rule))
-}
-check('a chosen row is amber', amber === 'rgb(251, 238, 181)', amber)
-check('and stays amber under the pointer', painted('.hold.chosen.pickable:hover'))
+check('a chosen row is amber over its cells', painted(shadedRow.firstElementChild) === AMBER,
+  painted(shadedRow.firstElementChild))
+
+const rule = (wanted) =>
+  [...document.styleSheets]
+    .flatMap((one) => [...one.cssRules])
+    .some((one) => one.selectorText?.split(',').some((part) => part.trim() === wanted))
+check('and stays amber under the pointer', rule('.step.chosen.lit') && rule('.free.chosen.lit'))
 button('Close').click()
 check('closing takes the shading away', shadedRows() === 0, String(shadedRows()))
 
@@ -165,16 +171,25 @@ check('closing takes the shading away', shadedRows() === 0, String(shadedRows())
 const second = buildEditor({ draft: toDraft(parseCard(WAITING)), onSave: async () => null, onClose: () => {} })
 document.getElementById('screen').append(second)
 
-const braten = [...second.querySelectorAll('.grid .holds > .step')].find((one) => one.textContent.startsWith('braten'))
-braten.click()
+const outermost = [...second.querySelectorAll('.grid .holds > .step')].find((one) => one.textContent.startsWith('servieren'))
+outermost.click()
 
 const waiting = [...second.querySelectorAll('.grid > .hold')].find((one) => one.textContent.includes('Zucker'))
 const inked = [...waiting.children].at(-1).getBoundingClientRect()
 const wide = waiting.getBoundingClientRect()
 check('a waiting row is wider than its own fields', wide.right - inked.right > 40,
   \`row to \${wide.right.toFixed(0)}, fields to \${inked.right.toFixed(0)}\`)
-check('and is painted all the way across', getComputedStyle(waiting).backgroundColor !== 'rgba(0, 0, 0, 0)',
-  getComputedStyle(waiting).backgroundColor)
+
+/*
+ * The L. A step's region is its own cell plus every rectangle of blank flowing into it -
+ * the cell standing at the right of the rows it takes, and the space those rows wait in
+ * reaching back under them. Shaded, both halves take the colour or the corner is missing.
+ */
+const shadedStep = second.querySelector('.grid .holds > .step.chosen')
+const shadedFree = second.querySelector('.grid > .free.chosen')
+check('a chosen step is amber', painted(shadedStep) === AMBER, painted(shadedStep))
+check('and so is the blank flowing into it, which is the rest of its L',
+  Boolean(shadedFree) && painted(shadedFree) === AMBER, shadedFree ? painted(shadedFree) : 'no blank shaded')
 
 document.querySelector('dialog.compose[open]')?.close()
 

@@ -93,11 +93,14 @@ const opened = editor()
 scene('Editor, a step selected', opened)
 tapStep(opened, 'verrühren')
 
-// A step whose inputs wait through two columns, which is where a row is wider than its
-// own fields and the shading has to reach as far as the row does.
+/*
+ * The L. Here vermengen is an input of Stockgare, so it is coming in and shaded - and
+ * its region is its own cell plus the blank its six waiting rows stand in, which
+ * together make an L. Both halves take the colour, or the corner is missing.
+ */
 const wide = buildEditor({ draft: toDraft(parseCard(LONG)), onSave: async () => null, onClose: () => {} })
-scene('Editor, a step whose rows wait', wide)
-tapStep(wide, 'vermengen')
+scene('Editor, a step coming in, shaded over its whole L', wide)
+tapStep(wide, 'Stockgare')
 
 /*
  * The form, drawn where it can be seen rather than over the page. It is a dialog: on

@@ -157,10 +157,16 @@ export function renderGrid(grid, scale = 1, edit = null) {
    * a sticky cell may not leave its own slot, so the next step pushes it out exactly as
    * it arrives. That is the roll.
    */
-  const drawn = new Map()
+  /*
+   * A step's region: its own cell, and every rectangle of blank that flows into it.
+   * Together they make an L - the cell standing at the right of the rows it takes, and
+   * the space those rows wait in reaching back under them - and an L is one shape. It
+   * takes one colour, it lights up at once, and it is one target.
+   */
+  const region = new Map()
   for (const cell of grid.cells) {
     const box = target(stepField(cell.node), cell.node)
-    drawn.set(cell, box)
+    region.set(cell, [box])
     const holder = element('div', 'holds')
     area(box, 1, 1, 1, 1)
     holder.append(box)
@@ -180,21 +186,9 @@ export function renderGrid(grid, scale = 1, edit = null) {
    */
   for (const free of grid.frees) {
     const box = element('div', free.into ? 'free open' : 'free')
-    /*
-     * Free area is where an ingredient waits, and it is enclosed by the step it is
-     * waiting for - so that is what a tap on it means. It used to reach the row
-     * underneath, which is the other true thing about that rectangle and the wrong one:
-     * you aimed at the blank inside `vermengen` and selected `Magerquark`.
-     *
-     * The cell it reaches is what lights up, not the blank itself. The blank shows
-     * whether the rows under it are coming in, and a fill of its own would cover that.
-     */
-    const reached = free.into && drawn.get(free.into)
-    if (reached && edit?.onPick) {
-      box.classList.add('reaches')
-      box.onclick = () => edit.onPick(free.into.node)
-      box.onpointerenter = () => reached.classList.add('lit')
-      box.onpointerleave = () => reached.classList.remove('lit')
+    if (free.into) {
+      region.get(free.into)?.push(box)
+      if (edit?.chosen?.(free.into.node)) box.classList.add('chosen')
     }
     table.append(put(box, {
       column: lead + free.column, columnSpan: free.columnSpan,
@@ -202,6 +196,20 @@ export function renderGrid(grid, scale = 1, edit = null) {
       last: head + 1 + free.row + free.rowSpan === bottom,
     }))
   }
+
+  /*
+   * The region wired as one. Pointing anywhere in it lights all of it and opens the
+   * step, because all of it is that step: you aimed at the blank inside `vermengen` and
+   * got `Magerquark` back when the blank belonged to the row waiting in it.
+   */
+  if (edit?.onPick)
+    for (const [cell, boxes] of region)
+      for (const box of boxes) {
+        box.classList.add('reaches')
+        box.onclick = () => edit.onPick(cell.node)
+        box.onpointerenter = () => boxes.forEach((one) => one.classList.add('lit'))
+        box.onpointerleave = () => boxes.forEach((one) => one.classList.remove('lit'))
+      }
 
   // Under the last ingredient, where the next one goes. It runs the width of the
   // ingredient column, because a row that starts halfway leaves a notch.

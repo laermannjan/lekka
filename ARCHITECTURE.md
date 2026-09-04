@@ -252,13 +252,18 @@ its own what each one brings.
 form is open on; amber shades what goes into it. A cell can be both, so the ring
 is a ring and not a fill.
 
-**A row is painted whole.** A row reaches as far as the step that takes it, so
-`250 g Mehl` waiting through two columns is one row six columns wide with fields
-in the first three and blank after. Painted through its cells only, the blank
-part - which is exactly the part that says it is still waiting - stayed white,
-and shading a step lit an L with its corner missing. Free area is drawn over that
-blank to carry the rules where two runs of it meet at different widths; it is ink
-and nothing else, with no fill and no target, so a tap there reaches the row.
+**A step is an L.** Its cell stands at the right of the rows it takes, and the
+blank those rows wait in reaches back under them - `grid.js` already calls that
+blank's owner `into`. The two are one shape and are drawn as one: shaded
+together, lit together, and one target. Shading only the cell left an L with its
+corner missing, which is what it looked like.
+
+A row is its three cells and stops there. It is pointed at by them and shaded
+over them; the blank is not the row's, it is the space the row is standing in
+while it waits. This is also what ended a run of bugs in that rectangle - the row
+used to span it too, so two elements covered the same pixels and every question
+about it (which colour, which target) was settled by CSS specificity. One owner,
+one answer.
 
 `+ Ingredient` sits under the last ingredient, always in the same place, because
 a button that moves about is a button nobody finds twice. It adds an empty row

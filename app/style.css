@@ -875,14 +875,13 @@ textarea:focus {
 }
 
 /*
- * Free area is where an ingredient waits, drawn over the row itself to carry the rules
- * where two runs of blank meet at different widths (`LAYOUT.md` rule 3). It has no fill,
- * so the row shows through it and says whether it is coming in.
+ * Free area is where an ingredient waits, and it belongs to the step it is waiting for:
+ * that step's cell stands at the right of these rows, and this is the space they wait in
+ * reaching back under them. The two make an L, and an L is one shape - one colour, one
+ * target, lit at once.
  *
- * What it means to point at it is the step it is waiting for, which is the cell that
- * encloses it - so that is the cell that lights up, and that is what a tap opens. It
- * reached the row underneath once, which is the other true thing about the rectangle and
- * the wrong one: you aimed at the blank inside `vermengen` and got `Magerquark`.
+ * It also carries the rules where two runs of blank meet at different widths
+ * (`LAYOUT.md` rule 3), which is why it is a rectangle of its own at all.
  */
 .grid > .free {
   pointer-events: none;
@@ -1094,9 +1093,8 @@ textarea:focus {
    is painted, and a hover in the same colour would say the row had been chosen by
    pointing at it. */
 /*
- * A row takes the pointer on its own cells only. It is painted whole all the same:
- * `:hover` matches an ancestor of whatever is under the pointer, so hovering a cell
- * lights the row it belongs to, blank part included.
+ * A row is its three cells, and stops there. The blank it waits in is the step's, and
+ * takes the step's colour - so the pointer does not reach the row through it either.
  */
 .grid > .hold {
   pointer-events: none;
@@ -1106,31 +1104,26 @@ textarea:focus {
   pointer-events: auto;
 }
 
-.hold.pickable:hover,
-.step.pickable:hover,
-.step.lit {
+.hold.pickable:hover > *,
+.step.lit,
+.free.lit {
   background: var(--shade);
 }
 
 /*
- * What goes into the step the sheet is open on, painted whole.
+ * What goes into the step the sheet is open on. A step is shaded over the whole of its
+ * region, blank included: the cell and the space its rows wait in are one L, and half
+ * an L shaded is what this looked like when the blank was left out of it.
  *
- * A row reaches as far as the step that takes it - `250 g Mehl` waiting through two
- * columns is one row six columns wide, with fields in the first three and blank after.
- * Painted through its children only the fields took the colour, and the blank part of
- * the row it was waiting in stayed white: a row half shaded, which is exactly the part
- * of it that says it is still waiting.
+ * Chosen beats lit, which needs saying because `:hover` was the more specific selector
+ * and won on its own. Pointing at something coming in turned it grey, which is what
+ * something *not* coming in looks like - so a sweep of the pointer read as unchoosing.
  */
-/*
- * Chosen beats hover, which needs saying because `:hover` is the more specific
- * selector and won on its own. Pointing at a row that is going into the open step
- * turned it grey, which is what a row *not* going in looks like - so sweeping the
- * pointer across the table read as unchoosing whatever it touched.
- */
-.hold.chosen,
+.hold.chosen > *,
 .step.chosen,
-.hold.chosen.pickable:hover,
-.step.chosen.pickable:hover {
+.free.chosen,
+.step.chosen.lit,
+.free.chosen.lit {
   background: var(--amber);
 }
 
