@@ -34,6 +34,10 @@ async function start() {
   const found = COLLECTION.exec(path)
   if (found) return showCollection(found[1], found[2])
 
+  // The foot says `/new` while a fresh recipe is being written, so the address has to
+  // mean it: without this, opening it lands on the overview under a foot saying `/new`.
+  if (path === '/new') return showWriting()
+
   return showOverview()
 }
 

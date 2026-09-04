@@ -94,8 +94,12 @@ function number(text) {
 
 export function duration(minutes) {
   if (!minutes) return null
-  const hours = Math.floor(minutes / 60)
-  const rest = Math.round(minutes % 60)
+  // Rounded once, before it is split. Rounding the remainder on its own turns 119.6 into
+  // "1 h 60 min", because the hours are floored off the total and the minutes are not.
+  const whole = Math.round(minutes)
+  if (!whole) return null
+  const hours = Math.floor(whole / 60)
+  const rest = whole % 60
   if (!hours) return `${rest} min`
   return rest ? `${hours} h ${rest} min` : `${hours} h`
 }

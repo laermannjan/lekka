@@ -30,7 +30,10 @@ export function nameSection(title, onRename) {
   if (!title) field.autofocus = true
   // On change rather than on input, for the reason the specification's fields are: the
   // name is part of the screen, and rebuilding the screen under the caret would throw it.
-  field.onchange = () => onRename(field.value)
+  // Trimmed, as every other field of the card is. `formatCard` writes the name and
+  // `parseCard` reads it back trimmed, so a trailing space is a card that does not come
+  // back the same when stored - which Save refuses, without saying which field did it.
+  field.onchange = () => onRename(field.value.trim())
   return element('div', 'section', undefined, [field])
 }
 
@@ -59,8 +62,8 @@ export function specification(card, edit = null) {
     ...pair('Time', duration(found.minutes)),
     ...pair('Weight', mass(found.grams)),
     ...pair('Liquid', volume(found.millilitres)),
-    ...pair('Ingredients', String(found.ingredients)),
-    ...pair('Steps', String(found.steps)),
+    ...pair('Ingredients', count(found.ingredients)),
+    ...pair('Steps', count(found.steps)),
     ...notes.flatMap((note, index) =>
       pair(
         notes.length > 1 ? `Note ${index + 1}` : 'Note',
@@ -105,6 +108,11 @@ function pair(name, text, onChange = null) {
     value.textContent = text
   }
   return [{ label, value }]
+}
+
+/** A count, or nothing at all: a recipe with no steps yet is not a recipe with 0 steps. */
+function count(number) {
+  return number ? String(number) : ''
 }
 
 /** A preparation as one line, the way the format writes it. */

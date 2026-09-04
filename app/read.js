@@ -70,7 +70,12 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false } = {
      * smaller than it is.
      */
     if (fit) {
-      table.style.zoom = Math.min(1, room / natural)
+      const shrink = Math.min(1, room / natural)
+      table.style.zoom = shrink
+      // `zoom` scales every length inside the table, `--room` among them, so a band
+      // centred in it would be centred in a fraction of the room it spans. Divided out
+      // here, it comes back to the width of what can actually be seen.
+      table.style.setProperty('--room', `${room / shrink}px`)
       box.classList.remove('reading')
       places.hidden = true
       for (const cell of table.querySelectorAll('.holds > .step')) cell.style.removeProperty('left')
