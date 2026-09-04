@@ -12,8 +12,13 @@ import { renderCard } from './render.js'
  *
  * Nothing here knows how far the cook has got. There is no progress to keep: the card
  * is a reference, and where you are looking is the only state it has.
+ *
+ * `fit` is the other answer to a table that will not fit: shrink it until it does. It is
+ * the whole card at once at the cost of the size it was set in, where reading is the size
+ * it was set in at the cost of seeing it all - so the two are exclusive, and fitting turns
+ * the reading affordances off because there is nowhere left to scroll to.
  */
-export function renderReading(card, scale, at, onAt) {
+export function renderReading(card, scale, at, { onAt, onFits, fit = false } = {}) {
   const box = element('div', 'read')
 
   // Done, Now and Next name places on the screen rather than columns, so they cannot
@@ -50,9 +55,26 @@ export function renderReading(card, scale, at, onAt) {
     box.classList.remove('reading')
     table.style.removeProperty('--cap')
     table.style.removeProperty('--tail')
+    table.style.removeProperty('zoom')
 
     const room = scroll.clientWidth
-    const whole = table.scrollWidth <= room + 1
+    const natural = table.scrollWidth
+    const whole = natural <= room + 1
+    onFits?.(whole)
+
+    /*
+     * Shrunk to fit, and never magnified: a card already inside the room it has is
+     * already the size it was written at, and blowing it up would say the screen is
+     * smaller than it is.
+     */
+    if (fit) {
+      table.style.zoom = Math.min(1, room / natural)
+      box.classList.remove('reading')
+      places.hidden = true
+      for (const cell of table.querySelectorAll('.holds > .step')) cell.style.removeProperty('left')
+      stops = [0]
+      return
+    }
 
     box.classList.toggle('reading', !whole)
     places.hidden = whole

@@ -151,11 +151,17 @@ reaches the server at all.
 **Card at `/r/…`.** The name, then the table, and the specification under it.
 
 Controls are sorted by what each one touches, which is the rule that says where
-anything goes. `Print small` acts on the page, so it stands in the masthead
-beside the app's name. The scale (½× 1× 1½× 2×) changes how the recipe is drawn,
-so it sits above the table, beside what it changes. `Edit` and `Save to
-collection` change the recipe itself, so they sit below it, out of the way of
+anything goes. The scale (½× 1× 1½× 2×) and `Fit to screen` change how the recipe
+is drawn, so they sit above the table, beside what they change. `Edit` and `Save
+to collection` change the recipe itself, so they sit below it, out of the way of
 reading.
+
+`Fit to screen` is the second answer to a table wider than the screen. Reading it
+a step at a time keeps the type and gives up seeing it all; fitting shrinks the
+table with `zoom` until it is inside the room it has, keeps the whole card and
+gives up the type. The two are exclusive, so fitting turns the places and the
+snapping off - there is nowhere left to scroll to - and the button is not offered
+at all on a recipe that already fits.
 
 The **specification** is what the app knows about the recipe that the recipe does
 not say in one place: how long it takes end to end, what the dough weighs, what

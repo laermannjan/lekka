@@ -142,7 +142,9 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       paint()
     }
 
-    const leave = button('Cancel', () => {
+    // `Cancel` undoes; with nothing to undo it is `Done`, which is what leaving a
+    // recipe you only looked at actually is.
+    const leave = button(dirty ? 'Cancel' : 'Done', () => {
       if (dirty && !confirm('Leave without saving? The changes are lost.')) return
       onClose()
     })

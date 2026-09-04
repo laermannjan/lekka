@@ -125,9 +125,13 @@ Sorted by what it touches, which settles every question of placement:
 
 | touches | goes |
 |---|---|
-| the page | the masthead, beside the name - `Print small` |
-| how the recipe is drawn | above the table, beside what it changes - the scale |
-| the recipe itself | below the table, out of the way of reading - `Edit`, `Save`, `Cancel` |
+| the page | the masthead, beside the name |
+| how the recipe is drawn | above the table, beside what it changes - the scale, `Fit to screen` |
+| the recipe itself | below the table, out of the way of reading - `Edit`, `Save`, `Done` |
+
+A control that would do nothing is not drawn. `Fit to screen` is offered only on a
+recipe that does not fit, and `Cancel` reads `Done` when there is nothing to
+cancel: leaving a recipe you only looked at is not an undo.
 
 ## Tags
 
@@ -229,6 +233,18 @@ inside them. A qualifier drops to its own line.
   step is edited in that step's form, and one that belongs to the recipe has no
   form to open, so it is not offered as a tap.
 
+## Fitting
+
+A recipe wider than the screen has two answers, and they are exclusive:
+
+- **read it a step at a time**, which keeps the type and gives up seeing it all
+- **fit it to the screen**, which keeps the whole table and gives up the type
+
+So it is one button, saying what it will do: `Fit to screen`, then `Actual size`.
+Fitting shrinks the table until it is inside the room it has and never magnifies
+one that already fits, and it turns the reading affordances off, because there is
+nowhere left to scroll to.
+
 ## Print
 
 Drop the masthead, the foot, every bar and every editing affordance, and let the
@@ -241,11 +257,10 @@ narrower than the word standing in it, the word breaks. It is the one place wher
 a word may be broken - on screen there is somewhere to scroll to; on paper there
 is not, and a word that will not break draws over the cell beside it instead.
 
-One button, `Print small`, prints at 11 px instead of 14. It is the answer to a
-question the app cannot settle - how dense a recipe may be depends on the printer,
-the paper and the eyes reading it - so it is asked rather than guessed. It says
-what it will do and not what is set, because a setting that shows only on paper
-has nothing on the screen to be pressed against.
+There is no density setting. There was one - a `Print small` button that printed
+at 11 px - and it asked a question about paper on a screen, where nothing could
+be pressed against the answer. The tracks above already fit a recipe to the page,
+and a screen fitted to itself is not also fitted to the sheet.
 
 ## Words
 

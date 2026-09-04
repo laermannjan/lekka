@@ -1448,8 +1448,10 @@ textarea:focus {
     white-space: normal;
   }
 
-  body.small-print .grid {
-    font-size: 11px;
+  /* Paper is fitted to the page by the tracks above, so a table shrunk to fit a screen
+     is not also shrunk to fit the sheet. */
+  .grid {
+    zoom: 1;
   }
 
   .row {

@@ -5,16 +5,7 @@ import * as api from './api.js'
 import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
 import { section, specification } from './page.js'
-import {
-  cache,
-  cached,
-  collection,
-  rows,
-  setRows,
-  setSmallPrint,
-  smallPrint,
-  useCollection,
-} from './library.js'
+import { cache, cached, collection, rows, setRows, useCollection } from './library.js'
 import { svg } from './qr.js'
 
 const SCALES = [
@@ -92,8 +83,8 @@ async function showCollection(id, key) {
 }
 
 async function showCard(id, key, state = {}) {
-  const { scale = 1, at = 0 } = state
-  const here = { scale, at }
+  const { scale = 1, at = 0, fit = false } = state
+  const here = { scale, at, fit }
 
   const text = await load(id)
   if (text === null) return fail('No recipe under this link.')
@@ -106,50 +97,53 @@ async function showCard(id, key, state = {}) {
     return fail(`Line ${error.line}: ${error.message}`)
   }
 
-  page(key ? `/r/${id}/${key}` : `/r/${id}`, printing())
+  const fitting = fitter(id, key, here)
+
+  page(key ? `/r/${id}/${key}` : `/r/${id}`)
   show(
     section(card.title),
     // What changes how the recipe is drawn sits above it, beside what it changes.
-    bar(scales(id, key, here)),
-    body(card, id, key, here),
+    bar(scales(id, key, here), fitting.button),
+    body(card, id, key, here, fitting.tell),
     // What changes the recipe itself sits past it, out of the way of reading.
     after(composer(id, key, card), keeper(id, key, here)),
     specification(card),
   )
 }
 
-function body(card, id, key, state) {
+function body(card, id, key, state, onFits) {
   // Reading is a scroll, not a redraw: the place is only kept so that changing the scale
   // comes back to the step the cook was standing on.
-  return renderReading(card, state.scale, state.at, (at) => {
-    state.at = at
+  return renderReading(card, state.scale, state.at, {
+    fit: state.fit,
+    onFits,
+    onAt: (at) => {
+      state.at = at
+    },
   })
 }
 
 /**
- * Type for the page rather than for the screen.
+ * The whole table at once, or the size it was written at. A recipe wider than the screen
+ * can be read a step at a time or shrunk until it fits, and those are the two answers
+ * there are: one keeps the type and gives up seeing it all, the other keeps the card and
+ * gives up the type. So it is one button that swaps between them.
  *
- * Paper cannot be scrolled, so a printed recipe is fitted to it, and one with eight
- * columns has to break words to fit at reading size. Smaller type buys the columns back.
- * Which of the two is wanted is a question about the printer and the eyes reading it, so
- * it is asked of the person and not guessed at.
- *
- * It acts on the page rather than on the recipe, which is why it stands in the masthead
- * beside the name and not in either of the recipe's own bars.
+ * It says what it will do rather than what is set, the way every switchable control here
+ * does, and it is not offered at all on a recipe that already fits - there would be
+ * nothing for it to do, and a control that does nothing is worse than no control.
  */
-function printing() {
-  const button = element('button', 'quiet')
-  const set = (small) => {
-    document.body.classList.toggle('small-print', small)
-    button.textContent = small ? 'Print normal' : 'Print small'
+function fitter(id, key, state) {
+  const button = element('button', 'quiet', state.fit ? 'Actual size' : 'Fit to screen')
+  button.onclick = () => showCard(id, key, { ...state, fit: !state.fit })
+  button.hidden = true
+  return {
+    button,
+    // A recipe drawn whole needs no fitting; one already fitted needs the way back.
+    tell: (whole) => {
+      button.hidden = whole && !state.fit
+    },
   }
-  set(smallPrint())
-  button.onclick = () => {
-    const small = !document.body.classList.contains('small-print')
-    setSmallPrint(small)
-    set(small)
-  }
-  return button
 }
 
 function composer(id, key, card) {
