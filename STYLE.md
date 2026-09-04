@@ -23,6 +23,7 @@ enlarged to look important, and every device on the page means one thing.
 | link | `#1B3FBF` | a link, and the act that commits |
 | gold | `#F0A81E` | what is set, where you stand, and `Import` |
 | amber | `#FBEEB5` | a chosen row, a callout |
+| tint blue | `#DCEAF8` | a duration, marked where it stands |
 | warning | `#A8331D` | `Delete`, `Remove`, and anything that went wrong |
 
 **Every colour has one job.**
@@ -154,6 +155,10 @@ is read.
 - An amount without a number (`nach Geschmack`) is grey, left aligned, and takes
   the amount and unit columns together.
 - Notes sit under their verb, centred, grey, balanced across lines.
+- **A duration in a verb is tagged**, on the pale blue tint. How long a step takes
+  is the one thing a cook looks for while the pan is already hot, and it is buried
+  in the middle of the words. It is the same pattern the specification sums, so
+  the tags on the table are exactly what the `Time` row adds up.
 - Nothing wraps in the ingredient column; the table scrolls sideways instead.
 - The head of the table is white and closed by a line of ink. Weight separates
   it from the body, not a fill.

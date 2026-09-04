@@ -57,6 +57,7 @@
   /* Tag tints. Pale enough to sit in a table all day, separated by hue so that
      the kind of a thing is legible before the value is read. */
   --tint-card: #fbf3b8;
+  --tint-time: #dceaf8;
   --tint-set: #cfe0f5;
   --tint-key: #f3d7ea;
   --tint-build: #e8e6dd;
@@ -938,6 +939,18 @@ textarea:focus {
 .verb {
   font-weight: 600;
   text-wrap: balance;
+}
+
+/*
+ * How long a step takes, marked where it stands. It is the one thing in a verb a
+ * cook looks for while the pan is already hot, and it is buried in the middle of
+ * the words. Not decoration: it is the same pattern the specification sums, so
+ * the tags on the table are exactly what the `Time` row adds up.
+ */
+.time {
+  background: var(--tint-time);
+  padding: 0 3px;
+  white-space: nowrap;
 }
 
 .note {

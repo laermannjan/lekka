@@ -104,6 +104,12 @@ preparation drawn above the line that says which column four is sits outside the
 table it belongs to. Under the header it reads as what it is - a row of the table
 that brings no ingredient, so the three ingredient fields beside it stand empty.
 
+A preparation is deliberately not a step. A step needs a column and a height, and
+something that consumes no ingredient has neither; making one would also make
+`-` mean *flows into* everywhere except there. Keeping it apart costs a line of
+vertical space, which is free, rather than a column, which is the scarce thing on
+this table.
+
 **A preparation belonging to a step is drawn inside that step's cell**, above its
 verb, and never in the band. It is something done before that step, and a band
 over the step's column said instead that it belonged to the column - which is not

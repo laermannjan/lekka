@@ -1,3 +1,4 @@
+import { DURATION } from './facts.js'
 import { buildGrid } from './grid.js'
 import { formatAmount, scaleAmount } from './amount.js'
 
@@ -428,7 +429,7 @@ function preparationsOf(node) {
 function stepField(node) {
   const cell = element('div', 'step')
   for (const prep of preparationsOf(node)) cell.append(preparationField(prep))
-  cell.append(element('div', 'verb', bind(node.verb)))
+  cell.append(marked('verb', node.verb))
   if (node.aside) cell.append(element('div', 'note', bind(node.aside)))
   return cell
 }
@@ -520,6 +521,27 @@ function area(node, column, columnSpan, row, rowSpan) {
 
 function bind(text) {
   return text.replace(UNIT, '$1\u00a0')
+}
+
+/**
+ * A line of a step, with its durations marked.
+ *
+ * How long a step takes is the one thing in a verb a cook looks for while the pan is
+ * already hot, and it is buried in the middle of the words. Marking it is not
+ * decoration: it is the same pattern the specification sums, so the tags on the table
+ * are exactly what the `Time` row adds up, and you can see where the total came from.
+ */
+function marked(className, text) {
+  const box = element('div', className)
+  const bound = bind(text)
+  let at = 0
+  for (const found of bound.matchAll(DURATION)) {
+    if (found.index > at) box.append(element('span', '', bound.slice(at, found.index)))
+    box.append(element('span', 'time', found[0]))
+    at = found.index + found[0].length
+  }
+  if (at < bound.length) box.append(element('span', '', bound.slice(at)))
+  return box
 }
 
 function element(tag, className, text) {

@@ -17,7 +17,7 @@ const FRACTION = { '½': 0.5, '¼': 0.25, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3
  * a step or invents work that is not a step at all. A range is taken at its upper bound,
  * so the total is the longest the recipe can take rather than a promise it may break.
  */
-const TIME = /(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*(min|h)\b/g
+export const DURATION = /(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*(min|h)\b/g
 
 /**
  * A weight or a volume written as a fraction. `amount.js` reads `½ l` as words, because
@@ -49,7 +49,7 @@ export function facts(card) {
     }
     if (node.kind !== 'step') continue
     found.steps += 1
-    for (const [, low, high, unit] of node.verb.matchAll(TIME)) {
+    for (const [, low, high, unit] of node.verb.matchAll(DURATION)) {
       const value = number(high ?? low)
       found.minutes += unit === 'h' ? value * 60 : value
     }

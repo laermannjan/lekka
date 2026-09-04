@@ -62,6 +62,21 @@ everything, or be indented under a step, and then it comes before that step. It
 is read like any other indented line: what is under a step happens before it. It
 simply brings no ingredient with it, so it gets no row.
 
+**A note is a comment; a preparation is an instruction.** `> Sauerteig am
+Vorabend` tells you something about the recipe, and `* Ofen auf 200 °C vorheizen`
+tells you to do something. They look alike on the page and are not the same kind
+of line.
+
+**A preparation is not a step, and could not be one.** A step needs a place on
+both axes: its column is `max(column(input)) + 1`, and its height is the rows of
+what it gathered. Something that consumes no ingredient has neither. It would
+also break the one rule the format rests on, since `-` means *flows into* and
+nothing flows out of preheating an oven into baking.
+
+That is what the notation buys: a preparation costs a line of vertical space,
+which is free, instead of a column, which is the scarce thing - columns are what
+make a card too wide for the screen.
+
 **Brackets always hold the same kind of thing:** the aside. What it yields, how
 to do it, which sort of flour.
 
