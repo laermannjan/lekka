@@ -268,12 +268,20 @@ makes an unnamed step from them and puts the caret in its verb. Deleting is in
 that bar too, where the cascade is already spelled out, and it takes the rows
 themselves rather than what holds them.
 
-**A step's inputs are chosen the same way.** Shift or a long press on a step ticks
-the rows it holds; from there they are ticked and unticked like any others, and
-`Apply` reads back what they now come to. A modifier nobody can see is a way in
-nobody finds, so a step whose cell is open says it in words: the bar under the
-table carries `Choose what goes into <the step>`, and taking it closes the cell,
-since what is being chosen is rows and they have to be readable. That question is asked of the step's
+**A step's inputs are the boxes, while its cell is open.** Opening a step ticks
+what it holds; unticking a box hands that row back at once and ticking one takes
+it in, so there is nothing to press and nothing to read back. What the boxes
+cannot do they do not offer: a row already inside a step this one is part of has
+its box disabled, so a loop cannot be ticked in and then refused after the fact.
+
+What the ticked rows come to is asked of the step's *candidates* - its own inputs
+plus whatever is still loose outside it - and not of `claim`, which answers "what
+holds these rows" and would climb past the step being edited: from inside a step,
+every row of it is also every row of the step above.
+
+Everything that comes and goes - that bar, the faults, the messages - is drawn
+below the row of buttons. One appearing above the table pushes the table down
+under the hand that is working in it. That question is asked of the step's
 *candidates* - its own inputs, plus whatever is still loose outside it - and not
 of `claim`, which answers "what holds these rows" and would climb past the step
 being edited: from inside a step, every row of it is also every row of the step

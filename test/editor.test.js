@@ -146,8 +146,8 @@ function rename(screen, from, to) {
   step.verb.onchange()
 }
 
-/** Shift on a step says "these rows are what goes into it". */
-const openStep = (screen, verb) => tap(cellNamed(screen, verb), { shiftKey: true })
+/** Opening a step's cell is what puts its inputs on the boxes. */
+const openStep = (screen, verb) => tap(cellNamed(screen, verb))
 
 /* Choosing rows. The row itself is the target: shift-click with a mouse, long press
    with a thumb. There is no column of checkboxes to aim at any more. */
@@ -164,7 +164,21 @@ function tick(screen, name, shift = false) {
 const process = (screen) => click(screen, 'Process in step')
 
 /** Every step cell of the one table, with the fields it is written in. */
-const takes = (screen) => one(screen, byClass('takes'), 'takes').textContent
+/** The rows whose boxes are ticked, top to bottom. */
+const ticked = (screen) => {
+  const names = named(screen)
+  return holdsOf(screen)
+    .map((hold, at) => (one(hold, byClass('tick'), 'tick').checked ? names[at] : null))
+    .filter(Boolean)
+}
+
+/** Which boxes may be ticked at all: a row already inside this step cannot go into it. */
+const offered = (screen) => {
+  const names = named(screen)
+  return holdsOf(screen)
+    .map((hold, at) => (one(hold, byClass('tick'), 'tick').disabled ? null : names[at]))
+    .filter(Boolean)
+}
 
 /** What the editor drew, as the card's own text does not exist until it is saved. */
 const plain = (node) => node.textContent.replace(/\u00a0/g, ' ')
@@ -218,12 +232,12 @@ test('ticking rows and processing them builds the step', async () => {
 
   // Nothing ticked, nothing offered: the table is quiet until the cook has said what
   // they mean.
-  assert.equal(all(screen).filter(byClass('takes')).length, 0)
+  assert.equal(all(screen).filter(byClass('chosen')).length, 0)
 
   tick(screen, 'Mehl')
-  assert.equal(takes(screen), '250 g Mehl')
+  assert.deepEqual(ticked(screen), ['Mehl'])
   tick(screen, 'Milch')
-  assert.equal(takes(screen), '250 g Mehl + 500 ml Milch')
+  assert.deepEqual(ticked(screen), ['Mehl', 'Milch'])
 
   process(screen)
   nameStep(screen, 'verrühren')
@@ -238,17 +252,17 @@ test('ticking rows and processing them builds the step', async () => {
   assert.deepEqual(saved, ['# Neu\n\n- verrühren\n  - Mehl: 250 g\n  - Milch: 500 ml\n'])
 })
 
-test('a row stands for whatever is holding it, so a whole strand reads as its last step', () => {
+test('a row stands for whatever is holding it, so a whole strand becomes one input', () => {
   const { screen } = open(PANCAKES)
 
-  // Mehl is inside verrühren, which is inside braten. Ticking every row of the card
-  // therefore says braten, not four ingredients.
+  // Mehl is inside verrühren, which is inside braten. Ticking every row of the recipe
+  // therefore says braten, not two ingredients, so the new step takes braten whole.
   for (const name of ['Mehl', 'Milch']) tick(screen, name)
-  assert.equal(takes(screen), 'braten')
+  process(screen)
+  nameStep(screen, 'anrichten')
 
-  // Just the rows under verrühren say verrühren.
-  tick(screen, 'Milch')
-  assert.equal(takes(screen), '250 g Mehl')
+  assert.deepEqual(faults(screen), [])
+  assert.deepEqual(shown(screen).sort(), ['anrichten', 'braten', 'verrühren'])
 })
 
 test('two strands that never meet are refused until a step joins them', () => {
@@ -270,7 +284,7 @@ test('two strands that never meet are refused until a step joins them', () => {
   // Ticking every row of both says both strands, which is how they are joined.
   tick(screen, 'Reis')
   tick(screen, 'Hähnchen')
-  assert.equal(takes(screen), 'kochen + braten')
+  assert.deepEqual(ticked(screen), ['Reis', 'Hähnchen'])
 
   process(screen)
   nameStep(screen, 'anrichten')
@@ -309,41 +323,35 @@ test('every field of a row writes to the same ingredient', () => {
   assert.equal(after.aside.value, 'Type 550')
 })
 
-test('a step being edited starts from its own rows, and refuses the strand it sits in', () => {
+test('opening a step ticks what goes into it, and a box is the change', () => {
   const { screen } = open(PANCAKES)
 
-  // Shift on the step ticks what it holds, and the bar says so.
   openStep(screen, 'verrühren')
-  assert.equal(takes(screen), '250 g Mehl + 500 ml Milch')
+  assert.deepEqual(ticked(screen), ['Mehl', 'Milch'])
 
-  // Dropping an input hands it back to the waiting list rather than deleting it.
+  // Unticking hands the row back to the waiting list rather than deleting it, at once.
   tick(screen, 'Milch')
-  click(screen, 'Apply')
-
-  // Milch is still a row of the same table; it has simply lost what was to its right.
   onlyTable(screen)
   assert.deepEqual(named(screen), ['Mehl', 'Milch'])
+  assert.deepEqual(ticked(screen), ['Mehl'])
   assert.deepEqual(faults(screen), ['500 ml Milch goes into no step'])
 })
 
-test('a row already inside the step above cannot be fed to the one below it', () => {
+test('a row already inside the step above is not offered to the one below it', () => {
   const { screen } = open(WITH_BUTTER)
 
   // Butter belongs to schmelzen, which belongs to braten, which holds verrühren.
-  // Feeding it to verrühren would be a loop, so it is refused rather than dropped.
+  // Feeding it to verrühren would be a loop, so its box cannot be ticked at all.
   openStep(screen, 'verrühren')
-  tick(screen, 'Butter')
-  click(screen, 'Apply')
-
-  assert.ok(all(screen).some((node) => node.textContent.includes('cannot go into verrühren')))
-  assert.deepEqual(shown(screen).sort(), ['braten', 'schmelzen', 'verrühren'])
+  assert.deepEqual(ticked(screen), ['Mehl', 'Milch'])
+  assert.deepEqual(offered(screen), ['Mehl', 'Milch'])
 })
 
 test('deleting a step frees what it held instead of taking the strand with it', () => {
   const { screen } = open(PANCAKES)
 
   openStep(screen, 'braten')
-  click(screen, 'Delete step')
+  click(screen, 'Delete braten')
 
   assert.deepEqual(shown(screen), ['verrühren'])
   assert.deepEqual(faults(screen), [])
@@ -474,7 +482,7 @@ test('taking one row out of a step is said before it happens, and then done', ()
   const { screen } = open(WITH_BUTTER)
 
   tick(screen, 'Mehl')
-  assert.equal(takes(screen), '250 g Mehl')
+  assert.deepEqual(ticked(screen), ['Mehl'])
   // The bar names what it would disturb, since that is what was not pointed at.
   assert.ok(
     all(screen).some((node) => node.textContent.includes('250 g Mehl comes out of verrühren')),
@@ -495,7 +503,7 @@ test('a step left empty by the move is named, and goes with it', () => {
   // Butter is all that schmelzen holds, so ticking its row reads as schmelzen itself,
   // and taking schmelzen whole is what keeps it from being emptied.
   tick(screen, 'Butter')
-  assert.equal(takes(screen), 'schmelzen')
+  assert.deepEqual(ticked(screen), ['Butter'])
   assert.ok(
     all(screen).some((node) => node.textContent.includes('schmelzen comes out of braten')),
   )
@@ -514,7 +522,7 @@ test('naming the last ingredient of a step warns that the step goes too', () => 
   // schmelzen holds, so schmelzen is left with nothing.
   tick(screen, 'Mehl')
   tick(screen, 'Butter')
-  assert.equal(takes(screen), '250 g Mehl + schmelzen')
+  assert.deepEqual(ticked(screen), ['Mehl', 'Butter'])
 
   process(screen)
   nameStep(screen, 'mischen')
@@ -530,12 +538,12 @@ test('the box at the head of the column takes every row, and lets them go again'
   const box = all_()
   box.checked = true
   box.onclick({})
-  assert.equal(takes(screen), 'braten')
+  assert.deepEqual(ticked(screen), named(screen))
 
   const again = all_()
   again.checked = false
   again.onclick({})
-  assert.equal(all(screen).filter(byClass('takes')).length, 0)
+  assert.deepEqual(ticked(screen), [])
 })
 
 test('shift extends from the last row touched', () => {
@@ -551,7 +559,7 @@ test('shift extends from the last row touched', () => {
   tick(screen, 'Mehl')
   tick(screen, 'Salz', true)
   // Mehl, Milch and Salz, but not Zucker.
-  assert.equal(takes(screen), '1 g Mehl + 2 g Milch + 3 g Salz')
+  assert.deepEqual(ticked(screen), ['Mehl', 'Milch', 'Salz'])
 })
 
 test('the add-ingredient row sits under the last ingredient of the one table', () => {
@@ -592,7 +600,8 @@ test('a card is one table at every stage of being written', () => {
 test('a step being edited starts from everything it holds, however deep', () => {
   const { screen } = open(WITH_BUTTER)
   openStep(screen, 'braten')
-  assert.equal(takes(screen), 'verrühren + schmelzen')
+  // Every row of the recipe is under braten, so every box is ticked.
+  assert.deepEqual(ticked(screen), named(screen))
 })
 
 test('a step needs rows, and + Step says so before it does nothing', () => {

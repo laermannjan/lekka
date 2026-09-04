@@ -127,9 +127,13 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * faults, and whether Save is allowed.
    */
   function write(node, fields) {
-    // The cell has said what it holds, so it goes back to being read.
+    // The cell has said what it holds, so it goes back to being read - and with it the
+    // ticks, which were that step's inputs and belong to a cell that is open.
     openAt = null
     want = null
+    editing = null
+    chosen = new Set()
+    anchor = null
     // A step keeps whatever it holds: only what the cell showed is being written.
     const was = node.kind === 'step' ? fieldsOf(node) : null
     current =
@@ -151,7 +155,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     const next = report(faults)
     if (reported && next) reported.replaceWith(next)
     else if (reported) reported.remove()
-    else if (next) box.insertBefore(next, box.children[1] ?? null)
+    else if (next) box.insertBefore(next, specified ?? null)
     reported = next
 
     // Safe to rebuild: `resettle` only runs for a field in the table, so the caret is
@@ -166,24 +170,6 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   const rename = (title) => amend({ title })
 
   /**
-   * Which rows go into a step, asked in the table rather than in a list.
-   *
-   * Shift or a long press on a step ticks the rows it holds; from there they are ticked
-   * and unticked like any others, and `Apply` reads back what they now come to. The list
-   * of candidates the form used to show was the same question asked about names.
-   */
-  function pickStep(node) {
-    editing = node
-    chosen = new Set(beneath(node))
-    anchor = null
-    notice = null
-    // The cell closes: what is being chosen is rows, and they have to be readable.
-    openAt = null
-    want = null
-    paint()
-  }
-
-  /**
    * What the ticked rows come to, for the step being edited.
    *
    * Not `claim`, which answers "what holds these rows" and climbs the whole tree: from
@@ -196,24 +182,6 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     return candidates(current, editing).filter((node) =>
       beneath(node).every((row) => chosen.has(row)),
     )
-  }
-
-  function apply() {
-    const wanted = intake()
-    const covered = new Set(wanted.flatMap(beneath))
-    const stray = [...chosen].filter((row) => !covered.has(row))
-
-    if (wanted.length === 0)
-      return say('A step has to take something. Tick the rows that go into it.')
-    if (stray.length > 0)
-      return say(
-        `${stray.map(label).join(', ')} cannot go into ${label(editing)}: ` +
-          'it is already inside a step this one is part of.',
-      )
-
-    const step = editing
-    editing = null
-    change(editStep(current, step, { ...fieldsOf(step), inputs: wanted }))
   }
 
   function say(text) {
@@ -233,6 +201,20 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     for (const node of nodes) if (on) chosen.add(node)
       else chosen.delete(node)
     if (nodes.length === 1) anchor = nodes[0]
+
+    // While a step is open the boxes are its inputs, so a box is the change: what they
+    // now come to is written back at once, and the table redraws showing it.
+    if (editing) {
+      const step = editing
+      const kept = openAt
+      current = editStep(current, step, { ...fieldsOf(step), inputs: intake() })
+      dirty = true
+      notice = null
+      editing = step
+      openAt = kept
+      chosen = new Set(beneath(step))
+      onChange?.(current)
+    }
     paint()
   }
 
@@ -241,10 +223,22 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     return current.strands.flatMap(beneath)
   }
 
-  /** Open a cell, with the caret in the field that was tapped. */
+  /**
+   * Open a cell, with the caret in the field that was tapped.
+   *
+   * Opening a step also ticks what goes into it. There is no separate way in and nothing
+   * to read: the boxes say what the step holds, and changing one changes it. Rows that
+   * could not go in - the ones already inside a step this one is part of - have their
+   * boxes disabled rather than refused after the fact.
+   */
   function reveal(node, field) {
     openAt = node
     want = field
+    if (node.kind === 'step') {
+      editing = node
+      chosen = new Set(beneath(node))
+      anchor = null
+    }
     paint()
   }
 
@@ -252,20 +246,33 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     if (!openAt) return
     openAt = null
     want = null
+    editing = null
+    chosen = new Set()
     paint()
+  }
+
+  /** Whether a row may go into the step being edited. */
+  function tickable(node) {
+    if (!editing) return true
+    return candidates(current, editing).some((one) => beneath(one).includes(node))
   }
 
   function paint() {
     const faults = validate(current)
     const across = scroller?.scrollLeft ?? 0
     reported = report(faults)
+    /*
+     * Everything that comes and goes is drawn below the row of buttons. A warning that
+     * appears above the table pushes the table down under the hand that is working in
+     * it; below it, the table stays where it was put.
+     */
     box.replaceChildren(
       ...[
         nameSection(current.title, rename),
-        reported,
-        selection(),
         table(),
         actions(faults),
+        selection(),
+        reported,
         hint(faults),
         (specified = specification(current, written())),
       ].filter(Boolean),
@@ -329,18 +336,14 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       onClose()
     })
 
-    /*
-     * What goes into a step is not something the step says about itself, so it is not a
-     * field in its cell: it is rows, ticked in the table. Shift and a long press have
-     * always said so, and neither is visible - a step you have opened has to be able to
-     * tell you that its inputs can be changed at all.
-     */
-    const inputs =
+    // A step that is open can be got rid of. A row is deleted from the bar its box raises.
+    const erase =
       openAt?.kind === 'step'
-        ? button(`Choose what goes into ${label(openAt)}`, () => pickStep(openAt))
+        ? element('button', 'quiet danger', `Delete ${label(openAt)}`)
         : null
+    if (erase) erase.onclick = () => drop([openAt])
 
-    return element('div', 'bar after', undefined, [save, leave, inputs].filter(Boolean))
+    return element('div', 'bar after', undefined, [save, leave, erase].filter(Boolean))
   }
 
   /**
@@ -348,26 +351,16 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * table is quiet until the cook has said what they mean, and it names both halves of
    * the move: what goes in, and what that would take it out of.
    */
+  /**
+   * What the ticked rows would become. Only when they are a selection of the cook's own:
+   * while a step is open its boxes are its inputs, and the boxes already say what they
+   * are, so there is nothing for a bar to read back.
+   */
   function selection() {
-    if (chosen.size === 0 && !editing) return null
-    const taken = editing ? intake() : claim(current, chosen)
-    const { moved, emptied } = editing ? { moved: [], emptied: [] } : upheaval(current, taken)
-
+    if (chosen.size === 0 || editing) return null
+    const taken = claim(current, chosen)
+    const { moved, emptied } = upheaval(current, taken)
     const rows = [...chosen]
-    const bar = element('div', 'bar chosen')
-    bar.append(
-      element('span', 'label', editing ? `Goes into ${label(editing)}` : `${chosen.size} chosen`),
-      element('span', 'takes', taken.map(label).join(' + ') || 'nothing'),
-    )
-
-    if (editing) {
-      const go = element('button', 'go', 'Apply')
-      go.onclick = apply
-      const erase = element('button', 'quiet danger', 'Delete step')
-      erase.onclick = () => drop([editing])
-      bar.append(go, erase, button('Cancel', clear))
-      return bar
-    }
 
     const go = element('button', 'go', 'Process in step')
     go.onclick = () => makeStep(taken)
@@ -375,13 +368,12 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     /*
      * Deleting takes the rows themselves and not what holds them. `Process in step` asks
      * what these rows currently belong to, because that is what a new step would take;
-     * this asks nothing - a ticked row is the ingredient on it, and the one row of a
-     * one-row recipe is that ingredient and not the step standing over it.
+     * this asks nothing - a ticked row is the ingredient on it.
      */
     const erase = element('button', 'quiet danger', rows.length > 1 ? 'Delete all' : 'Delete')
     erase.onclick = () => drop(rows)
 
-    bar.append(go, erase, button('Clear', clear))
+    const bar = element('div', 'bar chosen', undefined, [go, erase, button('Clear', clear)])
 
     if (moved.length === 0) return bar
     return element('div', '', undefined, [
@@ -475,7 +467,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
         openAt,
         onOpen: reveal,
         onField: write,
-        onEditStep: pickStep,
+        tickable,
         onDrawn: (node, input) => opened.set(node, input),
         onChoose: choose,
         chosen: (node) => chosen.has(node),

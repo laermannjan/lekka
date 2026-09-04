@@ -102,23 +102,11 @@ export function renderGrid(grid, scale = 1, edit = null) {
     box.addEventListener?.('contextmenu', (event) => event?.preventDefault?.())
   }
 
-  /*
-   * A step, as a target. A plain tap opens its cell; shift, command or a long press says
-   * "these rows are what goes in", which is the same grammar a row is chosen with.
-   */
+  /* A step, as a target: a tap opens its cell, and opening it ticks what goes into it. */
   const stepTarget = (box, node, open) => {
-    if (!edit?.onEditStep && !edit?.onOpen) return box
+    if (!edit?.onOpen || !open) return box
     box.classList.add('pickable')
-    let took = false
-    box.onclick = (event) => {
-      if (took) return void (took = false)
-      if (event?.shiftKey || event?.ctrlKey || event?.metaKey) return edit.onEditStep?.(node)
-      if (open) edit.onOpen?.(node, 'verb')
-    }
-    onHold(box, () => {
-      took = true
-      edit.onEditStep?.(node)
-    })
+    box.onclick = () => edit.onOpen(node, 'verb')
     return box
   }
 
@@ -420,7 +408,9 @@ function writableFields(node, edit) {
 function ingredientFields(node, scale, edit, ticks = 0) {
   const shift = (fields) =>
     ticks
-      ? [{ node: tickBox(node, edit), column: 1, columnSpan: 1, field: 'tick' },
+      // No `field`: the box is not a way into the row, it is how the row is chosen, and
+      // a click on it must not also open the cells beside it.
+      ? [{ node: tickBox(node, edit), column: 1, columnSpan: 1 },
          ...fields.map((one) => ({ ...one, column: one.column + ticks }))]
       : fields
 
@@ -462,6 +452,9 @@ function tickBox(node, edit) {
   input.type = 'checkbox'
   input.className = 'tick'
   input.checked = Boolean(edit.chosen?.(node))
+  // A row that could not go into the step being written is not offered: the box is there,
+  // so the column still reads as a column, and it cannot be ticked into a loop.
+  input.disabled = edit.tickable ? !edit.tickable(node) : false
   input.onclick = (event) => edit.onChoose([node], input.checked, Boolean(event?.shiftKey))
   box.append(input)
   return box

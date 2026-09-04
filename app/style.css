@@ -844,10 +844,14 @@ textarea:focus {
   grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(120px, 240px));
 }
 
-/* The editor's table is the reading table with one column added, for `+ Step`. */
+/*
+ * The editor's table is the reading table with a column at each end: a box to tick a row
+ * with in front, and `+ Step` behind. Neither is ever drawn while reading, which is
+ * where horizontal space is short.
+ */
 .grid.choosing {
   grid-template-columns:
-    58px 54px max-content repeat(var(--columns), minmax(120px, 240px)) 46px;
+    26px 58px 54px max-content repeat(var(--columns), minmax(120px, 240px)) 46px;
 }
 
 .grid.flat {
@@ -855,7 +859,7 @@ textarea:focus {
 }
 
 .grid.choosing.flat {
-  grid-template-columns: 58px 54px max-content 46px;
+  grid-template-columns: 26px 58px 54px max-content 46px;
 }
 
 .hold,
@@ -1582,6 +1586,7 @@ textarea:focus {
   }
 
   .bar,
+  .ticker,
   .badge,
   .sheet,
   .compose,
@@ -1617,7 +1622,7 @@ textarea:focus {
 
   .grid.choosing {
     grid-template-columns:
-      fit-content(58px) fit-content(54px) fit-content(150px)
+      min-content fit-content(58px) fit-content(54px) fit-content(150px)
       repeat(var(--columns), minmax(0, 1fr)) min-content;
   }
 
@@ -1627,7 +1632,8 @@ textarea:focus {
   }
 
   .grid.choosing.flat {
-    grid-template-columns: fit-content(58px) fit-content(54px) fit-content(150px) min-content;
+    grid-template-columns:
+      min-content fit-content(58px) fit-content(54px) fit-content(150px) min-content;
   }
 
   .grid .name,

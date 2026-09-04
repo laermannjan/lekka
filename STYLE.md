@@ -285,15 +285,18 @@ inside them. A qualifier drops to its own line.
   nobody uses.
 - Ticking a row and opening it are different targets, so neither has to ask what
   modifier was held.
-- **What goes into a step is chosen in the table**, not in its cell: it is rows,
-  and a step's cell holds only what the step says about itself. Shift, command or
-  a long press on a step ticks what it holds, and from there rows are ticked and
-  unticked like any others; the bar then offers `Apply` instead of `Process in
-  step`.
-- A step you have opened offers it in words, because a modifier nobody can see is
-  a way in nobody finds: while a step's cell is open, the bar under the table
-  carries `Choose what goes into <the step>`. Choosing closes the cell, because
-  what is being chosen is rows and they have to be readable.
+- **Opening a step ticks what goes into it**, and a box is the change: unticking
+  one hands that row back at once, ticking one takes it in. There is nothing to
+  press and nothing to read back - the boxes and the amber already say what the
+  step holds, so a bar repeating it in words would be saying it twice.
+- A row that could not go into the step being written - one already inside a step
+  this one is part of - has its box **disabled**. The column still reads as a
+  column, and nothing can be ticked into a loop.
+- A step is deleted from the bar under the table while its cell is open; a row is
+  deleted from the bar its own box raises.
+- **Everything that comes and goes is drawn below the row of buttons** - the bar
+  the ticked rows raise, the faults, the messages. One appearing above the table
+  pushes the table down under the hand that is working in it.
 - **Deleting is done from the bar the ticked rows raise**, where what else would
   go is already spelled out. It takes the rows themselves rather than what holds
   them: `Process in step` asks what these rows belong to, because that is what a
