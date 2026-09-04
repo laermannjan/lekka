@@ -77,11 +77,12 @@ scene('Editor, ingredients but no step', buildEditor({
 
 scene('Editor, at rest', editor())
 
-// One row ticked, which is the case that has to say what it would disturb.
-const ticked = editor()
-scene('Editor, one row chosen', ticked)
-for (const cell of ticked.querySelectorAll('.grid > .choose'))
-  if (cell.style.gridRowStart === '3') cell.onclick({ shiftKey: false })
+// A step opened, which is the only state in which the boxes hold anything: they stand
+// for what this step may take, ticked where it already takes it.
+const opened = editor()
+scene('Editor, a step open with its boxes', opened)
+for (const cell of opened.querySelectorAll('.grid .holds > .step'))
+  if (cell.textContent.startsWith('verrühren')) cell.onclick()
 
 function scene(name, body) {
   const head = document.createElement('div')
@@ -135,7 +136,7 @@ try {
     '--enable-logging=stderr',
     '--v=0',
     '--virtual-time-budget=4000',
-    '--window-size=1100,1800',
+    '--window-size=1100,2400',
     `--screenshot=${out}`,
     `http://127.0.0.1:${port}/_shot.html`,
   ])

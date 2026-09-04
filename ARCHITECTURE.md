@@ -439,9 +439,10 @@ work.
 
 - **The editor's wiring, against a stub DOM** (`test/dom.js`, ~120 lines). It
   walks what a person does - enter two ingredients, join them in a step, tap a
-  cell, drop an input - and checks which sheet opened, what the list offered and
-  what the save would write. A stub proves none of that is *visible*; it proves
-  the right node reached the right form, which is where the rules live.
+  cell, tick a box, drop an input - and checks what the table then says, what the
+  boxes offer and what the save would write. A stub proves none of that is
+  *visible*; it proves the right node reached the right field, which is where the
+  rules live.
 
 - **A picture, from `node tools/shot.mjs`.** It serves the app, draws the card
   view and the editor into one page, and screenshots it with
@@ -452,17 +453,25 @@ work.
   element present and every column the wrong width. Two of these side by side
   is what caught it.
 
-- **No browser tests, for now.** Three rounds were once lost to a CSS rule that
-  overrode `[hidden]`, where the property said "hidden" and the button was
-  visible, so a DOM stub would have passed. This app answers that by building
-  no element it does not mean: no key, no *Edit* button; no key on a row, no
-  *Delete*. What is absent cannot be shown by a stylesheet. The one thing still
-  toggled with `hidden` is the save-error line, and `[hidden]` carries an
-  `!important` in `style.css` to hold it down.
+- **A dozen checks in a real browser, from `node tools/check.mjs`.** Same
+  machinery as the picture - own server, headless Chrome - but it drives the
+  editor and reports `PASS`/`FAIL` per line, and exits non-zero.
 
-  Note what this does **not** buy: rights are enforced by the server and tested
-  there. A missing button is not a permission. The browser would only tell us
-  whether the app offers what the server would refuse.
+  It exists because the stub has no caret. `change` fires while the caret is
+  still in the field it is leaving and only then does the focus land, so
+  "committing a field throws the caret out of the row" is not a question a stub
+  can be asked: it has no focus to lose and no event ordering to get wrong. Three
+  bugs lived exactly there - a commit that closed its own cell, a repaint that
+  took the focus off the box that caused it, and a band centred in a width `zoom`
+  had already shrunk - and all three were green under `node --test`.
+
+  So the rule is not "no browser tests". It is: assert in `node --test` whatever
+  can be asserted about what the app *builds*, and keep the browser for the three
+  things only a browser has - the caret, the cascade, and layout.
+
+  What neither buys: rights are enforced by the server and tested there. A missing
+  button is not a permission. The browser would only tell us whether the app
+  offers what the server would refuse.
 
   What the stub still cannot reach is the sheet: `dialog.showModal` taking the
   focus, keeping it inside, and closing on escape are behaviours of a real
