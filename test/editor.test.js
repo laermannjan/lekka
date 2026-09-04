@@ -48,27 +48,18 @@ function type(screen, name, value) {
   input.onchange?.()
 }
 
+/** What a row of the specification reads, or null when the recipe has no answer. */
+function said(screen, name) {
+  const spec = one(screen, byClass('spec'), 'specification')
+  const at = spec.children.findIndex((node) => byClass('label')(node) && node.textContent === name)
+  return at === -1 ? null : plain(spec.children[at + 1])
+}
+
 /* A bar holding one button reads as that button, so a press means the button. */
 const click = (root, text) => {
   const found = all(root).filter(byText(text))
   return tap(found.find((node) => node.tag === 'button') ?? one(root, byText(text), `"${text}"`))
 }
-const field = (form, name) =>
-  one(form, (node) => node.tag === 'label' && node.children[0]?.textContent === name, name)
-    .children[1]
-
-function fill(values) {
-  const form = one(sheet(), (node) => node.tag === 'form', 'form')
-  for (const [name, value] of Object.entries(values)) field(form, name).value = value
-  return form
-}
-
-const submit = () => {
-  const form = one(sheet(), (node) => node.tag === 'form', 'form')
-  form.onsubmit()
-  sheet().close()
-}
-
 /* Writing a cell. Cells are drawn as they are read until one is tapped, and only the
    one tapped is opened, so every helper here opens before it types. */
 
@@ -150,8 +141,12 @@ function rename(screen, from, to) {
   step.verb.onchange()
 }
 
-/** Opening a step's cell is what puts its inputs on the boxes. */
-const openStep = (screen, verb) => tap(cellNamed(screen, verb))
+/** Opening a step's cell is what puts its inputs on the boxes. A cell that is already
+    open is not tapped: writing a field leaves its cell open, so it often already is. */
+function openStep(screen, verb) {
+  const cell = cellNamed(screen, verb)
+  if (!isOpen(cell)) tap(cell)
+}
 
 /** Open a row by tapping its name, which is how its own bar is raised. */
 function openRow(screen, name) {
@@ -159,9 +154,6 @@ function openRow(screen, name) {
   if (at === -1) throw new Error(`no row named ${name}`)
   tap(one(holdsOf(screen)[at], byClass('name'), 'name'))
 }
-
-/* Choosing rows. The row itself is the target: shift-click with a mouse, long press
-   with a thumb. There is no column of checkboxes to aim at any more. */
 
 /**
  * Every box now drawn, by what it stands for. A box belongs to an input, so an
@@ -334,6 +326,35 @@ test('every field of a row writes to the same ingredient', () => {
   assert.equal(after.aside.value, 'Type 550')
 })
 
+test('committing a field leaves its cell open, so a row can be tabbed along', () => {
+  const { screen } = open(PANCAKES)
+  const row = rowOf(screen, 0, 'amount')
+
+  row.amount.value = '300'
+  row.amount.onchange()
+
+  // The same fields, not new ones: a commit that redrew the table would take the caret
+  // out of the row the cook is still working across.
+  const after = holdsOf(screen)[0]
+  assert.equal(isOpen(after), true)
+  assert.equal(all(after).filter(byClass('field')).length, 4)
+  assert.equal(row.unit.value, 'g')
+
+  // What does depend on the value is brought up to date all the same.
+  assert.equal(said(screen, 'Weight'), '300 g')
+})
+
+test('a step keeps its cell, and its boxes, when its verb is written', () => {
+  const { screen } = open(PANCAKES)
+  const step = stepNamed(screen, 'verrühren')
+  step.verb.value = 'vermengen'
+  step.verb.onchange()
+
+  assert.deepEqual(shown(screen), ['braten', 'vermengen'])
+  assert.equal(isOpen(cellNamed(screen, 'vermengen')), true)
+  assert.deepEqual(ticked(screen), ['Mehl', 'Milch'])
+})
+
 test('opening a step ticks what goes into it, and nothing moves until Apply', () => {
   const { screen } = open(PANCAKES)
 
@@ -429,6 +450,26 @@ test('the specification writes the yield, the notes and the preparations', () =>
   // A preparation for the whole recipe is a row of the table that brings no ingredient.
   const band = one(onlyTable(screen), byClass('preparation'), 'preparation')
   assert.equal(plain(band), 'Ofen vorheizen240 °C')
+  assert.deepEqual(faults(screen), [])
+})
+
+test('a recipe with nothing in it yet is not a recipe with 0 ingredients', () => {
+  const { screen } = open('# Neu\n')
+  assert.equal(said(screen, 'Ingredients'), null)
+  assert.equal(said(screen, 'Steps'), null)
+
+  enter(screen, { name: 'Teig' })
+  assert.equal(said(screen, 'Ingredients'), '1')
+})
+
+test('a name is trimmed as it is written, so Save is not refused over a space', () => {
+  const { screen } = open('# x\n')
+  const name = one(screen, (node) => node.tag === 'input' && byClass('title')(node), 'name field')
+  name.value = 'Brot '
+  name.onchange()
+
+  const after = one(screen, (node) => node.tag === 'input' && byClass('title')(node), 'name field')
+  assert.equal(after.value, 'Brot')
   assert.deepEqual(faults(screen), [])
 })
 

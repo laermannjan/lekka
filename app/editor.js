@@ -3,7 +3,7 @@ import { buildForest } from './grid.js'
 import { nameSection, specification } from './page.js'
 import { fit, renderGrid } from './render.js'
 import {
-  candidates, fieldsOf, inputs, validate, label, storedForm, beneath,
+  candidates, fieldsOf, inputs, validate, label, storedForm,
   addIngredient, addStep, editIngredient, editStep, removeNode, sweptBy,
 } from './edit.js'
 
@@ -59,6 +59,15 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   /** The fields of the open cell, so a fault or a tap can put the caret in one. */
   let opened = new Map()
 
+  /** The tick boxes now drawn, so the caret can be put back on one after a repaint. */
+  let ticked = new Map()
+
+  /**
+   * Where the next repaint puts the caret: a field of the open cell, or the box that was
+   * just ticked. Null means nobody asked, and the caret is left where the cook put it.
+   */
+  let caret = null
+
   /** The specification now on the page. Weight and Time are sums of what the rows say,
       so typing into a row has to be able to bring them up to date. */
   let specified = null
@@ -105,14 +114,21 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
 
   const remeasure = () => (globalThis.requestAnimationFrame ?? ((run) => run()))(measure)
 
-  const change = (next) => {
+  /*
+   * A change to the draft, drawn once. `open` is what the change leaves open - the row
+   * or step it just made - and it runs before the drawing rather than after it, so a
+   * move that both changes the recipe and opens a cell still draws the screen one time.
+   */
+  const change = (next, open) => {
     current = next
     dirty = true
     notice = null
     chosen = new Set()
     openAt = null
     want = null
+    caret = null
     onChange?.(current)
+    open?.()
     paint()
   }
 
@@ -127,13 +143,10 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * faults, and whether Save is allowed.
    */
   function write(node, fields) {
-    // The cell has said what it holds, so it goes back to being read - and with it the
-    // ticks, which were that step's inputs and belong to a cell that is open.
-    openAt = null
-    want = null
-    chosen = new Set()
     // A step keeps whatever it holds: only what the cell showed is being written.
     const was = node.kind === 'step' ? fieldsOf(node) : null
+    // `editIngredient` and `editStep` write into the node itself, so the cell that is
+    // open is still the cell that is open and the fields drawn for it are still its own.
     current =
       node.kind === 'ingredient'
         ? editIngredient(current, node, fields)
@@ -142,7 +155,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     notice = null
     onChange?.(current)
 
-    paint()
+    resettle()
   }
 
   /** The report and Save brought up to date without the table being drawn again. */
@@ -167,56 +180,6 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
 
   const rename = (title) => amend({ title })
 
-  function say(text) {
-    notice = { text, bad: true }
-    paint()
-  }
-
-  /** Ticking one of the things the open step may take. */
-  function choose(node, on) {
-    if (on) chosen.add(node)
-    else chosen.delete(node)
-    paint()
-  }
-
-  /**
-   * What the boxes now say, written into the step. Only here does anything move.
-   *
-   * The cell stays open: applying is a step in writing the step, not the end of it, and
-   * a cook who has just said what goes in usually still has to say what is done with it.
-   */
-  function apply() {
-    const step = openAt
-    if (chosen.size === 0) return say('A step has to take something. Tick what goes into it.')
-
-    current = editStep(current, step, { ...fieldsOf(step), inputs: [...chosen] })
-    dirty = true
-    notice = null
-    openAt = step
-    chosen = new Set(inputs(step))
-    onChange?.(current)
-    paint()
-  }
-
-  /**
-   * Open a cell, with the caret in the field that was tapped. Opening a step also puts
-   * boxes on what it may take, ticked where it already takes it.
-   */
-  function reveal(node, field) {
-    openAt = node
-    want = field
-    chosen = node.kind === 'step' ? new Set(inputs(node)) : new Set()
-    paint()
-  }
-
-  function shut() {
-    if (!openAt) return
-    openAt = null
-    want = null
-    chosen = new Set()
-    paint()
-  }
-
   /** What the open step may take: its own inputs, plus whatever is still loose. */
   const offered = () => (openAt?.kind === 'step' ? candidates(current, openAt) : [])
 
@@ -233,112 +196,6 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
 
   const shaded = () => new Set([...chosen].flatMap((node) => within(node)))
 
-  function paint() {
-    const faults = validate(current)
-    const across = scroller?.scrollLeft ?? 0
-    reported = report(faults)
-    /*
-     * Everything that comes and goes is drawn below the row of buttons. A warning that
-     * appears above the table pushes the table down under the hand that is working in
-     * it; below it, the table stays where it was put.
-     */
-    box.replaceChildren(
-      ...[
-        nameSection(current.title, rename),
-        table(),
-        actions(faults),
-        selection(),
-        reported,
-        hint(faults),
-        (specified = specification(current, written())),
-      ].filter(Boolean),
-    )
-    // Only once it is on the page does it have anything to scroll.
-    if (scroller) scroller.scrollLeft = across
-    remeasure()
-
-    const fields = opened.get(openAt)
-    if (!fields) return
-    for (const field of fields.all ?? Object.values(fields)) fit(field)
-    const caret = fields[want] ?? fields.verb ?? fields.amount
-    caret?.focus?.()
-    caret?.select?.()
-  }
-
-  /**
-   * `Save` and `Cancel`, under the table, where `Edit` stood a moment ago: the button
-   * that leaves writing is in the place the button that entered it was.
-   *
-   * There was a bar above the table with `Write` on it. The label named a mode that
-   * every outlined cell on the screen was already announcing, and it sat between the
-   * cook and the thing they came to change.
-   */
-  function actions(faults) {
-    const save = element('button', 'go', 'Save')
-    saveButton = save
-    save.disabled = faults.length > 0 || !dirty || saving
-    save.onclick = async () => {
-      if (saving) return
-      saving = true
-      // The draft this write is of. The page stays live while it is in flight, so what
-      // comes back can be an answer about a recipe that has since been edited.
-      const sent = current
-      paint()
-
-      // `finally`, because a throw would otherwise leave `saving` up for good: Save
-      // disabled for the life of the editor, no message, and the changes still dirty.
-      let failed
-      try {
-        failed = await commit(sent)
-      } catch (error) {
-        failed = `Not saved. ${error.message}`
-      } finally {
-        saving = false
-      }
-      // A write that arrives is said as plainly as one that does not: without a word
-      // either way there is no telling a saved recipe from one the server refused.
-      notice = failed
-        ? { text: failed, bad: true }
-        : current === sent
-          ? { text: 'Saved.', bad: false }
-          : { text: 'Saved. What you changed while it was sending is not - save again.', bad: false }
-      paint()
-    }
-
-    // `Cancel` undoes; with nothing to undo it is `Done`, which is what leaving a
-    // recipe you only looked at actually is.
-    const leave = button(dirty ? 'Cancel' : 'Done', () => {
-      if (dirty && !confirm('Leave without saving? The changes are lost.')) return
-      onClose()
-    })
-
-    // Save and Cancel are about the whole recipe. What can be done to the one cell that
-    // is open is drawn apart from them, below.
-    return element('div', 'bar after', undefined, [save, leave])
-  }
-
-  /**
-   * What can be done to the thing that is open. `Save` and `Cancel` are about the whole
-   * recipe and stay in their own row above; this is about the one cell, so it is drawn
-   * apart from them and only while one is open.
-   */
-  function selection() {
-    if (!openAt) return null
-    const acts = []
-
-    if (openAt.kind === 'step') {
-      const go = element('button', 'go', 'Apply')
-      go.onclick = apply
-      acts.push(go)
-    }
-
-    const erase = element('button', 'quiet danger', `Delete ${label(openAt)}`)
-    erase.onclick = () => drop([openAt])
-    acts.push(erase)
-
-    return element('div', 'bar chosen', undefined, acts)
-  }
-
   function say(text) {
     notice = { text, bad: true }
     paint()
@@ -348,6 +205,10 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   function choose(node, on) {
     if (on) chosen.add(node)
     else chosen.delete(node)
+    // The repaint throws away the box that was just clicked, so the caret is told to go
+    // back to the one drawn in its place. Without this it lands on the verb, and the
+    // next box cannot be reached with the keyboard at all.
+    caret = { tick: node }
     paint()
   }
 
@@ -366,6 +227,10 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     notice = null
     openAt = step
     chosen = new Set(inputs(step))
+    // Back to the verb, because saying what goes in is usually followed by saying what
+    // is done with it - but not selected: the verb is already written and the next key
+    // would replace it.
+    caret = { node: step, field: want ?? 'verb' }
     onChange?.(current)
     paint()
   }
@@ -374,18 +239,16 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * Open a cell, with the caret in the field that was tapped. Opening a step also puts
    * boxes on what it may take, ticked where it already takes it.
    */
-  function reveal(node, field) {
+  function openTo(node, field) {
     openAt = node
     want = field
     chosen = node.kind === 'step' ? new Set(inputs(node)) : new Set()
-    paint()
+    // Selected, because tapping a cell to write in it means writing it again.
+    caret = { node, field, select: true }
   }
 
-  function shut() {
-    if (!openAt) return
-    openAt = null
-    want = null
-    chosen = new Set()
+  function reveal(node, field) {
+    openTo(node, field)
     paint()
   }
 
@@ -414,11 +277,21 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     remeasure()
 
     const fields = opened.get(openAt)
+    if (fields) for (const field of fields.all ?? Object.values(fields)) fit(field)
+
+    /*
+     * The caret is moved only by the move that asked for it. A repaint happens on every
+     * tick and every notice, and one that grabs the field each time takes the focus off
+     * whatever the cook is using and selects a word they were not editing.
+     */
+    const going = caret
+    caret = null
+    if (!going) return
+    if (going.tick) return void ticked.get(going.tick)?.focus?.()
     if (!fields) return
-    for (const field of fields.all ?? Object.values(fields)) fit(field)
-    const caret = fields[want] ?? fields.verb ?? fields.amount
-    caret?.focus?.()
-    caret?.select?.()
+    const into = fields[going.field] ?? fields.verb ?? fields.amount
+    into?.focus?.()
+    if (going.select) into?.select?.()
   }
 
   /**
@@ -489,7 +362,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     }
 
     const erase = element('button', 'quiet danger', `Delete ${label(openAt)}`)
-    erase.onclick = () => drop([openAt])
+    erase.onclick = () => drop(openAt)
     acts.push(erase)
 
     /*
@@ -516,8 +389,9 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     const before = new Set(current.strands)
     const next = addStep(current, { verb: '', aside: '', preparations: [], inputs: taken })
     const made = next.strands.find((strand) => !before.has(strand))
-    change(next)
-    reveal(made, 'verb')
+    // Opened as part of adding it, not after: `change` draws the screen and `reveal`
+    // would draw it a second time, throwing the first away under the hand.
+    change(next, () => openTo(made, 'verb'))
   }
 
   /**
@@ -569,20 +443,26 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    */
   function table() {
     opened = new Map()
+    ticked = new Map()
     const grid = buildForest(current.strands, current.preparations)
     const box = element('div', 'scroll')
     scroller = box
+    // Asked once for the whole drawing. Both walk the forest, and asked per node they
+    // walk it again for every row and every cell of a table that is already a forest.
+    const offers = new Set(offered())
+    const shade = shaded()
     box.append(
       renderGrid(grid, 1, {
         openAt,
         onOpen: reveal,
         onField: write,
         onDrawn: (node, input) => opened.set(node, input),
+        onTicked: (node, input) => ticked.set(node, input),
         onChoose: choose,
         // A box stands for an input; the shading stands for every row under one.
-        boxFor: (node) => offered().includes(node),
+        boxFor: (node) => offers.has(node),
         ticked: (node) => chosen.has(node),
-        chosen: (node) => shaded().has(node),
+        chosen: (node) => shade.has(node),
         onAdd: addRow,
         onStep: makeStep,
       }),
@@ -607,8 +487,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    */
   function addRow() {
     const next = addIngredient(current, {})
-    change(next)
-    reveal(next.strands.at(-1), 'amount')
+    change(next, () => openTo(next.strands.at(-1), 'amount'))
   }
 
   /**
@@ -625,18 +504,15 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * taking its verb, its note and its preparations. Adding a step already says what it
    * would disturb before it does it; deleting has to as well, because there is no undo.
    */
-  function drop(nodes) {
-    const taken = [].concat(nodes)
-    const swept = taken.flatMap((node) => sweptBy(current, node)).filter((node) => !taken.includes(node))
+  function drop(node) {
+    const swept = sweptBy(current, node).filter((one) => one !== node)
     if (swept.length > 0) {
       const names = [...new Set(swept.map(label))].join(', ')
       const going = swept.length === 1 ? 'it goes' : 'they go'
-      if (!confirm(`Deleting ${taken.map(label).join(', ')} leaves ${names} with nothing, so ${going} too. Delete anyway?`))
+      if (!confirm(`Deleting ${label(node)} leaves ${names} with nothing, so ${going} too. Delete anyway?`))
         return
     }
-    let next = current
-    for (const node of taken) next = removeNode(next, node)
-    change(next)
+    change(removeNode(current, node))
   }
 
   paint()
