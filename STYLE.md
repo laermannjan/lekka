@@ -157,8 +157,11 @@ is read.
 - Nothing wraps in the ingredient column; the table scrolls sideways instead.
 - The head of the table is white and closed by a line of ink. Weight separates
   it from the body, not a fill.
-- Preparation rows sit **under** the head, on the wash colour, spanning the
-  columns they come before, with the three ingredient fields beside them empty.
+- A preparation belonging to the **recipe** is a row under the head, on the wash
+  colour, spanning everything, with the three ingredient fields beside it empty.
+  One belonging to a **step** is drawn inside that step's cell, above its verb,
+  on the same colour: it is something done before that step, and a band over the
+  step's column said instead that it belonged to the column.
 - The recipe's left edge is 3 px of accent. It is the one place a colour names
   what a box is rather than what state it is in.
 
@@ -249,9 +252,11 @@ inside them. A qualifier drops to its own line.
   it belongs with the step - it is one of the things the step says about itself,
   and a band cell has nothing to say about which step it is attached to. So the
   band holds nothing while writing.
-- **An empty note or preparation stays out of sight** until the cell is reached
-  for. Both are rare, and three visible fields on every step would be noise on a
-  table whose whole point is that it is dense.
+- **Every field of the open cell is drawn**, empty or not, in the order the
+  things happen: what comes before the step, then the step, then its note. Only
+  one cell is open at a time, so there is room for all of them - and a field that
+  has to be discovered says nothing about what it is for. The placeholder is what
+  says it.
 - A tappable cell is marked by the cursor and by the amber wash under the
   pointer - never by a colour of its own.
 - A **chosen row** takes the amber across all three of its fields. There is no

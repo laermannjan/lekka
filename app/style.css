@@ -878,16 +878,27 @@ textarea:focus {
 }
 
 /*
- * A preparation is a row of the table that brings no ingredient: it sits under
- * the head, over the columns it happens before, with the three ingredient fields
- * beside it left empty. It needs no top border of its own - the head above it
- * draws one, which is the whole reason for moving it there.
+ * A preparation belonging to the recipe is a row of the table that brings no ingredient:
+ * it sits under the head, spanning everything, with the three ingredient fields beside
+ * it left empty. It needs no top border of its own - the head above it draws one.
+ *
+ * One belonging to a step is drawn inside that step's cell, above its verb, because that
+ * is what it is: something done before that step. In a band over the step's column it
+ * read as a property of the column, and a column is worked out from how deep the strand
+ * is - insert a step upstream and every column moves. The step does not.
  */
 .preparation {
   background: var(--wash);
   border-left: 1px solid var(--rule);
   font-weight: 600;
   text-align: center;
+}
+
+.step > .preparation {
+  border: 0;
+  font-weight: 400;
+  margin: 0 -6px 2px;
+  padding: 0 6px;
 }
 
 .preparation.joined {
@@ -1045,7 +1056,8 @@ textarea:focus {
 }
 
 .grid .field.unit,
-.grid .field.aside {
+.grid .field.aside,
+.grid .field.note {
   color: var(--grey);
 }
 
@@ -1081,29 +1093,17 @@ textarea:focus {
   font-weight: 600;
 }
 
-.grid .field.note {
-  color: var(--grey);
-}
-
 .grid .field.before {
   background: var(--wash);
   color: var(--grey);
 }
 
 /*
- * A note and an empty preparation stay out of sight until the cell is reached for. Both
- * are rare, and a field on every cell of every step would be noise on a table whose
- * whole point is that it is dense.
+ * Every field of the open cell is drawn, empty or not. Only one cell is open at a time,
+ * so there is room for all of them; hidden, they were three things a cook had to know
+ * were there, and a field that has to be discovered says nothing about what it is for.
+ * The placeholder is what says it.
  */
-.grid .step .field.note:placeholder-shown:not(:focus),
-.grid .step .field.before:placeholder-shown:not(:focus) {
-  opacity: 0;
-}
-
-.grid .step:hover .field,
-.grid .step:focus-within .field {
-  opacity: 1;
-}
 
 /* A long press is how a row or a step is chosen; inside a field it is how text is
    selected. */

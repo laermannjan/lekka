@@ -234,11 +234,20 @@ on enter, and goes back to being read.
 a button that moves about is a button nobody finds twice. It adds an empty row
 and puts the caret in it; there is no form to fill in first.
 
-**A step is written in its cell too** - its verb, its note, and the preparations
-attached to it, as fields that wrap and grow the way the cell they replaced does.
-A preparation is drawn over the step's column while the recipe is read, which is
-when it happens; written, it belongs with the step, so the band holds nothing
-while writing.
+**A step is written in its cell too** - what comes before it, what it does, and
+its note, in that order, as fields that wrap and grow the way the cells they
+replaced do. Every one is drawn, empty or not: only one cell is open at a time,
+so there is room, and a field that has to be discovered says nothing about what
+it is for.
+
+**A preparation belongs to a step, not to a column.** It is drawn inside that
+step's cell, above its verb, in both views. A band over the step's column said
+instead that it belonged to the column, which is not a thing the format can
+express and not a thing that would survive editing: a column is
+`max(column(input)) + 1`, so inserting a step upstream moves every column after
+it, and the preparation would silently move to a different moment. The step it
+precedes does not move. The band now holds only the preparations belonging to the
+recipe, which genuinely do span everything.
 
 **A step is built by choosing rows.** A row is chosen by holding it, or by shift
 or command clicking it - there is no column of checkboxes, because a column that

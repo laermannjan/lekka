@@ -89,7 +89,8 @@ function rowOf(screen, index, at = 'name') {
   if (!hold) throw new Error(`no row ${index} of ${holdsOf(screen).length}`)
   if (!isOpen(hold)) tap(one(hold, byClass(at), at))
   const fields = all(holdsOf(screen)[index]).filter(byClass('field'))
-  return { amount: fields[0], unit: fields[1], name: fields[2], aside: fields[3] }
+  const of = (kind) => fields.find(byClass(kind))
+  return { amount: of('amount'), unit: of('unit'), name: of('name'), aside: of('aside') }
 }
 
 /** Type into a row and leave it, which is what commits. */
@@ -120,7 +121,12 @@ function stepNamed(screen, verb) {
   if (!isOpen(cell)) tap(cell)
   const open = cellNamed(screen, verb)
   const fields = all(open).filter(byClass('field'))
-  return { cell: open, verb: fields[0], note: fields[1], before: fields.slice(2) }
+  return {
+    cell: open,
+    verb: fields.find(byClass('verb')),
+    note: fields.find(byClass('note')),
+    before: fields.filter(byClass('before')),
+  }
 }
 
 /** Name the step that has no name yet: the one `Process in step` has just made. */

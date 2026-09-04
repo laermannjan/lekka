@@ -83,8 +83,8 @@ test('a strand shorter than its sibling is pushed right, with its subtree', () =
   })
 })
 
-test('preparations sit over the step they precede, packed into band rows', () => {
-  const { band, columns } = buildGrid(
+test('the band holds only what the recipe itself says to do first', () => {
+  const { band, cells, columns } = buildGrid(
     parseCard(`# A
 * Kohle kaufen
 
@@ -97,16 +97,24 @@ test('preparations sit over the step they precede, packed into band rows', () =>
 `),
   )
   assert.equal(columns, 2)
+
+  // One row per preparation of the recipe, each spanning the whole table.
   assert.deepEqual(
     band.map((row) => row.map((entry) => [entry.node.text, entry.column, entry.columnSpan])),
-    [
-      [['Kohle kaufen', 0, 3]],
-      [
-        ['Grill indirekt heizen', 1, 1],
-        ['Grill direkt heizen', 2, 1],
-      ],
-    ],
+    [[['Kohle kaufen', 0, 3]]],
   )
+
+  // A preparation belonging to a step stays a child of that step, and is drawn in its
+  // cell: a column is worked out from how deep the strand is and moves when a step is
+  // inserted upstream, so binding to one would move the preparation with it.
+  const prepsOf = (verb) =>
+    cells
+      .find((cell) => cell.node.verb === verb)
+      .node.children.filter((child) => child.kind === 'preparation')
+      .map((child) => child.text)
+
+  assert.deepEqual(prepsOf('glasieren'), ['Grill direkt heizen'])
+  assert.deepEqual(prepsOf('räuchern'), ['Grill indirekt heizen'])
 })
 
 test('a free area is split where the step beside it changes', () => {

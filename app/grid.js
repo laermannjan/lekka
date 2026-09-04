@@ -24,15 +24,14 @@ export function buildForest(strands, preparations = []) {
   for (const strand of strands) measure(strand, rows, span)
 
   const cells = []
-  const attached = []
   const columns = Math.max(0, ...strands.map((strand) => span.get(strand).column))
-  for (const strand of strands) place(strand, columns, span, cells, attached)
+  for (const strand of strands) place(strand, columns, span, cells)
 
   return {
     rows,
     cells,
     frees: findFrees(occupy(rows, cells, columns)),
-    band: buildBand(preparations, attached, columns),
+    band: buildBand(preparations, columns),
     columns,
   }
 }
@@ -54,32 +53,28 @@ function measure(node, rows, span) {
   span.set(node, { row, rowSpan: rows.length - row, column: column + 1 })
 }
 
-function place(node, column, span, cells, attached) {
+function place(node, column, span, cells) {
   if (node.kind === 'ingredient') return
   const { row, rowSpan } = span.get(node)
   cells.push({ node, column, columnSpan: 1, row, rowSpan })
   for (const child of node.children)
-    if (child.kind === 'preparation') attached.push({ node: child, column, columnSpan: 1 })
-    else place(child, column - 1, span, cells, attached)
+    if (child.kind !== 'preparation') place(child, column - 1, span, cells)
 }
 
-function buildBand(global, attached, columns) {
-  const entries = [
-    ...global.map((node) => ({ node, column: 0, columnSpan: columns + 1 })),
-    ...attached.sort((a, b) => a.column - b.column),
-  ]
-
-  const band = []
-  for (const entry of entries) {
-    const row = band.find((row) => row.every((other) => !overlaps(other, entry)))
-    if (row) row.push(entry)
-    else band.push([entry])
-  }
-  return band
-}
-
-function overlaps(a, b) {
-  return a.column < b.column + b.columnSpan && b.column < a.column + a.columnSpan
+/*
+ * The band holds only what belongs to the recipe.
+ *
+ * A preparation belonging to a step is drawn inside that step's cell, above its verb,
+ * because that is what it is: something done before that step. Drawn in a band over the
+ * step's column it looked like a property of the column instead - and a column is worked
+ * out from how deep the strand is, so it moves whenever a step is inserted upstream. The
+ * step it precedes does not.
+ *
+ * Each one takes a row of its own, because each spans the whole table and two things
+ * spanning the whole table cannot share a line.
+ */
+function buildBand(global, columns) {
+  return global.map((node) => [{ node, column: 0, columnSpan: columns + 1 }])
 }
 
 function occupy(rows, cells, columns) {

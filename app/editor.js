@@ -243,7 +243,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
 
     const fields = opened.get(openAt)
     if (!fields) return
-    for (const field of Object.values(fields)) fit(field)
+    for (const field of fields.all ?? Object.values(fields)) fit(field)
     const caret = fields[want] ?? fields.verb ?? fields.amount
     caret?.focus?.()
     caret?.select?.()

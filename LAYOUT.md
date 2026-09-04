@@ -96,16 +96,20 @@ Above the ingredient rows, in this order:
 
 1. a **header row**: a label over the ingredient column, then the columns
    numbered from `01`.
-2. the **preparations**. One that belongs to a step sits in that step's column;
-   one written at the outermost level spans the full width, so it travels along
-   when the grid is scrolled sideways. Preparations whose columns do not touch
-   share a band row, otherwise a new row opens below.
+2. the **preparations belonging to the recipe**, one per row, each spanning the
+   full width, so they travel along when the grid is scrolled sideways.
 
 The header comes first because the column numbers say *when* a column happens: a
-preparation that happens before column four, drawn above the line that says which
-column four is, sits outside the table it belongs to. Under the header it reads
-as what it is - a row of the table that brings no ingredient, so the three
-ingredient fields beside it stand empty.
+preparation drawn above the line that says which column four is sits outside the
+table it belongs to. Under the header it reads as what it is - a row of the table
+that brings no ingredient, so the three ingredient fields beside it stand empty.
+
+**A preparation belonging to a step is drawn inside that step's cell**, above its
+verb, and never in the band. It is something done before that step, and a band
+over the step's column said instead that it belonged to the column - which is not
+a thing the format can express and not a thing that would survive editing, since
+a column is `max(column(input)) + 1` and moves whenever a step is inserted
+upstream. The step it precedes does not move.
 
 Notes about the recipe do **not** go into the grid, and neither does what it
 yields. They describe the whole recipe rather than a point in it, so they belong

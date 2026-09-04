@@ -155,16 +155,9 @@ export function renderGrid(grid, scale = 1, edit = null) {
   // the first thing every new card is, so this is the common case, not the corner.
   if (grid.columns === 0) table.classList.add('flat')
 
-  const writing = Boolean(edit?.onField)
-
-  /*
-   * Written, a preparation attached to a step is a field in that step's cell, so the
-   * band holds only the ones belonging to the recipe - and those are written in the
-   * specification, so here they are only drawn.
-   */
-  const band = writing
-    ? grid.band.map((row) => row.filter((entry) => entry.column === 0)).filter((row) => row.length)
-    : grid.band
+  // The band holds only what belongs to the recipe; a step's own preparations are drawn
+  // in its cell. Those are written in the specification, so here they are only drawn.
+  const band = grid.band
 
   const head = band.length
   // The row that adds an ingredient is a row of the table like any other, so it counts
@@ -427,8 +420,14 @@ function ingredientFields(node, scale, edit) {
   ]
 }
 
+/** A step's own preparations: what is done before it, drawn above it. */
+function preparationsOf(node) {
+  return (node.children ?? []).filter((child) => child.kind === 'preparation')
+}
+
 function stepField(node) {
   const cell = element('div', 'step')
+  for (const prep of preparationsOf(node)) cell.append(preparationField(prep))
   cell.append(element('div', 'verb', bind(node.verb)))
   if (node.aside) cell.append(element('div', 'note', bind(node.aside)))
   return cell
@@ -447,9 +446,9 @@ function stepField(node) {
  * whole point is that it is dense.
  */
 function writableStep(node, edit) {
-  const written = node.children
-    .filter((child) => child.kind === 'preparation')
-    .map((child) => (child.aside ? `${child.text} (${child.aside})` : child.text))
+  const written = preparationsOf(node).map((child) =>
+    child.aside ? `${child.text} (${child.aside})` : child.text,
+  )
 
   const read = () => ({
     verb: verb.value,
@@ -484,12 +483,20 @@ function writableStep(node, edit) {
   const verb = make('verb', node.verb, 'Step')
   const note = make('note', node.aside ?? '', 'Note')
   // One field per preparation, and one more, so another can be added by typing into it.
-  const befores = [...written, ''].map((line) => make('before', line, 'Before'))
+  // Above the verb, because that is when they happen.
+  const befores = [...written, ''].map((line) => make('before', line, 'Before it'))
 
-  edit.onDrawn?.(node, { verb, note, before: befores.at(-1) })
+  // `all` is what has to be sized; the names are what the caret can be sent to. A cell
+  // may hold several preparations, and every one of them wraps.
+  edit.onDrawn?.(node, {
+    verb,
+    note,
+    before: befores.at(-1),
+    all: [...befores, verb, note],
+  })
 
   const cell = element('div', 'step')
-  cell.append(verb, note, ...befores)
+  cell.append(...befores, verb, note)
   return cell
 }
 
