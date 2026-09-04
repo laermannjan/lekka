@@ -222,12 +222,32 @@ inside them. A qualifier drops to its own line.
 
 ## Editing
 
+- **An ingredient row is written in place.** Its four values already have three
+  cells drawn for them, so writing one is those cells opened as fields rather
+  than a form put over the table. The fields keep the cell's own alignment and
+  colour, and the name and its qualifier sit side by side as they are read, so a
+  row being written is the height of a row being read.
+- A field commits when the caret leaves it, and the table is not drawn again -
+  the row already shows what was typed, and rebuilding it would take the caret
+  out of a row still being tabbed along. Only the faults and the specification
+  are brought up to date, because they are sums of what the rows say.
+- An empty amount, unit or qualifier shows a faint placeholder (`–`, `–`, `…`),
+  so an empty field can be found and hit.
+- `+ Ingredient` adds an empty row and puts the caret in it. There is no form to
+  fill in first: the row is the form, and a blank one is simply a fault until it
+  is not.
 - A tappable cell is marked by the cursor and by the amber wash under the
   pointer - never by a colour of its own.
 - A **chosen row** takes the amber across all three of its fields. There is no
   column of checkboxes: a row is chosen by holding it, or by shift or command
   clicking it, so writing costs the table no column that reading has to make room
-  for.
+  for. A click reaches the row through its fields, so shift still chooses from
+  anywhere in it; a press does not, because holding a row is how a thumb chooses
+  it and holding inside a field is how a thumb selects text.
+- **Deleting is done from the bar the ticked rows raise**, where what else would
+  go is already spelled out. It takes the rows themselves rather than what holds
+  them: `Process in step` asks what these rows belong to, because that is what a
+  new step would take, and deleting asks nothing.
 - The name of the recipe is a field in the heading; its yield, notes and
   preparations are fields in the specification. A preparation that belongs to a
   step is edited in that step's form, and one that belongs to the recipe has no

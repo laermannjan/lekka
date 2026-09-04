@@ -2,7 +2,7 @@ import { splitAside } from './card.js'
 import { buildForest } from './grid.js'
 import { nameSection, specification } from './page.js'
 import { renderGrid } from './render.js'
-import { ingredientSheet, stepSheet } from './sheet.js'
+import { stepSheet } from './sheet.js'
 import {
   candidates, parentOf, fieldsOf, validate, label, storedForm, beneath,
   addIngredient, addStep, editIngredient, editStep, removeNode, claim, upheaval, sweptBy,
@@ -39,6 +39,23 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   let anchor = null
   let saving = false
 
+  /** The report and the Save button now on the page, so a text edit can refresh them. */
+  let reported = null
+  let saveButton = null
+
+  /** The first field of each row now drawn, so a fault can put the caret in its row. */
+  let opened = new Map()
+
+  /** The specification now on the page. Weight and Time are sums of what the rows say,
+      so typing into a row has to be able to bring them up to date. */
+  let specified = null
+
+  const written = () => ({
+    onYields: (text) => amend({ yields: text.trim() === '' ? null : text.trim() }),
+    onNotes: (notes) => amend({ notes }),
+    onPreparations: (lines) => amend({ preparations: lines.map(asPreparation) }),
+  })
+
   // The table is rebuilt on every repaint, and a repaint happens on every tick. Without
   // this a wide card jumps back to its first column each time a row is chosen, which is
   // exactly while the cook is working across it.
@@ -58,6 +75,41 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
 
   /** A field of the heading or the specification, committed when the caret leaves it. */
   const amend = (fields) => change({ ...current, ...fields })
+
+  /*
+   * A field inside the table. Unlike everything else that changes the draft this does
+   * not repaint: the row already shows what was typed, nothing else on the screen is
+   * drawn from it, and rebuilding the table would take the caret out of the row while
+   * the cook is still tabbing along it. Only what does depend on it is refreshed - the
+   * faults, and whether Save is allowed.
+   */
+  function write(node, fields) {
+    current = editIngredient(current, node, fields)
+    dirty = true
+    notice = null
+    onChange?.(current)
+    resettle()
+  }
+
+  /** The report and Save brought up to date without the table being drawn again. */
+  function resettle() {
+    const faults = validate(current)
+    if (saveButton) saveButton.disabled = faults.length > 0 || !dirty || saving
+
+    const next = report(faults)
+    if (reported && next) reported.replaceWith(next)
+    else if (reported) reported.remove()
+    else if (next) box.insertBefore(next, box.children[1] ?? null)
+    reported = next
+
+    // Safe to rebuild: `resettle` only runs for a field in the table, so the caret is
+    // never in the specification when its fields are replaced.
+    const facts = specification(current, written())
+    if (specified && facts) specified.replaceWith(facts)
+    else if (specified) specified.remove()
+    else if (facts) box.append(facts)
+    specified = facts
+  }
 
   const rename = (title) => amend({ title })
 
@@ -84,19 +136,16 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   function paint() {
     const faults = validate(current)
     const across = scroller?.scrollLeft ?? 0
+    reported = report(faults)
     box.replaceChildren(
       ...[
         nameSection(current.title, rename),
-        report(faults),
+        reported,
         selection(),
         table(),
         actions(faults),
         hint(faults),
-        specification(current, {
-          onYields: (text) => amend({ yields: text.trim() === '' ? null : text.trim() }),
-          onNotes: (notes) => amend({ notes }),
-          onPreparations: (lines) => amend({ preparations: lines.map(asPreparation) }),
-        }),
+        (specified = specification(current, written())),
       ].filter(Boolean),
     )
     // Only once it is on the page does it have anything to scroll.
@@ -113,6 +162,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    */
   function actions(faults) {
     const save = element('button', 'go', 'Save')
+    saveButton = save
     save.disabled = faults.length > 0 || !dirty || saving
     save.onclick = async () => {
       if (saving) return
@@ -165,6 +215,19 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     const go = element('button', 'go', `Process in step`)
     go.onclick = () => openStep(null, taken)
 
+    /*
+     * Deleting used to live in the form a row opened. A row has no form now, and this
+     * is where the cascade is already spelled out, so this is where it belongs.
+     *
+     * It takes the rows themselves and not what holds them. `Process in step` asks what
+     * these rows currently belong to, because that is what a new step would take; this
+     * asks nothing - a ticked row is the ingredient on it, and the one row of a one-row
+     * card is that ingredient and not the step standing over it.
+     */
+    const rows = [...chosen]
+    const erase = element('button', 'quiet danger', rows.length > 1 ? 'Delete all' : 'Delete')
+    erase.onclick = () => drop(rows)
+
     const clear = button('Clear', () => {
       chosen = new Set()
       anchor = null
@@ -175,6 +238,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       element('span', 'label', `${chosen.size} chosen`),
       element('span', 'takes', taken.map(label).join(' + ')),
       go,
+      erase,
       clear,
     ])
 
@@ -226,7 +290,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
         continue
       }
       const line = element('button', 'fault', fault.message)
-      line.onclick = () => open(target)
+      line.onclick = () => reach(target)
       list.append(line)
     }
     return list
@@ -240,6 +304,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * exactly what it is.
    */
   function table() {
+    opened = new Map()
     const grid = buildForest(current.strands, current.preparations)
     const box = element('div', 'scroll')
     scroller = box
@@ -247,9 +312,11 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       renderGrid(grid, 1, {
         onPick: open,
         pickable,
+        onField: write,
+        onDrawn: (node, input) => opened.set(node, input),
         onChoose: choose,
         chosen: (node) => chosen.has(node),
-        onAdd: () => openIngredient(null),
+        onAdd: addRow,
         onStep: () => openStep(null, chosen.size > 0 ? claim(current, chosen) : null),
       }),
     )
@@ -267,10 +334,35 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     )
   }
 
+  /**
+   * A row, empty, with the caret in it. There is no form to fill in first: the row is
+   * the form, and one that is still blank is simply a fault until it is not.
+   */
+  function addRow() {
+    const next = addIngredient(current, {})
+    change(next)
+    opened.get(next.strands.at(-1))?.focus()
+  }
+
+  /**
+   * What a fault leads to. A step opens its form; a row has none, so the caret goes into
+   * it - which is what "the fault leads to the thing it is about" means once the thing
+   * is a row rather than a form.
+   */
+  function reach(node) {
+    if (node.kind === 'ingredient') return void opened.get(node)?.focus()
+    open(node)
+  }
+
   /* Opening a form. Which one a tap gets is decided by what was tapped. */
 
   function open(node) {
-    if (node.kind === 'ingredient') return openIngredient(node)
+    /*
+     * A tap on a row has nothing to open: the row is the form, and the field under the
+     * finger has already taken the caret. Moving it anywhere else would be taking it
+     * away from the cell that was actually pointed at.
+     */
+    if (node.kind === 'ingredient') return
     if (node.kind === 'step') return openStep(node)
     // A preparation is not a thing of its own: it belongs to a step, and is edited in
     // that step's form. One belonging to the recipe rather than to any step is written
@@ -281,20 +373,8 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
 
   /** A preparation the recipe owns has no form to open, so it is not offered as a tap. */
   function pickable(node) {
+    if (node.kind === 'ingredient') return false
     return node.kind !== 'preparation' || Boolean(parentOf(current, node))
-  }
-
-  function openIngredient(node) {
-    ingredientSheet({
-      heading: node ? 'Ingredient' : 'New ingredient',
-      fields: node ? fieldsOf(node) : {},
-      save: {
-        text: node ? 'Save' : 'Add',
-        run: (fields) => change(node ? editIngredient(current, node, fields) : addIngredient(current, fields)),
-      },
-      again: node ? null : { text: 'Add and another', run: (fields) => change(addIngredient(current, fields)) },
-      remove: node ? { text: 'Delete', run: () => drop(node) } : null,
-    })
   }
 
   /**
@@ -302,14 +382,18 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * taking its verb, its note and its preparations. Adding a step already says what it
    * would disturb before it does it; deleting has to as well, because there is no undo.
    */
-  function drop(node) {
-    const swept = sweptBy(current, node)
+  function drop(nodes) {
+    const taken = [].concat(nodes)
+    const swept = taken.flatMap((node) => sweptBy(current, node)).filter((node) => !taken.includes(node))
     if (swept.length > 0) {
-      const names = swept.map(label).join(', ')
-      if (!confirm(`Deleting ${label(node)} leaves ${names} with nothing, so ${swept.length === 1 ? 'it goes' : 'they go'} too. Delete anyway?`))
+      const names = [...new Set(swept.map(label))].join(', ')
+      const going = swept.length === 1 ? 'it goes' : 'they go'
+      if (!confirm(`Deleting ${taken.map(label).join(', ')} leaves ${names} with nothing, so ${going} too. Delete anyway?`))
         return
     }
-    change(removeNode(current, node))
+    let next = current
+    for (const node of taken) next = removeNode(next, node)
+    change(next)
   }
 
   /**
@@ -334,7 +418,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
               : addStep(current, { ...fields, inputs: taken ?? fields.inputs }),
           ),
       },
-      remove: node ? { text: 'Delete', run: () => drop(node) } : null,
+      remove: node ? { text: 'Delete', run: () => drop([node]) } : null,
     })
   }
 

@@ -68,26 +68,6 @@ function sheet(heading, build, { save, remove, again = null }) {
   return box
 }
 
-/** Amount, unit, name, note - one line of the card, in the order the line has them. */
-export function ingredientSheet({ fields = {}, heading, save, remove, again }) {
-  return sheet(
-    heading,
-    (form) => {
-      const amount = field(form, 'Amount', fields.amount, { inputMode: 'decimal', width: 'short' })
-      const unit = field(form, 'Unit', fields.unit, { width: 'short' })
-      const name = field(form, 'Name', fields.name)
-      const note = field(form, 'Note', fields.aside, { hint: 'Type 550, finely chopped' })
-      return () => ({
-        amount: amount.value,
-        unit: unit.value,
-        name: name.value,
-        aside: note.value,
-      })
-    },
-    { save, remove, again },
-  )
-}
-
 /**
  * Instruction, note, preparations, and what goes in.
  *

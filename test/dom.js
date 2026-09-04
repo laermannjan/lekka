@@ -55,6 +55,23 @@ class Element {
     this.parent = null
   }
 
+  /** Swapping one node for another in place, which is how a fault list is refreshed
+      without the table under it being drawn again. */
+  replaceWith(node) {
+    if (!this.parent) return
+    this.parent.children[this.parent.children.indexOf(this)] = node
+    node.parent = this.parent
+    this.parent = null
+  }
+
+  insertBefore(node, before) {
+    const at = before ? this.children.indexOf(before) : -1
+    node.parent = this
+    if (at === -1) this.children.push(node)
+    else this.children.splice(at, 0, node)
+    return node
+  }
+
   setAttribute(name, value) {
     this[name] = String(value)
   }

@@ -205,7 +205,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
     hold.style.gridArea = `${row} / 1 / span 1 / span ${NAME_COLUMN + waits}`
     if (last) hold.classList.add('lowest')
     if (edit?.chosen?.(node)) hold.classList.add('chosen')
-    for (const field of ingredientFields(node, scale)) {
+    for (const field of ingredientFields(node, scale, edit)) {
       // The reading view hides these a row at a time as steps take them over.
       field.node.dataset.row = String(index)
       area(field.node, field.column, field.columnSpan, 1, 1)
@@ -293,13 +293,76 @@ function preparationField(node) {
   return box
 }
 
-function ingredientFields(node, scale) {
+/**
+ * A row being written is the row itself, opened.
+ *
+ * The four values of an ingredient already have three cells drawn for them, so writing
+ * one is those cells turned into fields rather than a form put over the table. The
+ * fields keep the cell's own alignment and colour, so a row being written looks like the
+ * row it will be, and the amount and the unit stay two fields because that is what the
+ * line is: a number and what it counts.
+ */
+function writableFields(node, edit) {
+  const read = () => ({
+    amount: fields.amount.value,
+    unit: fields.unit.value,
+    name: fields.name.value,
+    aside: fields.aside.value,
+  })
+
+  const make = (className, value, placeholder) => {
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = `field ${className}`
+    input.value = value
+    input.placeholder = placeholder
+    // On change rather than on input: the draft is told when the caret leaves, so
+    // nothing is rebuilt under it and tabbing along a row is not interrupted.
+    input.onchange = () => edit.onField(node, read())
+    /*
+     * The row is also the target for choosing it, and the fields cover the whole of it.
+     * A click is let through, so shift and command still choose the row from anywhere in
+     * it; a press is not, because holding a row is how a thumb chooses it and holding
+     * inside a field is how a thumb selects text.
+     */
+    input.onpointerdown = (event) => event.stopPropagation()
+    return input
+  }
+
+  const amount = node.amount
+  const fields = {
+    amount: make('amount', amount ? formatAmount({ ...amount, unit: '' }) : '', '–'),
+    unit: make('unit', amount?.unit ?? '', '–'),
+    name: make('name', node.name, 'Name'),
+    aside: make('aside', node.aside ?? '', '…'),
+  }
+
+  // The editor keeps the field a row was drawn with, so a fault about that row can put
+  // the caret in it - which is what "the fault leads to the thing it is about" means
+  // once the thing is a row and not a form.
+  edit.onDrawn?.(node, fields.amount)
+
+  // Name and qualifier sit side by side, as they are read, so a row being written is
+  // the same height as one being read.
+  const names = element('div', 'names')
+  names.append(fields.name, fields.aside)
+
+  return [
+    { node: fields.amount, column: 1, columnSpan: 1 },
+    { node: fields.unit, column: 2, columnSpan: 1 },
+    { node: names, column: NAME_COLUMN, columnSpan: 1 },
+  ]
+}
+
+function ingredientFields(node, scale, edit) {
   // A slice can put a step where ingredients go, standing for everything it consumed.
   if (node.kind === 'step') {
     const box = element('div', 'carried', node.verb)
     if (node.aside) box.append(element('span', 'aside', node.aside))
     return [{ node: box, column: 1, columnSpan: NAME_COLUMN }]
   }
+
+  if (edit?.onField) return writableFields(node, edit)
 
   const amount = scaleAmount(node.amount, scale)
   const name = element('div', 'name')

@@ -1006,6 +1006,66 @@ textarea:focus {
 
 /* ---- writing ------------------------------------------------------------ */
 
+/*
+ * A field inside the table keeps the cell it replaced: the same alignment, the same
+ * colour, the same height. A row being written should look like the row it will be,
+ * so it is drawn as a recess in the cell rather than as a control laid over it.
+ */
+.grid .field {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  box-shadow: inset 1px 1px var(--shade);
+  color: inherit;
+  font: inherit;
+  height: auto;
+  min-width: 0;
+  padding: 0 3px;
+  top: 0;
+  width: 100%;
+}
+
+.grid .field:focus {
+  border-color: var(--link);
+  outline: 1px solid var(--link);
+  outline-offset: -2px;
+}
+
+.grid .field::placeholder {
+  color: var(--faint);
+  opacity: 1;
+}
+
+.grid .field.amount {
+  text-align: right;
+}
+
+.grid .field.unit,
+.grid .field.aside {
+  color: var(--grey);
+}
+
+/* The name and its qualifier sit side by side, as they are read. */
+.grid .names {
+  display: flex;
+  gap: 3px;
+  min-width: 0;
+}
+
+.grid .names .field.name {
+  flex: 3;
+}
+
+.grid .names .field.aside {
+  flex: 2;
+}
+
+/* A long press is how a row is chosen; inside a field it is how text is selected. */
+.hold.pickable .field {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .pickable {
   cursor: pointer;
 }

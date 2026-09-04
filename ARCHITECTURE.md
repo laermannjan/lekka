@@ -218,15 +218,25 @@ where its name can be changed.
 `Save` and `Cancel` sit under the table, where `Edit` stood a moment ago, so the
 button that leaves writing is in the place the button that entered it was.
 
-It has one button that adds, in the table rather than over it. `+ Ingredient`
-sits under the last ingredient, always in the same place, because a button that
-moves about is a button nobody finds twice. It asks for amount, unit, name and
-note, and what it makes is a new row with nothing to its right.
+**An ingredient is written in its own row.** Its four values already have three
+cells drawn for them, so writing one is those cells opened as fields rather than
+a form put over the table - amount, unit, and the name beside its qualifier.
+A field commits when the caret leaves it, and the table is deliberately *not*
+redrawn: the row already shows what was typed, nothing else is drawn from it, and
+rebuilding would take the caret out of a row still being tabbed along. Only the
+faults and the specification are refreshed, because those are sums of what the
+rows say.
 
-**A step is built by choosing rows.** Every row carries a checkbox in a column
-of its own, so tapping a row still opens the row and choosing it is a separate
-target the width of a finger. Ticked rows raise a bar saying what they came to,
-and `Process in step` turns them into one.
+`+ Ingredient` sits under the last ingredient, always in the same place, because
+a button that moves about is a button nobody finds twice. It adds an empty row
+and puts the caret in it; there is no form to fill in first.
+
+**A step is built by choosing rows.** A row is chosen by holding it, or by shift
+or command clicking it - there is no column of checkboxes, because a column that
+exists only while writing is a column the table has to make room for while
+reading. Ticked rows raise a bar saying what they came to, and `Process in step`
+turns them into one. Deleting is in that bar too, where the cascade is already
+spelled out, and it takes the rows themselves rather than what holds them.
 
 What a row *means* is not the ingredient on it. It is whatever currently holds
 that ingredient - the rightmost cell in the row, which by right alignment is the
@@ -263,18 +273,18 @@ nothing.
 Each fault is a line that leads to the node it is about. `Save` is off while
 any fault stands.
 
-Tapping a cell edits it, which needs the back-reference layout keeps: `renderGrid`
+Tapping a step edits it, which needs the back-reference layout keeps: `renderGrid`
 takes an `edit` object and hands back the node a cell was drawn from, so the
-editor never works out from a position in the DOM what was clicked. The three
-fields of an ingredient row all lead to the ingredient, because they are one
-line of the card split across three columns.
+editor never works out from a position in the DOM what was clicked. The same
+object carries the row fields the other way - `onField` when one is committed,
+`onDrawn` so a fault can put the caret in the row it is about.
 
-The checkboxes are the same drawing with one column in front. Only the editor
-has one, so only the editor carries the `choosing` class that puts the track
-there; everywhere else the arithmetic is what it always was, and the card is
-drawn by the same code either way. A count is deliberately not used for this:
-`repeat(0, …)` is not a valid track list, so a browser throws the whole
-template away and draws every element in the wrong place.
+The editor's table is the reading table with one column added, for `+ Step`. Only
+the editor has one, so only the editor carries the `choosing` class that puts the
+track there; everywhere else the arithmetic is what it always was, and the recipe
+is drawn by the same code either way. A count is deliberately not used for this:
+`repeat(0, …)` is not a valid track list, so a browser throws the whole template
+away and draws every element in the wrong place.
 
 **Punctuation is structure.** A colon splits an ingredient line and brackets are
 the aside, so neither may sit inside a name, a verb or a note. This is checked
