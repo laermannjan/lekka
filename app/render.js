@@ -25,9 +25,9 @@ export function renderCard(card, scale = 1, edit = null) {
  * that node back on a click is the whole back-reference, so the editor never has to work
  * out from a position in the DOM what was clicked.
  *
- *   `onPick(node)`     a cell was tapped
- *   `onChoose(...)`    a row was chosen, or a run of them
- *   `onAdd()`          draw a row under the last ingredient that adds one
+ *   `onOpen(node, field)`  a cell was tapped, and which of its fields
+ *   `onChoose(node, on)`   a box was ticked or unticked
+ *   `onAdd()`              draw a row under the last ingredient that adds one
  *
  * Choosing happens in boxes, and a box stands for an **input** rather than for a row.
  * A step takes whole strands, so unticking one row of a strand it swallowed is not a
@@ -54,7 +54,6 @@ export function renderGrid(grid, scale = 1, edit = null) {
    * column: it is a control nobody uses.
    */
   const ticks = edit?.onChoose ? 1 : 0
-  const boxed = (node) => Boolean(edit?.boxFor?.(node))
   const lead = NAME_COLUMN + ticks
   const put = (node, spec) => place(node, grid, spec, lead)
 
@@ -67,48 +66,6 @@ export function renderGrid(grid, scale = 1, edit = null) {
   for (const cell of grid.cells)
     for (const child of cell.node.children)
       if (child.kind === 'ingredient') takenBy.set(child, cell.column)
-  const pick = (box, node) => {
-    if (!edit?.onPick) return box
-    // A cell with no form behind it is not offered as a tap. A preparation the recipe
-    // owns is the one such cell: it is written in the specification, not in a sheet.
-    if (edit.pickable && !edit.pickable(node)) return box
-    box.classList.add('pickable')
-    box.onclick = () => edit.onPick(node)
-    return box
-  }
-
-  /*
-   * Taking a set of rows at once: a column number takes what stands under it. Holding it
-   * and clicking it with a modifier are the same act, so they are wired together here -
-   * the hold is the only one a thumb has.
-   */
-  /*
-   * A press held on a control. Six pixels of drift is a hand holding still, not a drag,
-   * which is the same threshold the reading view uses; a pixel used to call the press
-   * off and lose the row. The callout is suppressed because a long press on a phone
-   * would otherwise raise the selection menu over whatever it has just chosen.
-   */
-  const onHold = (box, run) => {
-    let waiting = null
-    let from = null
-    const drop = () => { if (waiting) clearTimeout(waiting); waiting = null }
-    box.addEventListener?.('pointerdown', (event) => {
-      from = { x: event?.clientX ?? 0, y: event?.clientY ?? 0 }
-      waiting = setTimeout(() => { waiting = null; run() }, 450)
-    })
-    box.addEventListener?.('pointerup', drop)
-    box.addEventListener?.('pointercancel', drop)
-    box.addEventListener?.('pointermove', (event) => {
-      if (!waiting || !from) return
-      const moved = Math.max(
-        Math.abs((event?.clientX ?? 0) - from.x),
-        Math.abs((event?.clientY ?? 0) - from.y),
-      )
-      if (moved > 6) drop()
-    })
-    box.addEventListener?.('contextmenu', (event) => event?.preventDefault?.())
-  }
-
   /* A step, as a target: a tap opens its cell, and opening it ticks what goes into it. */
   const stepTarget = (box, node, open) => {
     if (!edit?.onOpen || !open) return box
@@ -116,29 +73,6 @@ export function renderGrid(grid, scale = 1, edit = null) {
     box.onclick = () => edit.onOpen(node, 'verb')
     return box
   }
-
-  const takes = (box, gather) => {
-    if (!edit?.onChoose) return box
-    const run = () => {
-      const nodes = gather()
-      if (nodes.length === 0) return
-      edit.onChoose(nodes, !nodes.every((node) => edit.chosen(node)), false)
-    }
-    box.classList.add('pickable')
-    let took = false
-    box.onclick = (event) => {
-      if (took) return void (took = false)
-      if (event?.shiftKey || event?.ctrlKey || event?.metaKey) run()
-    }
-    onHold(box, () => { took = true; run() })
-    return box
-  }
-
-  /*
-   * A row is chosen in its box and opened by a tap on its cells, and those are two
-   * different targets, so neither has to ask what modifier was held.
-   */
-  const choosable = (box, node) => pick(box, node)
 
   const table = element('div', 'grid')
   table.style.setProperty('--columns', grid.columns)
@@ -178,7 +112,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
   band.forEach((entries, index) => {
     const ends = new Set(entries.map((entry) => entry.column + entry.columnSpan - 1))
     for (const entry of entries) {
-      const box = pick(preparationField(entry.node, entry.column === 0), entry.node)
+      const box = preparationField(entry.node, entry.column === 0)
       if (ends.has(entry.column - 1)) box.classList.add('joined')
       if (entry.column === 0) {
         box.style.gridColumn = '1 / -1'
@@ -212,10 +146,6 @@ export function renderGrid(grid, scale = 1, edit = null) {
    */
   for (let column = 1; column <= grid.columns; column++) {
     const box = element('div', 'label', pad(numbers[column - 1]))
-    takes(box, () =>
-      grid.cells
-        .filter((cell) => cell.column === column)
-        .flatMap((cell) => grid.rows.slice(cell.row, cell.row + cell.rowSpan)))
     table.append(put(box, {
       column: lead + column, columnSpan: 1, row: 1, rowSpan: 1,
     }))
@@ -238,16 +168,11 @@ export function renderGrid(grid, scale = 1, edit = null) {
       // The reading view hides these a row at a time as steps take them over.
       field.node.dataset.row = String(index)
       area(field.node, field.column, field.columnSpan, 1, 1)
-      // A plain tap on a cell opens the row it belongs to, with the caret in that cell.
-      // A modifier is left to bubble, because that is how the row is chosen.
-      if (edit?.onOpen && field.field)
-        field.node.onclick = (event) => {
-          if (event?.shiftKey || event?.ctrlKey || event?.metaKey) return
-          edit.onOpen(node, field.field)
-        }
+      // A tap on a cell opens the row it belongs to, with the caret in that cell.
+      if (edit?.onOpen && field.field) field.node.onclick = () => edit.onOpen(node, field.field)
       hold.append(field.node)
     }
-    choosable(hold, node)
+    if (edit?.onOpen) hold.classList.add('pickable')
     table.append(hold)
   })
 
@@ -261,7 +186,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
     const open = edit?.openAt === cell.node
     const box = open
       ? stepTarget(writableStep(cell.node, edit), cell.node, false)
-      : stepTarget(pick(stepField(cell.node, edit), cell.node), cell.node, true)
+      : stepTarget(stepField(cell.node, edit), cell.node, true)
     const holder = element('div', 'holds')
     area(box, 1, 1, 1, 1)
     holder.append(box)
@@ -371,13 +296,6 @@ function writableFields(node, edit) {
     // On change rather than on input: the draft is told when the caret leaves, so
     // nothing is rebuilt under it and tabbing along a row is not interrupted.
     input.onchange = () => edit.onField(node, read())
-    /*
-     * The row is also the target for choosing it, and the fields cover the whole of it.
-     * A click is let through, so shift and command still choose the row from anywhere in
-     * it; a press is not, because holding a row is how a thumb chooses it and holding
-     * inside a field is how a thumb selects text.
-     */
-    input.onpointerdown = (event) => event.stopPropagation()
     return input
   }
 
@@ -443,11 +361,6 @@ function ingredientFields(node, scale, edit, ticks = 0) {
 }
 
 /**
- * The box a row is chosen with. Nothing else chooses one now: the shift-click and the
- * long press that stood in for this went with it, so there is one way to tick a row and
- * it is drawn. Shift still extends from the last box touched, which is what shift is for.
- */
-/**
  * The box an input is chosen with. Only the things the open step may take have one, so
  * the column is empty until a step is opened and holds nothing that would be a lie.
  */
@@ -462,6 +375,9 @@ function tickBox(node, edit, className = 'ticker') {
     event?.stopPropagation?.()
     edit.onChoose(node, input.checked)
   }
+  // Handed back like a field: ticking one draws the table again, and the caret has to
+  // be put on the box drawn in this one's place or the keyboard cannot reach the next.
+  edit.onTicked?.(node, input)
   box.append(input)
   return box
 }
@@ -524,8 +440,6 @@ function writableStep(node, edit) {
       event.preventDefault?.()
       input.blur?.()
     }
-    // As on a row: a click reaches the cell, a press does not.
-    input.onpointerdown = (event) => event.stopPropagation()
     return input
   }
 

@@ -1167,9 +1167,6 @@ textarea:focus {
  * The placeholder is what says it.
  */
 
-/* A long press is how a row or a step is chosen; inside a field it is how text is
-   selected. */
-.hold.pickable .field,
 .step .field {
   -webkit-touch-callout: default;
   -webkit-user-select: text;
@@ -1180,21 +1177,26 @@ textarea:focus {
   cursor: pointer;
 }
 
-.pickable:hover,
-.pickable:focus-visible {
+/*
+ * What a tap would open. A step's cell lights up whole; a row lights its cells, because
+ * the row is a container the cells sit in and a colour on it is drawn under them.
+ *
+ * Grey, not amber. Amber is what a row that is going into the open step is painted, and
+ * a hover that used the same colour would say the row had been chosen by pointing at it.
+ */
+.step.pickable:hover,
+.step.pickable:focus-visible {
   background: var(--amber);
+}
+
+.hold.pickable:hover > * {
+  background: var(--shade);
 }
 
 .hold.chosen > *,
+.hold.pickable.chosen:hover > *,
 .step.chosen {
   background: var(--amber);
-}
-
-.hold.pickable {
-  cursor: pointer;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
 }
 
 /*
