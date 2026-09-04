@@ -177,6 +177,9 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     chosen = new Set(beneath(node))
     anchor = null
     notice = null
+    // The cell closes: what is being chosen is rows, and they have to be readable.
+    openAt = null
+    want = null
     paint()
   }
 
@@ -326,7 +329,18 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       onClose()
     })
 
-    return element('div', 'bar after', undefined, [save, leave])
+    /*
+     * What goes into a step is not something the step says about itself, so it is not a
+     * field in its cell: it is rows, ticked in the table. Shift and a long press have
+     * always said so, and neither is visible - a step you have opened has to be able to
+     * tell you that its inputs can be changed at all.
+     */
+    const inputs =
+      openAt?.kind === 'step'
+        ? button(`Choose what goes into ${label(openAt)}`, () => pickStep(openAt))
+        : null
+
+    return element('div', 'bar after', undefined, [save, leave, inputs].filter(Boolean))
   }
 
   /**

@@ -262,7 +262,10 @@ themselves rather than what holds them.
 
 **A step's inputs are chosen the same way.** Shift or a long press on a step ticks
 the rows it holds; from there they are ticked and unticked like any others, and
-`Apply` reads back what they now come to. That question is asked of the step's
+`Apply` reads back what they now come to. A modifier nobody can see is a way in
+nobody finds, so a step whose cell is open says it in words: the bar under the
+table carries `Choose what goes into <the step>`, and taking it closes the cell,
+since what is being chosen is rows and they have to be readable. That question is asked of the step's
 *candidates* - its own inputs, plus whatever is still loose outside it - and not
 of `claim`, which answers "what holds these rows" and would climb past the step
 being edited: from inside a step, every row of it is also every row of the step

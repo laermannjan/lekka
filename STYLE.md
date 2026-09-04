@@ -280,9 +280,15 @@ inside them. A qualifier drops to its own line.
   for. A click reaches the row through its fields, so shift still chooses from
   anywhere in it; a press does not, because holding a row is how a thumb chooses
   it and holding inside a field is how a thumb selects text.
-- **Shift, command or a long press on a step** says "these rows are what goes
-  in": it ticks what the step holds, and from there rows are ticked and unticked
-  like any others. The bar then offers `Apply` instead of `Process in step`.
+- **What goes into a step is chosen in the table**, not in its cell: it is rows,
+  and a step's cell holds only what the step says about itself. Shift, command or
+  a long press on a step ticks what it holds, and from there rows are ticked and
+  unticked like any others; the bar then offers `Apply` instead of `Process in
+  step`.
+- A step you have opened offers it in words, because a modifier nobody can see is
+  a way in nobody finds: while a step's cell is open, the bar under the table
+  carries `Choose what goes into <the step>`. Choosing closes the cell, because
+  what is being chosen is rows and they have to be readable.
 - **Deleting is done from the bar the ticked rows raise**, where what else would
   go is already spelled out. It takes the rows themselves rather than what holds
   them: `Process in step` asks what these rows belong to, because that is what a
