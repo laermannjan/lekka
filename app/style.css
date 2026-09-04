@@ -1192,6 +1192,25 @@ textarea:focus {
   -webkit-touch-callout: none;
 }
 
+/*
+ * The box a row is chosen with. It sits in a column of its own in front of the table,
+ * so it is a target the width of a finger and not a modifier nobody can see.
+ */
+.ticker {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  padding: 0;
+}
+
+.tick {
+  accent-color: var(--accent);
+  cursor: pointer;
+  height: 15px;
+  margin: 0;
+  width: 15px;
+}
+
 .grid > .add {
   background: var(--shade);
   color: var(--grey);

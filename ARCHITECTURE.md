@@ -252,10 +252,18 @@ pinned to the visible part of the table and centred in that, so they stay where
 the eye is while the table scrolls under them. Whichever view drew the table
 measures that width into `--room`.
 
-**A step is built by choosing rows.** A row is chosen by holding it, or by shift
-or command clicking it - there is no column of checkboxes, because a column that
-exists only while writing is a column the table has to make room for while
-reading. Ticked rows raise a bar saying what they came to, and `Process in step`
+**A step is built by choosing rows**, ticked in a column of boxes in front of the
+table and drawn only while writing. Shift on a box extends the run from the last
+one touched; the box at the head of the column takes every row. Ticking a row and
+opening it are different targets, so neither has to ask what modifier was held.
+
+That column was left out once, to save horizontal space - but it is never drawn
+while reading, which is where space is short, and the editor already spends a
+column on `+ Step`. What the saving bought was two gestures nobody could see, and
+a control nobody can see is not cheaper than a column: it is a control nobody
+uses.
+
+Ticked rows raise a bar saying what they came to, and `Process in step`
 makes an unnamed step from them and puts the caret in its verb. Deleting is in
 that bar too, where the cascade is already spelled out, and it takes the rows
 themselves rather than what holds them.

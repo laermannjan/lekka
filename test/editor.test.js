@@ -152,12 +152,13 @@ const openStep = (screen, verb) => tap(cellNamed(screen, verb), { shiftKey: true
 /* Choosing rows. The row itself is the target: shift-click with a mouse, long press
    with a thumb. There is no column of checkboxes to aim at any more. */
 
-/** Choose the row whose ingredient name matches, in the order the tables are drawn. */
+/** Choose the row whose ingredient name matches, by its box, as a hand would. */
 function tick(screen, name, shift = false) {
-  const grid = onlyTable(screen)
-  const at = named(grid).indexOf(name)
+  const at = named(screen).indexOf(name)
   if (at === -1) throw new Error(`no row named ${name}`)
-  return tap(all(grid).filter(byClass('hold'))[at], { shiftKey: shift, ctrlKey: !shift })
+  const box = one(holdsOf(screen)[at], byClass('tick'), `tick for ${name}`)
+  box.checked = !box.checked
+  return box.onclick({ shiftKey: shift })
 }
 
 const process = (screen) => click(screen, 'Process in step')
@@ -520,15 +521,20 @@ test('naming the last ingredient of a step warns that the step goes too', () => 
   assert.deepEqual(shown(screen).sort(), ['braten', 'mischen', 'schmelzen', 'verrühren'])
 })
 
-test('the heading takes the whole strand, and lets it go again', () => {
+test('the box at the head of the column takes every row, and lets them go again', () => {
   const { screen } = open(WITH_BUTTER)
-  const heading = () =>
-    all(all(screen).filter(byClass('grid')).at(-1)).filter(byClass('heading'))[0]
+  // The head of the tick column, which is the one box outside any row.
+  const all_ = () =>
+    all(onlyTable(screen)).filter((node) => byClass('tick')(node) && !byClass('hold')(node.parent.parent))[0]
 
-  tap(heading(), { ctrlKey: true })
+  const box = all_()
+  box.checked = true
+  box.onclick({})
   assert.equal(takes(screen), 'braten')
 
-  tap(heading(), { ctrlKey: true })
+  const again = all_()
+  again.checked = false
+  again.onclick({})
   assert.equal(all(screen).filter(byClass('takes')).length, 0)
 })
 

@@ -2,6 +2,11 @@ import { DURATION } from './facts.js'
 import { buildGrid } from './grid.js'
 import { formatAmount, scaleAmount } from './amount.js'
 
+/*
+ * Where the ingredient block ends when nothing is being written. Writing puts a column
+ * of ticks in front of it, so everything after moves one column right; the arithmetic
+ * below reads `lead`, which is this plus that column when there is one.
+ */
 const NAME_COLUMN = 3
 const UNIT = /(\d)\s+(?=[^\s\d]{1,3}(?:[\s,]|$))/g
 
@@ -24,16 +29,27 @@ export function renderCard(card, scale = 1, edit = null) {
  *   `onChoose(...)`    a row was chosen, or a run of them
  *   `onAdd()`          draw a row under the last ingredient that adds one
  *
- * Choosing happens on the row itself - shift-click with a mouse, a long press with a
- * thumb - rather than in a column of checkboxes down the left. A column that exists only
- * while writing is a column the card has to make room for, and on a phone that is eight
- * per cent of the screen spent on a control used only when building a step.
+ * Choosing happens in a column of boxes down the left, drawn only while writing. It was
+ * once a shift-click and a long press instead, to save the column - but the column is
+ * only ever spent on a table being written, where the editor already spends one on
+ * `+ Step`, and what it bought was two gestures nobody could see.
  */
 export function renderGrid(grid, scale = 1, edit = null) {
   // A slice of the card numbers its columns with the places they hold in the whole of
   // it, so the header still says when this is.
   const numbers = grid.numbers ?? Array.from({ length: grid.columns }, (_, index) => index + 1)
-  const put = (node, spec) => place(node, grid, spec)
+  /*
+   * A column of checkboxes, in front of the table and only while it is being written.
+   *
+   * It was taken out once, on the grounds that a column costs horizontal space and space
+   * is what this table is short of. That is true of a table being read, and this column
+   * is never drawn there - it belongs to the editor, like `+ Step`. What replaced it was
+   * a shift-click and a long press, and a control nobody can see is not cheaper than a
+   * column: it is a control nobody uses.
+   */
+  const ticks = edit?.onChoose ? 1 : 0
+  const lead = NAME_COLUMN + ticks
+  const put = (node, spec) => place(node, grid, spec, lead)
 
   /*
    * What takes each ingredient, so its cell can be given the columns it waits through.
@@ -55,10 +71,9 @@ export function renderGrid(grid, scale = 1, edit = null) {
   }
 
   /*
-   * Taking a set of rows at once: a heading takes what stands under it. Holding it and
-   * clicking it with a modifier are the same act, so they are wired together here - the
-   * hold is the only one a thumb has, and without it a phone could not take a strand at
-   * all once the column of checkboxes went.
+   * Taking a set of rows at once: a column number takes what stands under it. Holding it
+   * and clicking it with a modifier are the same act, so they are wired together here -
+   * the hold is the only one a thumb has.
    */
   /*
    * A press held on a control. Six pixels of drift is a hand holding still, not a drag,
@@ -125,24 +140,10 @@ export function renderGrid(grid, scale = 1, edit = null) {
   }
 
   /*
-   * A row is chosen on the row itself, not in a column of checkboxes: hold to take one,
-   * shift to take the run from the last one touched. A plain tap still opens the row,
-   * which is what a tap on a cell has always meant, so the three never collide.
+   * A row is chosen in its box and opened by a tap on its cells, and those are two
+   * different targets, so neither has to ask what modifier was held.
    */
-  const choosable = (box, node) => {
-    if (!edit?.onChoose) return pick(box, node)
-    box.classList.add('pickable')
-    // A press that has already chosen the row must not also open it on the way up.
-    let took = false
-    box.onclick = (event) => {
-      if (took) return void (took = false)
-      if (event?.shiftKey) return edit.onChoose([node], !edit.chosen(node), true)
-      if (event?.ctrlKey || event?.metaKey) return edit.onChoose([node], !edit.chosen(node), false)
-      if (edit.onPick) edit.onPick(node)
-    }
-    onHold(box, () => { took = true; edit.onChoose([node], !edit.chosen(node), false) })
-    return box
-  }
+  const choosable = (box, node) => pick(box, node)
 
   const table = element('div', 'grid')
   table.style.setProperty('--columns', grid.columns)
@@ -187,18 +188,32 @@ export function renderGrid(grid, scale = 1, edit = null) {
       if (entry.column === 0) {
         box.style.gridColumn = '1 / -1'
         box.style.gridRow = String(index + 2)
-      } else area(box, NAME_COLUMN + entry.column, entry.columnSpan, index + 2, 1)
+      } else area(box, lead + entry.column, entry.columnSpan, index + 2, 1)
       table.append(box)
     }
   })
 
+  /*
+   * The box at the head of the tick column takes every row, which is what choosing all
+   * of them means. It used to be the heading itself, on a modifier click - the same
+   * invisible gesture the rows had, and it goes the same way.
+   */
+  if (ticks && grid.rows.length > 0) {
+    const all = element('div', 'ticker label')
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.className = 'tick'
+    input.checked = grid.rows.every((row) => edit.chosen?.(row))
+    input.onclick = () => edit.onChoose(grid.rows, input.checked, false)
+    all.append(input)
+    area(all, 1, 1, 1, 1)
+    table.append(all)
+  }
+
   // The reading view puts steps in this column too, so it names it for what it holds.
   const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
-  label.style.gridColumn = `1 / ${NAME_COLUMN + 1}`
+  label.style.gridColumn = `${1 + ticks} / ${lead + 1}`
   label.style.gridRow = '1'
-  // The heading takes the whole strand, which is what choosing every row of it means;
-  // it is where the header checkbox used to be.
-  if (grid.rows.length > 0) takes(label, () => grid.rows)
   table.append(label)
   /*
    * A column number takes the rows the steps in that column stand on - what this moment
@@ -213,7 +228,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
         .filter((cell) => cell.column === column)
         .flatMap((cell) => grid.rows.slice(cell.row, cell.row + cell.rowSpan)))
     table.append(put(box, {
-      column: NAME_COLUMN + column, columnSpan: 1, row: 1, rowSpan: 1,
+      column: lead + column, columnSpan: 1, row: 1, rowSpan: 1,
     }))
   }
 
@@ -227,10 +242,10 @@ export function renderGrid(grid, scale = 1, edit = null) {
     // is waiting rather than as a rectangle worked out separately.
     const waits = (takenBy.get(node) ?? grid.columns + 1) - 1
     const hold = element('div', 'hold')
-    hold.style.gridArea = `${row} / 1 / span 1 / span ${NAME_COLUMN + waits}`
+    hold.style.gridArea = `${row} / 1 / span 1 / span ${lead + waits}`
     if (last) hold.classList.add('lowest')
     if (edit?.chosen?.(node)) hold.classList.add('chosen')
-    for (const field of ingredientFields(node, scale, edit)) {
+    for (const field of ingredientFields(node, scale, edit, ticks)) {
       // The reading view hides these a row at a time as steps take them over.
       field.node.dataset.row = String(index)
       area(field.node, field.column, field.columnSpan, 1, 1)
@@ -262,7 +277,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
     area(box, 1, 1, 1, 1)
     holder.append(box)
     table.append(put(holder, {
-      column: NAME_COLUMN + cell.column, columnSpan: 1,
+      column: lead + cell.column, columnSpan: 1,
       row: head + 2 + cell.row, rowSpan: cell.rowSpan,
       last: head + 1 + cell.row + cell.rowSpan === bottom,
     }))
@@ -278,7 +293,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
   for (const free of grid.frees) {
     const box = element('div', free.into ? 'free open' : 'free')
     table.append(put(box, {
-      column: NAME_COLUMN + free.column, columnSpan: free.columnSpan,
+      column: lead + free.column, columnSpan: free.columnSpan,
       row: head + 2 + free.row, rowSpan: free.rowSpan,
       last: head + 1 + free.row + free.rowSpan === bottom,
     }))
@@ -290,12 +305,12 @@ export function renderGrid(grid, scale = 1, edit = null) {
     const box = element('div', 'add', '+ Ingredient')
     box.onclick = edit.onAdd
     table.append(put(box, {
-      column: 1, columnSpan: NAME_COLUMN, row: bottom, rowSpan: 1, last: true,
+      column: 1, columnSpan: lead, row: bottom, rowSpan: 1, last: true,
     }))
     // and the rest of that row, so the table has an edge along its whole width.
     if (grid.columns > 0)
       table.append(put(element('div', 'free'), {
-        column: NAME_COLUMN + 1, columnSpan: grid.columns, row: bottom, rowSpan: 1, last: true,
+        column: lead + 1, columnSpan: grid.columns, row: bottom, rowSpan: 1, last: true,
       }))
   }
 
@@ -307,7 +322,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
     box.onclick = edit.onStep
     // Everything under the head: the band, every row, and the row that adds one.
     table.append(put(box, {
-      column: NAME_COLUMN + grid.columns + 1,
+      column: lead + grid.columns + 1,
       columnSpan: 1,
       row: 2,
       rowSpan: bottom - 1,
@@ -402,15 +417,21 @@ function writableFields(node, edit) {
   ]
 }
 
-function ingredientFields(node, scale, edit) {
+function ingredientFields(node, scale, edit, ticks = 0) {
+  const shift = (fields) =>
+    ticks
+      ? [{ node: tickBox(node, edit), column: 1, columnSpan: 1, field: 'tick' },
+         ...fields.map((one) => ({ ...one, column: one.column + ticks }))]
+      : fields
+
   // A slice can put a step where ingredients go, standing for everything it consumed.
   if (node.kind === 'step') {
     const box = element('div', 'carried', node.verb)
     if (node.aside) box.append(element('span', 'aside', node.aside))
-    return [{ node: box, column: 1, columnSpan: NAME_COLUMN }]
+    return shift([{ node: box, column: 1, columnSpan: NAME_COLUMN }])
   }
 
-  if (edit?.openAt === node) return writableFields(node, edit)
+  if (edit?.openAt === node) return shift(writableFields(node, edit))
 
   const amount = scaleAmount(node.amount, scale)
   const name = element('div', 'name')
@@ -418,16 +439,32 @@ function ingredientFields(node, scale, edit) {
   if (node.aside) name.append(element('span', 'aside', node.aside))
 
   if (amount?.kind === 'words')
-    return [
+    return shift([
       { node: element('div', 'words', amount.text), column: 1, columnSpan: 2, field: 'amount' },
       { node: name, column: NAME_COLUMN, columnSpan: 1, field: 'name' },
-    ]
+    ])
 
-  return [
+  return shift([
     { node: element('div', 'amount', amount ? formatAmount({ ...amount, unit: '' }) : ''), column: 1, columnSpan: 1, field: 'amount' },
     { node: element('div', 'unit', amount?.unit ?? ''), column: 2, columnSpan: 1, field: 'unit' },
     { node: name, column: NAME_COLUMN, columnSpan: 1, field: 'name' },
-  ]
+  ])
+}
+
+/**
+ * The box a row is chosen with. Nothing else chooses one now: the shift-click and the
+ * long press that stood in for this went with it, so there is one way to tick a row and
+ * it is drawn. Shift still extends from the last box touched, which is what shift is for.
+ */
+function tickBox(node, edit) {
+  const box = element('div', 'ticker')
+  const input = document.createElement('input')
+  input.type = 'checkbox'
+  input.className = 'tick'
+  input.checked = Boolean(edit.chosen?.(node))
+  input.onclick = (event) => edit.onChoose([node], input.checked, Boolean(event?.shiftKey))
+  box.append(input)
+  return box
 }
 
 /** A step's own preparations: what is done before it, drawn above it. */
@@ -517,9 +554,9 @@ export function fit(area) {
   area.style.height = `${area.scrollHeight}px`
 }
 
-function place(node, grid, { column, columnSpan, row, rowSpan, last }) {
+function place(node, grid, { column, columnSpan, row, rowSpan, last }, lead) {
   area(node, column, columnSpan, row, rowSpan)
-  if (column + columnSpan - 1 === NAME_COLUMN + grid.columns) node.classList.add('rightmost')
+  if (column + columnSpan - 1 === lead + grid.columns) node.classList.add('rightmost')
   if (last) node.classList.add('lowest')
   return node
 }

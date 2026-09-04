@@ -274,12 +274,17 @@ inside them. A qualifier drops to its own line.
   says it.
 - A tappable cell is marked by the cursor and by the amber wash under the
   pointer - never by a colour of its own.
-- A **chosen row** takes the amber across all three of its fields. There is no
-  column of checkboxes: a row is chosen by holding it, or by shift or command
-  clicking it, so writing costs the table no column that reading has to make room
-  for. A click reaches the row through its fields, so shift still chooses from
-  anywhere in it; a press does not, because holding a row is how a thumb chooses
-  it and holding inside a field is how a thumb selects text.
+- **A row is chosen in a box**, in a column of its own in front of the table,
+  drawn only while writing. Shift on a box extends the run from the last one
+  touched, and the box at the head of the column takes every row.
+  A **chosen row** takes the amber across all of its fields.
+  The column was left out once, to save the horizontal space a table being read
+  is short of - but it is never drawn there, and the editor already spends a
+  column on `+ Step`. What the saving bought was a shift-click and a long press,
+  and a control nobody can see is not cheaper than a column: it is a control
+  nobody uses.
+- Ticking a row and opening it are different targets, so neither has to ask what
+  modifier was held.
 - **What goes into a step is chosen in the table**, not in its cell: it is rows,
   and a step's cell holds only what the step says about itself. Shift, command or
   a long press on a step ticks what it holds, and from there rows are ticked and
