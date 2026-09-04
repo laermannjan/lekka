@@ -227,17 +227,19 @@ inside them. A qualifier drops to its own line.
   verb, note and preparations are fields in its cell, and what the recipe
   yields, its notes and the preparations belonging to it are fields in the
   specification.
-- **An ingredient row is written in place.** Its four values already have three
-  cells drawn for them, so writing one is those cells opened as fields rather
-  than a form put over the table. The fields keep the cell's own alignment and
-  colour, and the name and its qualifier sit side by side as they are read, so a
-  row being written is the height of a row being read.
-- A field commits when the caret leaves it, and the table is not drawn again -
-  the row already shows what was typed, and rebuilding it would take the caret
-  out of a row still being tabbed along. Only the faults and the specification
-  are brought up to date, because they are sums of what the rows say.
-- An empty amount, unit or qualifier shows a faint placeholder (`–`, `–`, `…`),
-  so an empty field can be found and hit.
+- **One cell is open at a time.** Everything else stays exactly as it is read.
+  A field is one line and cuts where a cell wraps, so a table of nothing but
+  fields is a table that cannot be read while it is being written in - which is
+  the one thing the editor must not cost.
+- **A tap opens the cell it lands on**, with the caret in that cell and its text
+  selected, so typing replaces it. Tapping a row opens all four of its fields,
+  because they are one line of the recipe split across three cells and tab should
+  run along them. Tapping a step opens that step's cell alone.
+- A cell commits when the caret leaves it, or on enter, and goes back to being
+  read. The fields keep the cell's own alignment and colour, and a step's fields
+  wrap and grow the way the cell they replaced does.
+- An empty amount, unit or qualifier shows a faint placeholder (`–`, `–`, `…`)
+  in the row that is open, so an empty field can be found and hit.
 - `+ Ingredient` adds an empty row and puts the caret in it, and `Process in
   step` makes an unnamed step and puts the caret in that. There is no form to
   fill in first: the thing is made and then named, and a blank one is simply a
@@ -247,11 +249,9 @@ inside them. A qualifier drops to its own line.
   it belongs with the step - it is one of the things the step says about itself,
   and a band cell has nothing to say about which step it is attached to. So the
   band holds nothing while writing.
-- **A note and an empty preparation stay out of sight** until the cell is reached
-  for. Both are rare, and a field on every cell of every step would be noise on a
+- **An empty note or preparation stays out of sight** until the cell is reached
+  for. Both are rare, and three visible fields on every step would be noise on a
   table whose whole point is that it is dense.
-- Writing, a step column is wider than reading gives it: a cell being read wraps
-  its verb, and a field is one line and cuts instead.
 - A tappable cell is marked by the cursor and by the amber wash under the
   pointer - never by a colour of its own.
 - A **chosen row** takes the amber across all three of its fields. There is no

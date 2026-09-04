@@ -87,21 +87,21 @@ export function renderGrid(grid, scale = 1, edit = null) {
   }
 
   /*
-   * A step, as a target. A plain click goes into whichever field was pointed at; shift,
-   * command or a long press says "these rows are what goes in", which is the same
-   * grammar a row is chosen with.
+   * A step, as a target. A plain tap opens its cell; shift, command or a long press says
+   * "these rows are what goes in", which is the same grammar a row is chosen with.
    */
-  const held = (box, node) => {
-    if (!edit?.onEditStep) return box
+  const stepTarget = (box, node, open) => {
+    if (!edit?.onEditStep && !edit?.onOpen) return box
     box.classList.add('pickable')
     let took = false
     box.onclick = (event) => {
       if (took) return void (took = false)
-      if (event?.shiftKey || event?.ctrlKey || event?.metaKey) edit.onEditStep(node)
+      if (event?.shiftKey || event?.ctrlKey || event?.metaKey) return edit.onEditStep?.(node)
+      if (open) edit.onOpen?.(node, 'verb')
     }
     onHold(box, () => {
       took = true
-      edit.onEditStep(node)
+      edit.onEditStep?.(node)
     })
     return box
   }
@@ -240,6 +240,13 @@ export function renderGrid(grid, scale = 1, edit = null) {
       // The reading view hides these a row at a time as steps take them over.
       field.node.dataset.row = String(index)
       area(field.node, field.column, field.columnSpan, 1, 1)
+      // A plain tap on a cell opens the row it belongs to, with the caret in that cell.
+      // A modifier is left to bubble, because that is how the row is chosen.
+      if (edit?.onOpen && field.field)
+        field.node.onclick = (event) => {
+          if (event?.shiftKey || event?.ctrlKey || event?.metaKey) return
+          edit.onOpen(node, field.field)
+        }
       hold.append(field.node)
     }
     choosable(hold, node)
@@ -253,9 +260,10 @@ export function renderGrid(grid, scale = 1, edit = null) {
    * it arrives. That is the roll.
    */
   for (const cell of grid.cells) {
-    const box = writing
-      ? held(writableStep(cell.node, edit), cell.node)
-      : pick(stepField(cell.node), cell.node)
+    const open = edit?.openAt === cell.node
+    const box = open
+      ? stepTarget(writableStep(cell.node, edit), cell.node, false)
+      : stepTarget(pick(stepField(cell.node), cell.node), cell.node, true)
     const holder = element('div', 'holds')
     area(box, 1, 1, 1, 1)
     holder.append(box)
@@ -334,6 +342,10 @@ function preparationField(node) {
  * fields keep the cell's own alignment and colour, so a row being written looks like the
  * row it will be, and the amount and the unit stay two fields because that is what the
  * line is: a number and what it counts.
+ *
+ * Only the row being written is opened. Every other row stays as it is read, because a
+ * field is one line and cuts where a cell wraps: a table of nothing but fields is a
+ * table you cannot read while writing in it.
  */
 function writableFields(node, edit) {
   const read = () => ({
@@ -373,7 +385,7 @@ function writableFields(node, edit) {
   // The editor keeps the field a row was drawn with, so a fault about that row can put
   // the caret in it - which is what "the fault leads to the thing it is about" means
   // once the thing is a row and not a form.
-  edit.onDrawn?.(node, fields.amount)
+  edit.onDrawn?.(node, fields)
 
   // Name and qualifier sit side by side, as they are read, so a row being written is
   // the same height as one being read.
@@ -395,7 +407,7 @@ function ingredientFields(node, scale, edit) {
     return [{ node: box, column: 1, columnSpan: NAME_COLUMN }]
   }
 
-  if (edit?.onField) return writableFields(node, edit)
+  if (edit?.openAt === node) return writableFields(node, edit)
 
   const amount = scaleAmount(node.amount, scale)
   const name = element('div', 'name')
@@ -404,14 +416,14 @@ function ingredientFields(node, scale, edit) {
 
   if (amount?.kind === 'words')
     return [
-      { node: element('div', 'words', amount.text), column: 1, columnSpan: 2 },
-      { node: name, column: NAME_COLUMN, columnSpan: 1 },
+      { node: element('div', 'words', amount.text), column: 1, columnSpan: 2, field: 'amount' },
+      { node: name, column: NAME_COLUMN, columnSpan: 1, field: 'name' },
     ]
 
   return [
-    { node: element('div', 'amount', amount ? formatAmount({ ...amount, unit: '' }) : ''), column: 1, columnSpan: 1 },
-    { node: element('div', 'unit', amount?.unit ?? ''), column: 2, columnSpan: 1 },
-    { node: name, column: NAME_COLUMN, columnSpan: 1 },
+    { node: element('div', 'amount', amount ? formatAmount({ ...amount, unit: '' }) : ''), column: 1, columnSpan: 1, field: 'amount' },
+    { node: element('div', 'unit', amount?.unit ?? ''), column: 2, columnSpan: 1, field: 'unit' },
+    { node: name, column: NAME_COLUMN, columnSpan: 1, field: 'name' },
   ]
 }
 
@@ -445,13 +457,25 @@ function writableStep(node, edit) {
     preparations: befores.map((field) => field.value.trim()).filter(Boolean),
   })
 
+  /*
+   * A textarea and not an input: a step's verb is often longer than the column it stands
+   * in, a cell being read wraps it, and a field that cuts instead would make writing the
+   * one place the card cannot be read. It grows to whatever it holds, and enter commits
+   * rather than adding a line the format has no room for.
+   */
   const make = (className, value, placeholder) => {
-    const input = document.createElement('input')
-    input.type = 'text'
+    const input = document.createElement('textarea')
+    input.rows = 1
     input.className = `field ${className}`
     input.value = value
     input.placeholder = placeholder
     input.onchange = () => edit.onField(node, read())
+    input.oninput = () => fit(input)
+    input.onkeydown = (event) => {
+      if (event?.key !== 'Enter') return
+      event.preventDefault?.()
+      input.blur?.()
+    }
     // As on a row: a click reaches the cell, a press does not.
     input.onpointerdown = (event) => event.stopPropagation()
     return input
@@ -462,11 +486,18 @@ function writableStep(node, edit) {
   // One field per preparation, and one more, so another can be added by typing into it.
   const befores = [...written, ''].map((line) => make('before', line, 'Before'))
 
-  edit.onDrawn?.(node, verb)
+  edit.onDrawn?.(node, { verb, note, before: befores.at(-1) })
 
   const cell = element('div', 'step')
   cell.append(verb, note, ...befores)
   return cell
+}
+
+/** A field as tall as what it holds. Guarded: a stub DOM measures nothing. */
+export function fit(area) {
+  if (!area || typeof area.scrollHeight !== 'number') return
+  area.style.height = 'auto'
+  area.style.height = `${area.scrollHeight}px`
 }
 
 function place(node, grid, { column, columnSpan, row, rowSpan, last }) {

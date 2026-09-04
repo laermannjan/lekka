@@ -218,23 +218,27 @@ where its name can be changed.
 `Save` and `Cancel` sit under the table, where `Edit` stood a moment ago, so the
 button that leaves writing is in the place the button that entered it was.
 
-**An ingredient is written in its own row.** Its four values already have three
-cells drawn for them, so writing one is those cells opened as fields rather than
-a form put over the table - amount, unit, and the name beside its qualifier.
-A field commits when the caret leaves it, and the table is deliberately *not*
-redrawn: the row already shows what was typed, nothing else is drawn from it, and
-rebuilding would take the caret out of a row still being tabbed along. Only the
-faults and the specification are refreshed, because those are sums of what the
-rows say.
+**A cell is written where it is drawn, one at a time.** A tap opens the cell it
+lands on, with the caret in it and its text selected; everything else stays
+exactly as it is read. That last part is the whole design: a field is one line
+and cuts where a cell wraps, so a table of nothing but fields is a table nobody
+can read while writing in it. Opening every cell at once was tried first and was
+the thing that made it unusable.
+
+An ingredient's four values already have three cells drawn for them, so a tap on
+any of them opens all four - they are one line of the recipe split across three
+cells, and tab should run along them. A cell commits when the caret leaves it, or
+on enter, and goes back to being read.
 
 `+ Ingredient` sits under the last ingredient, always in the same place, because
 a button that moves about is a button nobody finds twice. It adds an empty row
 and puts the caret in it; there is no form to fill in first.
 
 **A step is written in its cell too** - its verb, its note, and the preparations
-attached to it. A preparation is drawn over the step's column while the recipe is
-read, which is when it happens; written, it belongs with the step, so the band
-holds nothing while writing.
+attached to it, as fields that wrap and grow the way the cell they replaced does.
+A preparation is drawn over the step's column while the recipe is read, which is
+when it happens; written, it belongs with the step, so the band holds nothing
+while writing.
 
 **A step is built by choosing rows.** A row is chosen by holding it, or by shift
 or command clicking it - there is no column of checkboxes, because a column that

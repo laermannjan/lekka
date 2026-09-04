@@ -1,7 +1,7 @@
 import { splitAside } from './card.js'
 import { buildForest } from './grid.js'
 import { nameSection, specification } from './page.js'
-import { renderGrid } from './render.js'
+import { fit, renderGrid } from './render.js'
 import {
   candidates, fieldsOf, validate, label, storedForm, beneath,
   addIngredient, addStep, editIngredient, editStep, removeNode, claim, upheaval, sweptBy,
@@ -38,13 +38,23 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   let anchor = null
   /** The step whose inputs are being chosen, if the cook is choosing them. */
   let editing = null
+
+  /**
+   * The one cell that is open, and which of its fields the caret goes to.
+   *
+   * One at a time: a field is a single line and cuts where a cell wraps, so a table of
+   * nothing but fields is a table that cannot be read while it is being written in. The
+   * rest of the recipe stays exactly as it is read.
+   */
+  let openAt = null
+  let want = null
   let saving = false
 
   /** The report and the Save button now on the page, so a text edit can refresh them. */
   let reported = null
   let saveButton = null
 
-  /** The first field of each row now drawn, so a fault can put the caret in its row. */
+  /** The fields of the open cell, so a fault or a tap can put the caret in one. */
   let opened = new Map()
 
   /** The specification now on the page. Weight and Time are sums of what the rows say,
@@ -71,6 +81,8 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     chosen = new Set()
     anchor = null
     editing = null
+    openAt = null
+    want = null
     onChange?.(current)
     paint()
   }
@@ -86,6 +98,9 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * faults, and whether Save is allowed.
    */
   function write(node, fields) {
+    // The cell has said what it holds, so it goes back to being read.
+    openAt = null
+    want = null
     // A step keeps whatever it holds: only what the cell showed is being written.
     const was = node.kind === 'step' ? fieldsOf(node) : null
     current =
@@ -96,11 +111,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     notice = null
     onChange?.(current)
 
-    // A preparation added or dropped changes how many fields the cell has, and that is
-    // the one thing a cell being written cannot show without being drawn again. The
-    // caret has already left it, so redrawing costs nothing here.
-    if (was && fields.preparations.length !== was.preparations.length) return paint()
-    resettle()
+    paint()
   }
 
   /** The report and Save brought up to date without the table being drawn again. */
@@ -198,6 +209,20 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     return current.strands.flatMap(beneath)
   }
 
+  /** Open a cell, with the caret in the field that was tapped. */
+  function reveal(node, field) {
+    openAt = node
+    want = field
+    paint()
+  }
+
+  function shut() {
+    if (!openAt) return
+    openAt = null
+    want = null
+    paint()
+  }
+
   function paint() {
     const faults = validate(current)
     const across = scroller?.scrollLeft ?? 0
@@ -215,6 +240,13 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     )
     // Only once it is on the page does it have anything to scroll.
     if (scroller) scroller.scrollLeft = across
+
+    const fields = opened.get(openAt)
+    if (!fields) return
+    for (const field of Object.values(fields)) fit(field)
+    const caret = fields[want] ?? fields.verb ?? fields.amount
+    caret?.focus?.()
+    caret?.select?.()
   }
 
   /**
@@ -339,7 +371,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     const next = addStep(current, { verb: '', aside: '', preparations: [], inputs: taken })
     const made = next.strands.find((strand) => !before.has(strand))
     change(next)
-    opened.get(made)?.focus()
+    reveal(made, 'verb')
   }
 
   /**
@@ -396,6 +428,8 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     scroller = box
     box.append(
       renderGrid(grid, 1, {
+        openAt,
+        onOpen: reveal,
         onField: write,
         onEditStep: pickStep,
         onDrawn: (node, input) => opened.set(node, input),
@@ -426,7 +460,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   function addRow() {
     const next = addIngredient(current, {})
     change(next)
-    opened.get(next.strands.at(-1))?.focus()
+    reveal(next.strands.at(-1), 'amount')
   }
 
   /**
@@ -435,7 +469,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * "the fault leads to the thing it is about" means once nothing opens a form.
    */
   function reach(node) {
-    opened.get(node)?.focus()
+    reveal(node, node.kind === 'ingredient' ? 'name' : 'verb')
   }
 
   /**

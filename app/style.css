@@ -818,15 +818,10 @@ textarea:focus {
   grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(120px, 240px));
 }
 
-/*
- * Writing, a step column is wider than reading gives it. A cell being read wraps its
- * verb over as many lines as it needs; a field is one line and cuts instead, so the
- * column has to hold more of it. The table is already the thing that scrolls sideways,
- * so the room comes out of the scroll and not out of anything else.
- */
+/* The editor's table is the reading table with one column added, for `+ Step`. */
 .grid.choosing {
   grid-template-columns:
-    58px 54px max-content repeat(var(--columns), minmax(120px, 340px)) 46px;
+    58px 54px max-content repeat(var(--columns), minmax(120px, 240px)) 46px;
 }
 
 .grid.flat {
@@ -1016,6 +1011,10 @@ textarea:focus {
  * A field inside the table keeps the cell it replaced: the same alignment, the same
  * colour, the same height. A row being written should look like the row it will be,
  * so it is drawn as a recess in the cell rather than as a control laid over it.
+ *
+ * Only the cell being written is a field. Everything else stays as it is read, because
+ * a field is one line and cuts where a cell wraps: a table of nothing but fields is a
+ * table that cannot be read while it is being written in.
  */
 .grid .field {
   background: var(--paper);
@@ -1066,9 +1065,14 @@ textarea:focus {
 }
 
 /* A step being written stacks its fields: what it does, its note, and what has to
-   happen before it. */
+   happen before it. They wrap and grow, because a verb is often longer than the column
+   it stands in and a cell being read wraps it too. */
 .grid .step .field {
+  display: block;
+  line-height: 1.35;
   margin: 0 auto;
+  overflow: hidden;
+  resize: none;
   text-align: center;
   width: calc(100% - 2px);
 }

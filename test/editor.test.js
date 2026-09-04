@@ -65,15 +65,30 @@ const submit = () => {
   sheet().close()
 }
 
-/* Writing a row. The row is the form: its four values are four fields in three cells,
-   and each of them commits the whole row when the caret leaves it. */
+/* Writing a cell. Cells are drawn as they are read until one is tapped, and only the
+   one tapped is opened, so every helper here opens before it types. */
 
-/** The four fields of the nth ingredient row of the one table. */
-function rowOf(screen, index) {
-  const holds = all(onlyTable(screen)).filter(byClass('hold'))
-  const hold = holds[index]
-  if (!hold) throw new Error(`no row ${index} of ${holds.length}`)
-  const fields = all(hold).filter(byClass('field'))
+const holdsOf = (screen) => all(onlyTable(screen)).filter(byClass('hold'))
+// `+ Step` is `add step`, and is a button rather than a cell.
+const stepCells = (screen) =>
+  all(onlyTable(screen)).filter((node) => byClass('step')(node) && !byClass('add')(node))
+
+/** What a cell says, whether it is open or drawn as it is read. */
+function says(cell, kind) {
+  const field = all(cell).find((node) => byClass('field')(node) && byClass(kind)(node))
+  if (field) return field.value
+  const shownAs = all(cell).find(byClass(kind === 'verb' ? 'verb' : 'noun'))
+  return shownAs ? plain(shownAs) : ''
+}
+
+const isOpen = (cell) => all(cell).some(byClass('field'))
+
+/** Open the nth ingredient row and hand back its four fields. */
+function rowOf(screen, index, at = 'name') {
+  const hold = holdsOf(screen)[index]
+  if (!hold) throw new Error(`no row ${index} of ${holdsOf(screen).length}`)
+  if (!isOpen(hold)) tap(one(hold, byClass(at), at))
+  const fields = all(holdsOf(screen)[index]).filter(byClass('field'))
   return { amount: fields[0], unit: fields[1], name: fields[2], aside: fields[3] }
 }
 
@@ -88,9 +103,45 @@ function write(screen, index, values) {
 /** Add an ingredient the way a person does: a row, then type into it. */
 function enter(screen, values) {
   click(screen, '+ Ingredient')
-  const rows = all(onlyTable(screen)).filter(byClass('hold')).length
-  return write(screen, rows - 1, values)
+  return write(screen, holdsOf(screen).length - 1, values)
 }
+
+/** The step cell whose verb reads this, left as it is drawn. */
+function cellNamed(screen, verb) {
+  const found = stepCells(screen).find((cell) => says(cell, 'verb') === verb)
+  if (!found)
+    throw new Error(`no step "${verb}" among ${JSON.stringify(stepCells(screen).map((c) => says(c, 'verb')))}`)
+  return found
+}
+
+/** Open the step whose verb reads this, and hand back its fields. */
+function stepNamed(screen, verb) {
+  const cell = cellNamed(screen, verb)
+  if (!isOpen(cell)) tap(cell)
+  const open = cellNamed(screen, verb)
+  const fields = all(open).filter(byClass('field'))
+  return { cell: open, verb: fields[0], note: fields[1], before: fields.slice(2) }
+}
+
+/** Name the step that has no name yet: the one `Process in step` has just made. */
+function nameStep(screen, verb, values = {}) {
+  const step = stepNamed(screen, '')
+  step.verb.value = verb
+  if (values.note !== undefined) step.note.value = values.note
+  if (values.before !== undefined) step.before.at(-1).value = values.before
+  step.verb.onchange()
+  return step
+}
+
+/** Rename a step where it stands. */
+function rename(screen, from, to) {
+  const step = stepNamed(screen, from)
+  step.verb.value = to
+  step.verb.onchange()
+}
+
+/** Shift on a step says "these rows are what goes into it". */
+const openStep = (screen, verb) => tap(cellNamed(screen, verb), { shiftKey: true })
 
 /* Choosing rows. The row itself is the target: shift-click with a mouse, long press
    with a thumb. There is no column of checkboxes to aim at any more. */
@@ -106,53 +157,13 @@ function tick(screen, name, shift = false) {
 const process = (screen) => click(screen, 'Process in step')
 
 /** Every step cell of the one table, with the fields it is written in. */
-const stepsOf = (screen) =>
-  all(onlyTable(screen))
-    .filter(byClass('step'))
-    .map((cell) => {
-      const fields = all(cell).filter(byClass('field'))
-      return { cell, verb: fields[0], note: fields[1], before: fields.slice(2) }
-    })
-
-const stepNamed = (screen, verb) => {
-  const found = stepsOf(screen).find((step) => step.verb.value === verb)
-  if (!found)
-    throw new Error(`no step "${verb}" among ${JSON.stringify(stepsOf(screen).map((s) => s.verb.value))}`)
-  return found
-}
-
-/** Name the step that has no name yet: the one `Process in step` has just made. */
-function nameStep(screen, verb, values = {}) {
-  const step = stepNamed(screen, '')
-  step.verb.value = verb
-  if (values.note !== undefined) step.note.value = values.note
-  if (values.before !== undefined) step.before.at(-1).value = values.before
-  step.verb.onchange()
-  return step
-}
-
-/** Shift on a step says "these rows are what goes into it". */
-const openStep = (screen, verb) => tap(stepNamed(screen, verb).cell, { shiftKey: true })
-
-/** Rename a step where it stands. */
-function rename(screen, from, to) {
-  const step = stepNamed(screen, from)
-  step.verb.value = to
-  step.verb.onchange()
-}
 const takes = (screen) => one(screen, byClass('takes'), 'takes').textContent
 
 /** What the editor drew, as the card's own text does not exist until it is saved. */
 const plain = (node) => node.textContent.replace(/\u00a0/g, ' ')
-const shown = (screen) =>
-  all(screen)
-    .filter((node) => node.tag === 'input' && byClass('verb')(node))
-    .map((node) => node.value)
-/** Every ingredient row of the one table, top to bottom, as the rows now spell it. */
-const named = (screen) =>
-  all(screen)
-    .filter((node) => node.tag === 'input' && byClass('name')(node))
-    .map((node) => node.value)
+const shown = (screen) => stepCells(screen).map((cell) => says(cell, 'verb'))
+/** Every ingredient row of the one table, top to bottom, open or not. */
+const named = (screen) => holdsOf(screen).map((hold) => says(hold, 'name'))
 
 /** There is one table. An unused ingredient is a row in it, not a table of its own. */
 function onlyTable(screen) {
