@@ -59,6 +59,10 @@ const WAITING = `# Waiting
     - Zucker: 2 EL
 `
 
+/* A card too wide for the window, which is where reading and writing used to part
+   company: the reading view capped its ingredient names at 200px and wrapped them. */
+const LONG = await readFile(new URL('../test/cards/roggenquarkbrot.lekka', import.meta.url), 'utf8')
+
 /**
  * The checks, as the page runs them. Each one says what it is asking in the words the
  * code uses, so a failure reads as a sentence about the app rather than a line number.
@@ -71,6 +75,7 @@ import { toDraft, addIngredient } from './edit.js'
 
 const TEXT = ${JSON.stringify(CARD)}
 const WAITING = ${JSON.stringify(WAITING)}
+const LONG = ${JSON.stringify(LONG)}
 const said = []
 const check = (name, ok, detail = '') =>
   said.push(\`\${ok ? 'PASS' : 'FAIL'} \${name}\${detail ? \` :: \${detail}\` : ''}\`)
@@ -221,6 +226,18 @@ const onCell = document.elementFromPoint((cell.left + cell.right) / 2, (cell.top
 check('a row is pointed at by its own cells', again.contains(onCell), onCell?.className)
 
 /*
+ * Density. A row is a line of a recipe, and a line should say itself in a line: the
+ * ingredient names were held to 200px while a card was being read, so a qualifier
+ * broke onto its own line and half the table was air. Both views size their columns
+ * by the same rule now, so a recipe is the same shape either way.
+ */
+const tall = document.createElement('div')
+document.getElementById('screen').append(tall)
+tall.append(renderReading(parseCard(LONG), 1, 0, { onAt: () => {}, onFits: () => {} }))
+const written = buildEditor({ draft: toDraft(parseCard(LONG)), onSave: async () => null, onClose: () => {} })
+document.getElementById('screen').append(written)
+
+/*
  * A preparation stands over the column of the step it comes before, above the head of
  * the table. Both halves of that are measured: which column it is over, and that it is
  * above the line that names the columns rather than below it.
@@ -230,6 +247,21 @@ document.getElementById('screen').append(narrow)
 narrow.append(renderReading(parseCard(TEXT), 1, 0, { onAt: () => {}, onFits: () => {} }))
 
 requestAnimationFrame(() => {
+  const linesOf = (root) => {
+    const heights = [...root.querySelectorAll('.grid > .hold')].map((one) =>
+      one.getBoundingClientRect().height)
+    return { least: Math.min(...heights), most: Math.max(...heights) }
+  }
+  for (const [name, root] of [['read', tall], ['written', written]]) {
+    const { least, most } = linesOf(root)
+    check(\`every row says itself in one line, \${name}\`, most < least * 1.4,
+      \`\${least.toFixed(1)} to \${most.toFixed(1)}\`)
+  }
+  const columns = (root) => getComputedStyle(root.querySelector('.grid')).gridTemplateColumns
+  check('and the two views size their columns alike',
+    columns(tall).split(' ').slice(3, -1).join(' ') === columns(written).split(' ').slice(3, -1).join(' '),
+    columns(tall) + '  vs  ' + columns(written))
+
   const table = narrow.querySelector('.grid')
   const prep = table.querySelector('.preparation')
   const heading = table.querySelector('.label.heading')

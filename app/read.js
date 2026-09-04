@@ -53,7 +53,6 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false } = {
        table is laid out at `max-content` - so a card still wearing the ones the last pass
        gave it can never be found to fit again, and reading is a one-way door. */
     box.classList.remove('reading')
-    table.style.removeProperty('--cap')
     table.style.removeProperty('--tail')
     table.style.removeProperty('zoom')
 
@@ -84,8 +83,11 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false } = {
       return
     }
 
+    // What the Done place is measured from, and the room left after it for the last
+    // step to be scrolled into. The step columns are capped in the stylesheet at the
+    // same 240px the table takes when it fits; they used to be capped at this width
+    // instead, which tied every column to how wide the ingredient names happened to be.
     const lead = table.querySelector('.heading')?.getBoundingClientRect().width ?? 0
-    table.style.setProperty('--cap', lead + 'px')
     table.style.setProperty('--tail', Math.max(0, room - lead) + 'px')
 
     const widths = getComputedStyle(table).gridTemplateColumns.split(' ').map(Number.parseFloat)

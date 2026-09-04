@@ -104,13 +104,28 @@ async function showCard(id, key, state = {}) {
   const fitting = fitter(id, key, here)
 
   page(key ? `/r/${id}/${key}` : `/r/${id}`)
+  /*
+   * Nothing between the heading and the table but the heading itself.
+   *
+   * The scale and the fit used to sit above it, beside what they change - which was the
+   * right instinct and the wrong place, because writing has nothing to put there and the
+   * table jumped up by the height of that row the moment `Edit` was pressed, out from
+   * under the pointer that had just pressed it. Under the table both views begin at the
+   * same line, and the page has one row of furniture instead of two.
+   *
+   * The two kinds are still told apart, by a gap: what changes how the recipe is drawn
+   * on the left, what changes the recipe itself past it.
+   */
   show(
     section(card.title),
-    // What changes how the recipe is drawn sits above it, beside what it changes.
-    bar(scales(id, key, here), fitting.button),
     body(card, id, key, here, fitting.tell),
-    // What changes the recipe itself sits past it, out of the way of reading.
-    after(composer(id, key, card), keeper(id, key, here)),
+    after(
+      scales(id, key, here),
+      fitting.button,
+      element('span', 'spring'),
+      composer(id, key, card),
+      keeper(id, key, here),
+    ),
     specification(card),
   )
 }

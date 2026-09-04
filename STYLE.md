@@ -180,6 +180,13 @@ line of words, which is what a tag is for.
 Column widths: amount 58 px, unit 54 px, a step column between 120 and 240 px.
 Rows are at least 21 px with 2 px of vertical padding.
 
+**A column is as wide as what stands in it, up to 240 px**, and a name column as
+wide as its longest name up to 300. Both views size their columns by that one
+rule, so a recipe is the same shape written as read. Reading held the names to
+200 and every column to the width of the ingredient block, which wrapped a
+qualifier onto its own line and left half the table as air: a line of a recipe
+should say itself in a line.
+
 The table is **as wide as it needs to be**, up to the width of the sheet. One
 that fits is drawn whole; only one that does not scrolls sideways.
 
@@ -307,6 +314,14 @@ inside them. A qualifier drops to its own line.
 - `+ Ingredient` adds an empty row and opens the form on it. There is no form to
   fill in first: the thing is made and then named, and a blank one is simply a
   fault until it is not.
+- **Nothing sits between the heading and the table.** The scale and the fit used
+  to, beside what they change - the right instinct in the wrong place, because
+  writing has nothing to put there and the table jumped up by the height of that
+  row the moment `Edit` was pressed, out from under the pointer that pressed it.
+  They are under the table now, with a gap between them and the acts that change
+  the recipe itself.
+- **The name is the same box read and written**: same height, same baseline, same
+  left edge. Pressing `Edit` puts a field around the name it is already on.
 - **`Save` and `Cancel` are the only buttons on the page**, under the table where
   `Edit` stood a moment ago. What can be done to one row or one step is done in
   the form, where that row or step is.
