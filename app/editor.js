@@ -74,6 +74,35 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
 
   const box = element('div', 'editor')
 
+  /*
+   * What a band spanning the whole table is centred in. The reading view measures this
+   * as it settles; here nothing settles, so it is measured after each repaint and again
+   * when the window changes.
+   *
+   * After the repaint, not during it: the first one happens while the editor is still
+   * being built and has not been put on the page, so there is nothing to measure yet -
+   * and the resize listener is only taken out once it has been, or the first paint would
+   * cancel the watch before it began.
+   */
+  let watching = false
+  const measure = () => {
+    const grid = scroller?.firstElementChild
+    if (!box.isConnected || !grid || typeof scroller.clientWidth !== 'number') return
+    grid.style.setProperty('--room', `${scroller.clientWidth}px`)
+    if (watching) return
+    watching = true
+    globalThis.window?.addEventListener('resize', onResize)
+  }
+
+  /* A card is drawn afresh on every save and every step back, and the old editor is
+     thrown away without being told. Being out of the document is what that looks like. */
+  const onResize = () => {
+    if (!box.isConnected) return globalThis.window?.removeEventListener('resize', onResize)
+    measure()
+  }
+
+  const remeasure = () => (globalThis.requestAnimationFrame ?? ((run) => run()))(measure)
+
   const change = (next) => {
     current = next
     dirty = true
@@ -240,6 +269,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     )
     // Only once it is on the page does it have anything to scroll.
     if (scroller) scroller.scrollLeft = across
+    remeasure()
 
     const fields = opened.get(openAt)
     if (!fields) return

@@ -171,8 +171,9 @@ thing lifted out of a line of words, which is what a tag is for.
   it from the body, not a fill.
 - A preparation belonging to the **recipe** is a row under the head, on the wash
   colour, spanning everything, with the three ingredient fields beside it empty.
-  It is left aligned, because a table can be three times the width of the screen
-  and centred text would sit in the middle of a scroll nobody has made yet.
+  Its words are pinned to the part of the table you can see and centred in that:
+  a table can be three times the width of the screen, and words centred across all
+  of it sit in the middle of a scroll nobody has made.
   One belonging to a **step** is drawn inside that step's cell, above its verb, as
   a tag on the wash: it is something done before that step, and a band over the
   step's column said instead that it belonged to the column.

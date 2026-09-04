@@ -58,6 +58,8 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false } = {
     table.style.removeProperty('zoom')
 
     const room = scroll.clientWidth
+    // What a band spanning the whole table is centred in: the part of it you can see.
+    table.style.setProperty('--room', `${room}px`)
     const natural = table.scrollWidth
     const whole = natural <= room + 1
     onFits?.(whole)

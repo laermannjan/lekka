@@ -922,11 +922,19 @@ textarea:focus {
 
 /*
  * One belonging to the recipe spans the whole table, and a table can be three times the
- * width of the screen - centred, its text sat in the middle of a scroll nobody has made
- * yet. It starts where reading starts.
+ * width of the screen - centred across all of it, its words sat in the middle of a
+ * scroll nobody had made yet. So the words are pinned to the part of the table you can
+ * see and centred in that, and they are where you are looking whatever it is scrolled to.
+ *
+ * `--room` is that width, measured by whichever view drew the table. Without one the
+ * band falls back to the table's own width, which is what it always was.
  */
-.grid > .preparation {
-  text-align: left;
+.grid > .preparation > .said {
+  display: block;
+  left: 0;
+  max-width: 100%;
+  position: sticky;
+  width: var(--room, 100%);
 }
 
 /* A tag, not a band: it is one thing to do, not a stripe across the cell. */
@@ -1572,6 +1580,12 @@ textarea:focus {
 
   .scroll {
     overflow-x: visible;
+  }
+
+  /* Paper has nothing to scroll, so a band is simply as wide as the table. */
+  .grid > .preparation > .said {
+    position: static;
+    width: 100%;
   }
 
   .grid,

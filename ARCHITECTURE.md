@@ -247,7 +247,10 @@ express and not a thing that would survive editing: a column is
 `max(column(input)) + 1`, so inserting a step upstream moves every column after
 it, and the preparation would silently move to a different moment. The step it
 precedes does not move. The band now holds only the preparations belonging to the
-recipe, which genuinely do span everything.
+recipe, which genuinely do span everything - though their words do not: they are
+pinned to the visible part of the table and centred in that, so they stay where
+the eye is while the table scrolls under them. Whichever view drew the table
+measures that width into `--room`.
 
 **A step is built by choosing rows.** A row is chosen by holding it, or by shift
 or command clicking it - there is no column of checkboxes, because a column that

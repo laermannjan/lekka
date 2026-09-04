@@ -97,7 +97,11 @@ Above the ingredient rows, in this order:
 1. a **header row**: a label over the ingredient column, then the columns
    numbered from `01`.
 2. the **preparations belonging to the recipe**, one per row, each spanning the
-   full width, so they travel along when the grid is scrolled sideways.
+   full width. Their words do not: they are pinned to the part of the table you
+   can see and centred in that, so they stay where you are looking while the
+   table scrolls under them. A table can be three times the width of the screen,
+   and words centred across all of it sit in the middle of a scroll nobody has
+   made.
 
 The header comes first because the column numbers say *when* a column happens: a
 preparation drawn above the line that says which column four is sits outside the

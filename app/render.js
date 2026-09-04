@@ -182,7 +182,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
   band.forEach((entries, index) => {
     const ends = new Set(entries.map((entry) => entry.column + entry.columnSpan - 1))
     for (const entry of entries) {
-      const box = pick(preparationField(entry.node), entry.node)
+      const box = pick(preparationField(entry.node, entry.column === 0), entry.node)
       if (ends.has(entry.column - 1)) box.classList.add('joined')
       if (entry.column === 0) {
         box.style.gridColumn = '1 / -1'
@@ -322,9 +322,18 @@ function pad(number) {
   return String(number).padStart(2, '0')
 }
 
-function preparationField(node) {
-  const box = element('div', 'preparation', bind(node.text))
-  if (node.aside) box.append(element('span', 'aside', bind(node.aside)))
+/**
+ * A preparation. One belonging to a step is a tag in that step's cell; one belonging to
+ * the recipe spans the whole table, and the table can be three times the width of the
+ * screen - so its words go in a band of their own that is pinned to the part you can
+ * see, and centred in that. Wherever the table is scrolled to, it is where you look.
+ */
+function preparationField(node, spanning = false) {
+  const box = element('div', 'preparation')
+  const said = spanning ? element('span', 'said') : box
+  said.append(element('span', '', bind(node.text)))
+  if (node.aside) said.append(element('span', 'aside', bind(node.aside)))
+  if (spanning) box.append(said)
   return box
 }
 
