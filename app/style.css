@@ -54,13 +54,23 @@
   --link: #1b3fbf;
   --link-deep: #142f8f;
 
-  /* Tag tints. Pale enough to sit in a table all day, separated by hue so that
-     the kind of a thing is legible before the value is read. */
+  /*
+   * Tag tints, each with a dotted edge of its own hue. Pale enough to sit in a
+   * table all day, separated by hue so that the kind of a thing is legible before
+   * the value is read, and edged in the same hue so the box reads as one thing
+   * rather than as a pale fill inside a black rule.
+   */
   --tint-card: #fbf3b8;
+  --edge-card: #b09a2e;
   --tint-time: #dceaf8;
+  --edge-time: #6f9cc8;
   --tint-set: #cfe0f5;
+  --edge-set: #5a86ba;
   --tint-key: #f3d7ea;
+  --edge-key: #b268a1;
   --tint-build: #e8e6dd;
+  --edge-build: #9d9a8e;
+  --edge-wash: #78a288;
   --warning: #a8331d;
   --warning-ground: #f7e5e1;
 
@@ -301,10 +311,25 @@ a.wordmark:hover {
   white-space: nowrap;
 }
 
-.tag.card { background: var(--tint-card); }
-.tag.set { background: var(--tint-set); }
-.tag.key { background: var(--tint-key); }
-.tag.build { background: var(--tint-build); }
+.tag.card {
+  background: var(--tint-card);
+  border-color: var(--edge-card);
+}
+
+.tag.set {
+  background: var(--tint-set);
+  border-color: var(--edge-set);
+}
+
+.tag.key {
+  background: var(--tint-key);
+  border-color: var(--edge-key);
+}
+
+.tag.build {
+  background: var(--tint-build);
+  border-color: var(--edge-build);
+}
 
 .tag.none {
   border-color: var(--faint);
@@ -895,11 +920,22 @@ textarea:focus {
   text-align: center;
 }
 
+/*
+ * One belonging to the recipe spans the whole table, and a table can be three times the
+ * width of the screen - centred, its text sat in the middle of a scroll nobody has made
+ * yet. It starts where reading starts.
+ */
+.grid > .preparation {
+  text-align: left;
+}
+
+/* A tag, not a band: it is one thing to do, not a stripe across the cell. */
 .step > .preparation {
-  border: 0;
+  border: 1px dotted var(--edge-wash);
+  display: inline-block;
   font-weight: 400;
-  margin: 0 -6px 2px;
-  padding: 0 6px;
+  margin: 0 auto 3px;
+  padding: 0 4px;
 }
 
 .preparation.joined {
@@ -949,6 +985,7 @@ textarea:focus {
  */
 .time {
   background: var(--tint-time);
+  border: 1px dotted var(--edge-time);
   padding: 0 3px;
   white-space: nowrap;
 }

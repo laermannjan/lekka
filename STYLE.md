@@ -24,6 +24,9 @@ enlarged to look important, and every device on the page means one thing.
 | gold | `#F0A81E` | what is set, where you stand, and `Import` |
 | amber | `#FBEEB5` | a chosen row, a callout |
 | tint blue | `#DCEAF8` | a duration, marked where it stands |
+
+Each tint has a dotted edge of its own hue. A pale fill inside a black rule reads
+as two things; filled and edged in one hue it reads as one.
 | warning | `#A8331D` | `Delete`, `Remove`, and anything that went wrong |
 
 **Every colour has one job.**
@@ -144,7 +147,11 @@ the row was asked for.
 Mono small capitals, a dotted border - a value that was generated rather than
 typed should not be drawn with the same edge as a control - and a tint that says
 what kind of identifier it is, so a recipe is told from a collection before either
-is read.
+is read. The border is dotted in the tint's own hue, not in ink.
+
+The same treatment marks a value inside running text: a **duration** in a verb, on
+the pale blue, and a **preparation** belonging to a step, on the wash. Both are one
+thing lifted out of a line of words, which is what a tag is for.
 
 ## Inside the table
 
@@ -164,8 +171,10 @@ is read.
   it from the body, not a fill.
 - A preparation belonging to the **recipe** is a row under the head, on the wash
   colour, spanning everything, with the three ingredient fields beside it empty.
-  One belonging to a **step** is drawn inside that step's cell, above its verb,
-  on the same colour: it is something done before that step, and a band over the
+  It is left aligned, because a table can be three times the width of the screen
+  and centred text would sit in the middle of a scroll nobody has made yet.
+  One belonging to a **step** is drawn inside that step's cell, above its verb, as
+  a tag on the wash: it is something done before that step, and a band over the
   step's column said instead that it belonged to the column.
 - The recipe's left edge is 3 px of accent. It is the one place a colour names
   what a box is rather than what state it is in.
