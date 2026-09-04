@@ -907,6 +907,17 @@ textarea:focus {
   padding: 0;
 }
 
+/*
+ * Free area is the shape of a row that is still waiting, drawn over the row itself to
+ * carry the rules where two runs of blank meet at different widths (`LAYOUT.md` rule 3).
+ * It is ink and nothing else: no fill, so the row shows through it, and no target, so a
+ * tap in the blank part of a row reaches the row rather than stopping on the rectangle
+ * that was only ever there to draw a line.
+ */
+.grid > .free {
+  pointer-events: none;
+}
+
 .grid > .rightmost,
 .grid > .free.open,
 .hold > .amount,
@@ -1247,12 +1258,20 @@ textarea:focus {
   background: var(--amber);
 }
 
-.hold.pickable:hover > * {
+/*
+ * A row is painted whole, not cell by cell.
+ *
+ * A row reaches as far as the step that takes it - `250 g Mehl` waiting through two
+ * columns is one row six columns wide, with fields in the first three and blank after.
+ * Painted through its children only the fields took the colour, and the blank part of
+ * the row it was waiting in stayed white: a row half shaded, which is exactly the part
+ * of it that says it is still waiting.
+ */
+.hold.pickable:hover {
   background: var(--shade);
 }
 
-.hold.chosen > *,
-.hold.pickable.chosen:hover > *,
+.hold.chosen,
 .step.chosen {
   background: var(--amber);
 }

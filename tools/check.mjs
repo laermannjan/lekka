@@ -44,6 +44,18 @@ const CARD = `# Pfannkuchen (12 Stück)
     - Butter: 30 g
 `
 
+/* A card whose rows wait: `Zucker` stands through a column before the step that takes
+   it, so its row is wider than its own three fields and the free area is drawn over the
+   part it is waiting in. That overlap is the one this file exists to measure. */
+const WAITING = `# Waiting
+
+- braten
+  - verrühren
+    - Mehl: 250 g
+    - Milch: 500 ml
+  - Zucker: 2 EL
+`
+
 /**
  * The checks, as the page runs them. Each one says what it is asking in the words the
  * code uses, so a failure reads as a sentence about the app rather than a line number.
@@ -55,6 +67,7 @@ import { buildEditor } from './editor.js'
 import { toDraft, addIngredient } from './edit.js'
 
 const TEXT = ${JSON.stringify(CARD)}
+const WAITING = ${JSON.stringify(WAITING)}
 const said = []
 const check = (name, ok, detail = '') =>
   said.push(\`\${ok ? 'PASS' : 'FAIL'} \${name}\${detail ? \` :: \${detail}\` : ''}\`)
@@ -113,6 +126,32 @@ spare.click()
 check('a tick keeps the caret on its box', boxes().includes(document.activeElement),
   document.activeElement?.tagName + '.' + document.activeElement?.className)
 check('and shades what it brought with it', shadedRows() === 2, String(shadedRows()))
+
+/*
+ * A row that waits. Its fields stop at the ingredient block; the row itself reaches as
+ * far as the step that takes it, and free area is drawn over the part in between to
+ * carry the rules. Two things have to be true of that overlap: the row is painted under
+ * it, and a tap in it reaches the row rather than stopping on the rectangle.
+ */
+const second = buildEditor({ draft: toDraft(parseCard(WAITING)), onSave: async () => null, onClose: () => {} })
+document.getElementById('screen').append(second)
+
+const braten = [...second.querySelectorAll('.grid .holds > .step')].find((one) => one.textContent.startsWith('braten'))
+braten.click()
+
+const waiting = [...second.querySelectorAll('.grid > .hold')].find((one) => one.textContent.includes('Zucker'))
+const fields = [...waiting.children].filter((one) => !one.classList.contains('ticker'))
+const wide = waiting.getBoundingClientRect()
+const inked = fields[fields.length - 1].getBoundingClientRect()
+check('a waiting row is wider than its own fields', wide.right - inked.right > 40,
+  \`row to \${wide.right.toFixed(0)}, fields to \${inked.right.toFixed(0)}\`)
+check('and is painted all the way across', getComputedStyle(waiting).backgroundColor !== 'rgba(0, 0, 0, 0)',
+  getComputedStyle(waiting).backgroundColor)
+
+const blank = document.elementFromPoint((inked.right + wide.right) / 2, (wide.top + wide.bottom) / 2)
+check('and a tap in the part it waits through reaches the row',
+  blank === waiting || waiting.contains(blank),
+  blank?.className)
 
 /*
  * Fit to screen. \`zoom\` scales every length inside the table, so a band told to be

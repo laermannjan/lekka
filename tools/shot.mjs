@@ -43,6 +43,11 @@ const CARD = `# Pfannkuchen (12 Stück)
     - Butter: 30 g
 `
 
+/* A card with rows that wait: six ingredients stand through two columns before the
+   step that takes them, which is where a row is wider than its own fields. */
+const LONG = await (await import('node:fs/promises')).readFile(
+  new URL('../test/cards/roggenquarkbrot.lekka', import.meta.url), 'utf8')
+
 /** Each scene is a heading and something to put under it, drawn one above the other. */
 const SCENES = `
 import { parseCard } from './card.js'
@@ -52,6 +57,7 @@ import { buildEditor } from './editor.js'
 import { toDraft, addIngredient } from './edit.js'
 
 const TEXT = ${JSON.stringify(CARD)}
+const LONG = ${JSON.stringify(LONG)}
 const screen = document.getElementById('screen')
 const editor = () =>
   buildEditor({
@@ -88,6 +94,17 @@ for (const cell of opened.querySelectorAll('.grid .holds > .step'))
 const row = editor()
 scene('Editor, a row open', row)
 row.querySelector('.grid > .hold .name').click()
+
+// A step whose inputs wait through two columns, which is where a row is wider than its
+// own fields and the shading has to reach as far as the row does.
+const wide = buildEditor({
+  draft: toDraft(parseCard(LONG)),
+  onSave: async () => null,
+  onClose: () => {},
+})
+scene('Editor, a step whose rows wait', wide)
+for (const cell of wide.querySelectorAll('.grid .holds > .step'))
+  if (cell.textContent.startsWith('vermengen')) cell.onclick()
 
 function scene(name, body) {
   const head = document.createElement('div')
@@ -141,7 +158,7 @@ try {
     '--enable-logging=stderr',
     '--v=0',
     '--virtual-time-budget=4000',
-    '--window-size=1100,3000',
+    '--window-size=1100,4200',
     `--screenshot=${out}`,
     `http://127.0.0.1:${port}/_shot.html`,
   ])
