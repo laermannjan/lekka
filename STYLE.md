@@ -149,9 +149,9 @@ typed should not be drawn with the same edge as a control - and a tint that says
 what kind of identifier it is, so a recipe is told from a collection before either
 is read. The border is dotted in the tint's own hue, not in ink.
 
-The same treatment marks a **duration** in a verb, on the pale blue, and a
-**preparation** over its column, on the wash. Both are one thing lifted out of a
-line of words, which is what a tag is for.
+The same treatment marks a **duration** in a verb, on the pale blue: one value
+lifted out of a line of words, which is what a tag is for. A preparation is not
+one - it is a cell of the table, marked by the wash and nothing else.
 
 ## Inside the table
 
@@ -169,11 +169,15 @@ line of words, which is what a tag is for.
 - Nothing wraps in the ingredient column; the table scrolls sideways instead.
 - The head of the table is white and closed by a line of ink. Weight separates
   it from the body, not a fill.
-- **A preparation is a tag over the column of the step it comes before**, on the
-  wash, above the line that names that column - which is when it happens. One
-  belonging to the **recipe** stands over the ingredient block, left-aligned with
-  `Ingredient` under it: it is the same thing said about the first step there is,
-  and the ingredient block is what comes before every column there is.
+- **A preparation is a cell over the column of the step it comes before**, above
+  the line that names that column - which is when it happens. One belonging to
+  the **recipe** stands over the ingredient block: the same thing said about the
+  first step there is, and the block is what comes before every column there is.
+
+  A cell, not a tag. It was drawn as one - a dotted edge, shrink-to-fit, floating
+  over its column - and a tag is for one value lifted out of a line of words.
+  This is a thing to do, standing where the things to do stand: it fills its
+  column, takes the rules its neighbours take, and is told apart by the wash.
 - The recipe's left edge is 3 px of accent. It is the one place a colour names
   what a box is rather than what state it is in.
 

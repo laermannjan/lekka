@@ -945,26 +945,15 @@ textarea:focus {
  * column is, and this is the thing done before that. One belonging to the recipe is the
  * same thing said about the first step there is, so it goes over the ingredient block.
  *
- * A tag rather than a band. It does not fill its column - it is one thing to do, in a
- * row of the table that has no ingredients in it and no rules across it, so what marks
- * it is the tint and the dotted edge every tag on this card is marked with.
+ * A cell of the table, not a tag on it. It was drawn as a tag - a dotted edge and a
+ * shrink-to-fit box floating over its column - and a tag is for one value lifted out of
+ * a line of words. This is not that: it is a thing to do, standing where the things to
+ * do stand. So it fills its column, takes the rules its neighbours take, and is told
+ * apart by the tint alone.
  */
 .preparation {
-  align-self: end;
   background: var(--wash);
-  border: 1px dotted var(--edge-wash) !important;
-  font-weight: 400;
-  justify-self: center;
-  margin-bottom: 3px;
-  padding: 1px 5px;
   text-align: center;
-}
-
-/* One belonging to the recipe stands over the ingredient block, which is three columns
-   wide. Left, not centred: it lines up with `Ingredient` under it, and a tag centred
-   over three columns sits over the unit column, which it has nothing to do with. */
-.grid > .preparation.whole {
-  justify-self: start;
 }
 
 .amount {
