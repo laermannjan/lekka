@@ -169,20 +169,28 @@ check('and a tap in the part it waits through reaches the row',
   blank?.className)
 
 /*
- * Fit to screen. \`zoom\` scales every length inside the table, so a band told to be
- * \`--room\` wide is drawn at a fraction of the room it is supposed to span, and the
- * words centred in it sit left of centre.
+ * A preparation stands over the column of the step it comes before, above the head of
+ * the table. Both halves of that are measured: which column it is over, and that it is
+ * above the line that names the columns rather than below it.
  */
 const narrow = document.createElement('div')
-narrow.style.width = '360px'
 document.getElementById('screen').append(narrow)
-narrow.append(renderReading(parseCard(TEXT), 1, 0, { onAt: () => {}, onFits: () => {}, fit: true }))
+narrow.append(renderReading(parseCard(TEXT), 1, 0, { onAt: () => {}, onFits: () => {} }))
 
 requestAnimationFrame(() => {
-  const band = narrow.querySelector('.grid > .preparation > .said').getBoundingClientRect().width
-  const room = narrow.querySelector('.scroll').getBoundingClientRect().width
-  check('a pinned band spans the room even when the card is shrunk to fit',
-    Math.abs(band - room) < 2, \`band \${band.toFixed(1)} vs room \${room.toFixed(1)}\`)
+  const table = narrow.querySelector('.grid')
+  const prep = table.querySelector('.preparation')
+  const heading = table.querySelector('.label.heading')
+  const first = [...table.querySelectorAll('.label')].find((one) => one.textContent === '01')
+
+  check('a preparation sits above the head of the table',
+    prep.getBoundingClientRect().bottom <= heading.getBoundingClientRect().top + 1,
+    \`prep to \${prep.getBoundingClientRect().bottom.toFixed(0)}, head from \${heading.getBoundingClientRect().top.toFixed(0)}\`)
+
+  // \`Pfanne vorheizen\` belongs to the recipe, so it stands over the ingredient block.
+  check('and one belonging to the recipe stands over the ingredient block',
+    prep.getBoundingClientRect().right <= first.getBoundingClientRect().left + 1,
+    \`prep to \${prep.getBoundingClientRect().right.toFixed(0)}, column 01 from \${first.getBoundingClientRect().left.toFixed(0)}\`)
 
   const out = document.createElement('pre')
   out.id = 'checks'

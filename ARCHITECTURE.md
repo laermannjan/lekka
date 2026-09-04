@@ -264,18 +264,25 @@ and nothing else, with no fill and no target, so a tap there reaches the row.
 a button that moves about is a button nobody finds twice. It adds an empty row
 and opens the form on it; there is no form to fill in first.
 
-**A preparation belongs to a step, not to a column.** It is drawn inside that
-step's cell, above its verb, when the recipe is read, and is a field of that
-step's form when it is written. A band over the step's column said instead that
-it belonged to the column, which is not a thing the format can express and not a
-thing that would survive editing: a column is `max(column(input)) + 1`, so
-inserting a step upstream moves every column after it, and the preparation would
-silently move to a different moment. The step it precedes does not move. The band
-holds only the preparations belonging to the recipe, which genuinely do span
-everything - though their words do not: they are pinned to the visible part of
-the table and centred in that, so they stay where the eye is while the table
-scrolls under them. Whichever view drew the table measures that width into
-`--room`.
+**A preparation belongs to a step, and is drawn over that step's column**, above
+the line that names the column, because that is when it happens. It is a field of
+that step's form when it is written. One belonging to the recipe is the same
+thing said about the first step there is, so it stands over the ingredient block,
+which is what comes before every column there is - and that is the whole of the
+model: there is no second kind of preparation, only one whose step is the card.
+
+The column is worked out by `buildBand` when the table is drawn, and never
+stored. This arrangement was dropped once on the grounds that a band over a
+column says the preparation belongs to the column, and a column is
+`max(column(input)) + 1` - insert a step upstream and every column after it
+moves, so the preparation would silently move to a different moment. That
+objection was about a *stored* column. A derived one moves with its step, which
+is exactly right, and the drawing is correct at every moment in between.
+
+What it cost: a preparation belonging to the recipe used to span the table with
+its words pinned to the visible part, so they stayed where the eye was however
+far the table had scrolled. Standing in the ingredient block it scrolls away with
+that block. `--room` and the resize watch that measured it are gone with it.
 
 **A step is built by ticking boxes, and a box stands for an input.** A step takes
 whole strands, so unticking one row of a strand it swallowed is not a move the

@@ -91,26 +91,21 @@ export function renderGrid(grid, scale = 1, edit = null) {
   const bottom = head + 1 + grid.rows.length + adds
 
   /*
-   * Preparations go under the head of the table, not over it.
+   * Preparations go over the head of the table, each above the column it comes before.
    *
-   * The column numbers say when a column happens; a preparation that happens before
-   * column four was being drawn above the line that says which column four is, which put
-   * the first thing printed on the card outside the table it belongs to. Under the head
-   * it reads as what it is: a row of the table that brings no ingredient, so its three
-   * left-hand fields stand empty.
+   * A preparation is something done before something else, and what it is done before is
+   * a step - so it is drawn over that step's column, above the number that names it,
+   * which is when it happens. One belonging to the recipe is the same thing said about
+   * the first step there is, so it goes over the ingredient block.
    *
-   * So the head is row 1, the band is rows 2 to `head + 1`, and the rows of the card go
-   * on starting where they always did.
+   * The band is rows 1 to `head`, the head is row `head + 1`, and the rows of the card
+   * go on starting where they always did.
    */
   band.forEach((entries, index) => {
-    const ends = new Set(entries.map((entry) => entry.column + entry.columnSpan - 1))
     for (const entry of entries) {
-      const box = preparationField(entry.node, entry.column === 0)
-      if (ends.has(entry.column - 1)) box.classList.add('joined')
-      if (entry.column === 0) {
-        box.style.gridColumn = '1 / -1'
-        box.style.gridRow = String(index + 2)
-      } else area(box, lead + entry.column, entry.columnSpan, index + 2, 1)
+      const box = preparationField(entry.node)
+      if (entry.column === 0) box.classList.add('whole')
+      area(box, entry.column === 0 ? 1 : lead + entry.column, entry.column === 0 ? lead : 1, index + 1, 1)
       table.append(box)
     }
   })
@@ -118,7 +113,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
   // The reading view puts steps in this column too, so it names it for what it holds.
   const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
   label.style.gridColumn = `1 / ${lead + 1}`
-  label.style.gridRow = '1'
+  label.style.gridRow = String(head + 1)
   table.append(label)
   /*
    * A column number takes the rows the steps in that column stand on - what this moment
@@ -129,7 +124,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
   for (let column = 1; column <= grid.columns; column++) {
     const box = element('div', 'label', pad(numbers[column - 1]))
     table.append(put(box, {
-      column: lead + column, columnSpan: 1, row: 1, rowSpan: 1,
+      column: lead + column, columnSpan: 1, row: head + 1, rowSpan: 1,
     }))
   }
 
@@ -211,12 +206,12 @@ export function renderGrid(grid, scale = 1, edit = null) {
   if (edit?.onStep) {
     const box = element('div', 'add step', '+ Step')
     box.onclick = edit.onStep
-    // Everything under the head: the band, every row, and the row that adds one.
+    // Everything under the head: every row, and the row that adds one.
     table.append(put(box, {
       column: lead + grid.columns + 1,
       columnSpan: 1,
-      row: 2,
-      rowSpan: bottom - 1,
+      row: head + 2,
+      rowSpan: bottom - head - 1,
       last: true,
     }))
   }
@@ -228,18 +223,11 @@ function pad(number) {
   return String(number).padStart(2, '0')
 }
 
-/**
- * A preparation. One belonging to a step is a tag in that step's cell; one belonging to
- * the recipe spans the whole table, and the table can be three times the width of the
- * screen - so its words go in a band of their own that is pinned to the part you can
- * see, and centred in that. Wherever the table is scrolled to, it is where you look.
- */
-function preparationField(node, spanning = false) {
+/** A preparation, over the column of the step it comes before. */
+function preparationField(node) {
   const box = element('div', 'preparation')
-  const said = spanning ? element('span', 'said') : box
-  said.append(element('span', '', bind(node.text)))
-  if (node.aside) said.append(element('span', 'aside', bind(node.aside)))
-  if (spanning) box.append(said)
+  box.append(element('span', '', bind(node.text)))
+  if (node.aside) box.append(element('span', 'aside', bind(node.aside)))
   return box
 }
 
@@ -269,14 +257,8 @@ function ingredientFields(node, scale) {
   ]
 }
 
-/** A step's own preparations: what is done before it, drawn above it. */
-function preparationsOf(node) {
-  return (node.children ?? []).filter((child) => child.kind === 'preparation')
-}
-
 function stepField(node) {
   const cell = element('div', 'step')
-  for (const prep of preparationsOf(node)) cell.append(preparationField(prep))
   cell.append(marked('verb', node.verb))
   if (node.aside) cell.append(element('div', 'note', bind(node.aside)))
   return cell

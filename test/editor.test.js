@@ -478,10 +478,28 @@ test('the specification writes the yield, the notes and the preparations', () =>
   type(screen, 'Yield', '1 Laib')
   type(screen, 'Before', 'Ofen vorheizen (240 °C)')
 
-  // A preparation for the whole recipe is a row of the table that brings no ingredient.
+  // A preparation for the whole recipe stands over the ingredient block, which is what
+  // comes before every column there is.
   const band = one(onlyTable(screen), byClass('preparation'), 'preparation')
   assert.equal(plain(band), 'Ofen vorheizen240 °C')
+  assert.ok(band.classList.contains('whole'))
   assert.deepEqual(faults(screen), [])
+})
+
+test("a step's preparation is drawn over its column, not inside its cell", () => {
+  const { screen } = open('# Neu\n')
+  enter(screen, { name: 'Teig' })
+  process(screen)
+  nameStep(screen, 'backen', { before: 'Ofen vorheizen (240 °C)' })
+
+  // In the band, over the column `backen` is standing in - and nothing in the cell.
+  const band = one(onlyTable(screen), byClass('preparation'), 'preparation')
+  assert.equal(plain(band), 'Ofen vorheizen240 °C')
+  assert.equal(band.classList.contains('whole'), false)
+  assert.equal(all(cellNamed(screen, 'backen')).filter(byClass('preparation')).length, 0)
+
+  // And it is written in the step's own form, because that is what it belongs to.
+  assert.deepEqual(openStep(screen, 'backen').before.map((one) => one.value), ['Ofen vorheizen (240 °C)', ''])
 })
 
 test('a recipe with nothing in it yet is not a recipe with 0 ingredients', () => {

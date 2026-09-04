@@ -94,32 +94,28 @@ the grid is simply blank.
 
 Above the ingredient rows, in this order:
 
-1. a **header row**: a label over the ingredient column, then the columns
+1. the **preparations**, each a tag over the column of the step it comes before,
+   packed into as few rows as will hold them: two on the same step need two
+   rows, two on different steps share one.
+2. a **header row**: a label over the ingredient column, then the columns
    numbered from `01`.
-2. the **preparations belonging to the recipe**, one per row, each spanning the
-   full width. Their words do not: they are pinned to the part of the table you
-   can see and centred in that, so they stay where you are looking while the
-   table scrolls under them. A table can be three times the width of the screen,
-   and words centred across all of it sit in the middle of a scroll nobody has
-   made.
 
-The header comes first because the column numbers say *when* a column happens: a
-preparation drawn above the line that says which column four is sits outside the
-table it belongs to. Under the header it reads as what it is - a row of the table
-that brings no ingredient, so the three ingredient fields beside it stand empty.
+**Every preparation is over the column it comes before**, and above the line that
+names that column, because that is when it happens. A preparation belonging to
+the recipe is the same thing said about the first step there is, so it stands
+over the ingredient block - which is what comes before every column there is.
+
+The column is worked out when the table is drawn and never stored. That answers
+the objection this arrangement was once dropped for: a column is
+`max(column(input)) + 1` and moves whenever a step is inserted upstream, so a
+preparation *bound* to a column would silently move to a different moment - but
+one bound to its step moves with the step, which is where it belongs.
 
 A preparation is deliberately not a step. A step needs a column and a height, and
 something that consumes no ingredient has neither; making one would also make
 `-` mean *flows into* everywhere except there. Keeping it apart costs a line of
 vertical space, which is free, rather than a column, which is the scarce thing on
 this table.
-
-**A preparation belonging to a step is drawn inside that step's cell**, above its
-verb, and never in the band. It is something done before that step, and a band
-over the step's column said instead that it belonged to the column - which is not
-a thing the format can express and not a thing that would survive editing, since
-a column is `max(column(input)) + 1` and moves whenever a step is inserted
-upstream. The step it precedes does not move.
 
 Notes about the recipe do **not** go into the grid, and neither does what it
 yields. They describe the whole recipe rather than a point in it, so they belong

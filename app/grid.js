@@ -31,7 +31,7 @@ export function buildForest(strands, preparations = []) {
     rows,
     cells,
     frees: findFrees(occupy(rows, cells, columns)),
-    band: buildBand(preparations, columns),
+    band: buildBand(preparations, cells),
     columns,
   }
 }
@@ -61,20 +61,40 @@ function place(node, column, span, cells) {
     if (child.kind !== 'preparation') place(child, column - 1, span, cells)
 }
 
-/*
- * The band holds only what belongs to the recipe.
+/**
+ * The band: every preparation on the card, over the column it comes before.
  *
- * A preparation belonging to a step is drawn inside that step's cell, above its verb,
- * because that is what it is: something done before that step. Drawn in a band over the
- * step's column it looked like a property of the column instead - and a column is worked
- * out from how deep the strand is, so it moves whenever a step is inserted upstream. The
- * step it precedes does not.
+ * A preparation is always something done before something else, and what it is done
+ * before is a step. One belonging to the recipe is the same thing said about the first
+ * step, so it goes over the ingredient block - column 0 here - which is what comes
+ * before every column there is.
  *
- * Each one takes a row of its own, because each spans the whole table and two things
- * spanning the whole table cannot share a line.
+ * The column is worked out here and never stored. That answers the objection this was
+ * once dropped for: a column is `max(column(input)) + 1`, so inserting a step upstream
+ * moves every column after it - and the preparation moves with its step, because the
+ * step is what it is attached to and the column is only where that step is standing
+ * today.
+ *
+ * They pack into as few rows as will hold them. Two preparations on the same step need
+ * two rows; two on different steps share one.
  */
-function buildBand(global, columns) {
-  return global.map((node) => [{ node, column: 0, columnSpan: columns + 1 }])
+function buildBand(global, cells) {
+  const wanted = [
+    ...global.map((node) => ({ node, column: 0 })),
+    ...cells.flatMap((cell) =>
+      (cell.node.children ?? [])
+        .filter((child) => child.kind === 'preparation')
+        .map((node) => ({ node, column: cell.column })),
+    ),
+  ]
+
+  const rows = []
+  for (const entry of wanted) {
+    let row = rows.find((held) => held.every((one) => one.column !== entry.column))
+    if (!row) rows.push((row = []))
+    row.push(entry)
+  }
+  return rows.map((row) => [...row].sort((a, b) => a.column - b.column))
 }
 
 function occupy(rows, cells, columns) {

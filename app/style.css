@@ -911,50 +911,32 @@ textarea:focus {
 }
 
 /*
- * A preparation belonging to the recipe is a row of the table that brings no ingredient:
- * it sits under the head, spanning everything, with the three ingredient fields beside
- * it left empty. It needs no top border of its own - the head above it draws one.
+ * A preparation, over the column of the step it comes before.
  *
- * One belonging to a step is drawn inside that step's cell, above its verb, because that
- * is what it is: something done before that step. In a band over the step's column it
- * read as a property of the column, and a column is worked out from how deep the strand
- * is - insert a step upstream and every column moves. The step does not.
+ * It sits above the head of the table, which is where it happens: the head names when a
+ * column is, and this is the thing done before that. One belonging to the recipe is the
+ * same thing said about the first step there is, so it goes over the ingredient block.
+ *
+ * A tag rather than a band. It does not fill its column - it is one thing to do, in a
+ * row of the table that has no ingredients in it and no rules across it, so what marks
+ * it is the tint and the dotted edge every tag on this card is marked with.
  */
 .preparation {
+  align-self: end;
   background: var(--wash);
-  border-left: 1px solid var(--rule);
-  font-weight: 600;
+  border: 1px dotted var(--edge-wash) !important;
+  font-weight: 400;
+  justify-self: center;
+  margin-bottom: 3px;
+  padding: 1px 5px;
   text-align: center;
 }
 
-/*
- * One belonging to the recipe spans the whole table, and a table can be three times the
- * width of the screen - centred across all of it, its words sat in the middle of a
- * scroll nobody had made yet. So the words are pinned to the part of the table you can
- * see and centred in that, and they are where you are looking whatever it is scrolled to.
- *
- * `--room` is that width, measured by whichever view drew the table. Without one the
- * band falls back to the table's own width, which is what it always was.
- */
-.grid > .preparation > .said {
-  display: block;
-  left: 0;
-  max-width: 100%;
-  position: sticky;
-  width: var(--room, 100%);
-}
-
-/* A tag, not a band: it is one thing to do, not a stripe across the cell. */
-.step > .preparation {
-  border: 1px dotted var(--edge-wash);
-  display: inline-block;
-  font-weight: 400;
-  margin: 0 auto 3px;
-  padding: 0 4px;
-}
-
-.preparation.joined {
-  border-left: 0;
+/* One belonging to the recipe stands over the ingredient block, which is three columns
+   wide. Left, not centred: it lines up with `Ingredient` under it, and a tag centred
+   over three columns sits over the unit column, which it has nothing to do with. */
+.grid > .preparation.whole {
+  justify-self: start;
 }
 
 .amount {
@@ -1615,12 +1597,6 @@ textarea:focus {
 
   .scroll {
     overflow-x: visible;
-  }
-
-  /* Paper has nothing to scroll, so a band is simply as wide as the table. */
-  .grid > .preparation > .said {
-    position: static;
-    width: 100%;
   }
 
   .grid,

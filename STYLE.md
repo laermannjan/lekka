@@ -149,9 +149,9 @@ typed should not be drawn with the same edge as a control - and a tint that says
 what kind of identifier it is, so a recipe is told from a collection before either
 is read. The border is dotted in the tint's own hue, not in ink.
 
-The same treatment marks a value inside running text: a **duration** in a verb, on
-the pale blue, and a **preparation** belonging to a step, on the wash. Both are one
-thing lifted out of a line of words, which is what a tag is for.
+The same treatment marks a **duration** in a verb, on the pale blue, and a
+**preparation** over its column, on the wash. Both are one thing lifted out of a
+line of words, which is what a tag is for.
 
 ## Inside the table
 
@@ -169,14 +169,11 @@ thing lifted out of a line of words, which is what a tag is for.
 - Nothing wraps in the ingredient column; the table scrolls sideways instead.
 - The head of the table is white and closed by a line of ink. Weight separates
   it from the body, not a fill.
-- A preparation belonging to the **recipe** is a row under the head, on the wash
-  colour, spanning everything, with the three ingredient fields beside it empty.
-  Its words are pinned to the part of the table you can see and centred in that:
-  a table can be three times the width of the screen, and words centred across all
-  of it sit in the middle of a scroll nobody has made.
-  One belonging to a **step** is drawn inside that step's cell, above its verb, as
-  a tag on the wash: it is something done before that step, and a band over the
-  step's column said instead that it belonged to the column.
+- **A preparation is a tag over the column of the step it comes before**, on the
+  wash, above the line that names that column - which is when it happens. One
+  belonging to the **recipe** stands over the ingredient block, left-aligned with
+  `Ingredient` under it: it is the same thing said about the first step there is,
+  and the ingredient block is what comes before every column there is.
 - The recipe's left edge is 3 px of accent. It is the one place a colour names
   what a box is rather than what state it is in.
 
