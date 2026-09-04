@@ -2,9 +2,8 @@ import { splitAside } from './card.js'
 import { buildForest } from './grid.js'
 import { nameSection, specification } from './page.js'
 import { renderGrid } from './render.js'
-import { stepSheet } from './sheet.js'
 import {
-  candidates, parentOf, fieldsOf, validate, label, storedForm, beneath,
+  candidates, fieldsOf, validate, label, storedForm, beneath,
   addIngredient, addStep, editIngredient, editStep, removeNode, claim, upheaval, sweptBy,
 } from './edit.js'
 
@@ -37,6 +36,8 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    */
   let chosen = new Set()
   let anchor = null
+  /** The step whose inputs are being chosen, if the cook is choosing them. */
+  let editing = null
   let saving = false
 
   /** The report and the Save button now on the page, so a text edit can refresh them. */
@@ -69,6 +70,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     notice = null
     chosen = new Set()
     anchor = null
+    editing = null
     onChange?.(current)
     paint()
   }
@@ -84,10 +86,20 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * faults, and whether Save is allowed.
    */
   function write(node, fields) {
-    current = editIngredient(current, node, fields)
+    // A step keeps whatever it holds: only what the cell showed is being written.
+    const was = node.kind === 'step' ? fieldsOf(node) : null
+    current =
+      node.kind === 'ingredient'
+        ? editIngredient(current, node, fields)
+        : editStep(current, node, { ...was, ...fields })
     dirty = true
     notice = null
     onChange?.(current)
+
+    // A preparation added or dropped changes how many fields the cell has, and that is
+    // the one thing a cell being written cannot show without being drawn again. The
+    // caret has already left it, so redrawing costs nothing here.
+    if (was && fields.preparations.length !== was.preparations.length) return paint()
     resettle()
   }
 
@@ -112,6 +124,59 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   }
 
   const rename = (title) => amend({ title })
+
+  /**
+   * Which rows go into a step, asked in the table rather than in a list.
+   *
+   * Shift or a long press on a step ticks the rows it holds; from there they are ticked
+   * and unticked like any others, and `Apply` reads back what they now come to. The list
+   * of candidates the form used to show was the same question asked about names.
+   */
+  function pickStep(node) {
+    editing = node
+    chosen = new Set(beneath(node))
+    anchor = null
+    notice = null
+    paint()
+  }
+
+  /**
+   * What the ticked rows come to, for the step being edited.
+   *
+   * Not `claim`, which answers "what holds these rows" and climbs the whole tree: from
+   * inside a step, every row of it is also every row of the step above, so claim would
+   * answer with the step this one sits in. The question here is narrower - which of the
+   * things this step *may* take are wholly ticked - so it is asked of the candidates,
+   * which are its own inputs plus whatever is still loose outside it.
+   */
+  function intake() {
+    return candidates(current, editing).filter((node) =>
+      beneath(node).every((row) => chosen.has(row)),
+    )
+  }
+
+  function apply() {
+    const wanted = intake()
+    const covered = new Set(wanted.flatMap(beneath))
+    const stray = [...chosen].filter((row) => !covered.has(row))
+
+    if (wanted.length === 0)
+      return say('A step has to take something. Tick the rows that go into it.')
+    if (stray.length > 0)
+      return say(
+        `${stray.map(label).join(', ')} cannot go into ${label(editing)}: ` +
+          'it is already inside a step this one is part of.',
+      )
+
+    const step = editing
+    editing = null
+    change(editStep(current, step, { ...fieldsOf(step), inputs: wanted }))
+  }
+
+  function say(text) {
+    notice = { text, bad: true }
+    paint()
+  }
 
   /** Ticking a row, or a run of them from the last row touched. */
   function choose(nodes, on, extend) {
@@ -208,39 +273,39 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * the move: what goes in, and what that would take it out of.
    */
   function selection() {
-    if (chosen.size === 0) return null
-    const taken = claim(current, chosen)
-    const { moved, emptied } = upheaval(current, taken)
+    if (chosen.size === 0 && !editing) return null
+    const taken = editing ? intake() : claim(current, chosen)
+    const { moved, emptied } = editing ? { moved: [], emptied: [] } : upheaval(current, taken)
 
-    const go = element('button', 'go', `Process in step`)
-    go.onclick = () => openStep(null, taken)
+    const rows = [...chosen]
+    const bar = element('div', 'bar chosen')
+    bar.append(
+      element('span', 'label', editing ? `Goes into ${label(editing)}` : `${chosen.size} chosen`),
+      element('span', 'takes', taken.map(label).join(' + ') || 'nothing'),
+    )
+
+    if (editing) {
+      const go = element('button', 'go', 'Apply')
+      go.onclick = apply
+      const erase = element('button', 'quiet danger', 'Delete step')
+      erase.onclick = () => drop([editing])
+      bar.append(go, erase, button('Cancel', clear))
+      return bar
+    }
+
+    const go = element('button', 'go', 'Process in step')
+    go.onclick = () => makeStep(taken)
 
     /*
-     * Deleting used to live in the form a row opened. A row has no form now, and this
-     * is where the cascade is already spelled out, so this is where it belongs.
-     *
-     * It takes the rows themselves and not what holds them. `Process in step` asks what
-     * these rows currently belong to, because that is what a new step would take; this
-     * asks nothing - a ticked row is the ingredient on it, and the one row of a one-row
-     * card is that ingredient and not the step standing over it.
+     * Deleting takes the rows themselves and not what holds them. `Process in step` asks
+     * what these rows currently belong to, because that is what a new step would take;
+     * this asks nothing - a ticked row is the ingredient on it, and the one row of a
+     * one-row recipe is that ingredient and not the step standing over it.
      */
-    const rows = [...chosen]
     const erase = element('button', 'quiet danger', rows.length > 1 ? 'Delete all' : 'Delete')
     erase.onclick = () => drop(rows)
 
-    const clear = button('Clear', () => {
-      chosen = new Set()
-      anchor = null
-      paint()
-    })
-
-    const bar = element('div', 'bar chosen', undefined, [
-      element('span', 'label', `${chosen.size} chosen`),
-      element('span', 'takes', taken.map(label).join(' + ')),
-      go,
-      erase,
-      clear,
-    ])
+    bar.append(go, erase, button('Clear', clear))
 
     if (moved.length === 0) return bar
     return element('div', '', undefined, [
@@ -254,6 +319,27 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
         ].join(' '),
       ),
     ])
+  }
+
+  function clear() {
+    chosen = new Set()
+    anchor = null
+    editing = null
+    paint()
+  }
+
+  /**
+   * A step made from the ticked rows, unnamed, with the caret in it. The verb used to be
+   * asked for in a form before the step existed; here the step is made and then named,
+   * which is what `+ Ingredient` does with a row.
+   */
+  function makeStep(taken) {
+    if (taken.length === 0) return say('Tick the rows that go into the step first.')
+    const before = new Set(current.strands)
+    const next = addStep(current, { verb: '', aside: '', preparations: [], inputs: taken })
+    const made = next.strands.find((strand) => !before.has(strand))
+    change(next)
+    opened.get(made)?.focus()
   }
 
   /**
@@ -310,14 +396,13 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     scroller = box
     box.append(
       renderGrid(grid, 1, {
-        onPick: open,
-        pickable,
         onField: write,
+        onEditStep: pickStep,
         onDrawn: (node, input) => opened.set(node, input),
         onChoose: choose,
         chosen: (node) => chosen.has(node),
         onAdd: addRow,
-        onStep: () => openStep(null, chosen.size > 0 ? claim(current, chosen) : null),
+        onStep: () => makeStep(claim(current, chosen)),
       }),
     )
     return box
@@ -345,36 +430,12 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   }
 
   /**
-   * What a fault leads to. A step opens its form; a row has none, so the caret goes into
-   * it - which is what "the fault leads to the thing it is about" means once the thing
-   * is a row rather than a form.
+   * What a fault leads to. Every part of a recipe is a field in the table or in the
+   * specification now, so it is always somewhere the caret can be put - which is what
+   * "the fault leads to the thing it is about" means once nothing opens a form.
    */
   function reach(node) {
-    if (node.kind === 'ingredient') return void opened.get(node)?.focus()
-    open(node)
-  }
-
-  /* Opening a form. Which one a tap gets is decided by what was tapped. */
-
-  function open(node) {
-    /*
-     * A tap on a row has nothing to open: the row is the form, and the field under the
-     * finger has already taken the caret. Moving it anywhere else would be taking it
-     * away from the cell that was actually pointed at.
-     */
-    if (node.kind === 'ingredient') return
-    if (node.kind === 'step') return openStep(node)
-    // A preparation is not a thing of its own: it belongs to a step, and is edited in
-    // that step's form. One belonging to the recipe rather than to any step is written
-    // in the specification, where the rest of what a person wrote is.
-    const owner = parentOf(current, node)
-    if (owner) openStep(owner)
-  }
-
-  /** A preparation the recipe owns has no form to open, so it is not offered as a tap. */
-  function pickable(node) {
-    if (node.kind === 'ingredient') return false
-    return node.kind !== 'preparation' || Boolean(parentOf(current, node))
+    opened.get(node)?.focus()
   }
 
   /**
@@ -394,41 +455,6 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     let next = current
     for (const node of taken) next = removeNode(next, node)
     change(next)
-  }
-
-  /**
-   * A new step's inputs come from the rows that were ticked, so its form only asks what
-   * the step *is*. With nothing ticked it falls back to asking with a list, which is the
-   * same list editing a step uses: `+ Step` must not be a button that does nothing, and
-   * a cook who has not worked out what the checkboxes are for still has a way through.
-   */
-  function openStep(node, taken = null) {
-    stepSheet({
-      heading: node ? 'Step' : 'New step',
-      fields: node ? fieldsOf(node) : {},
-      // The filter: what is still a root, plus, when editing, this step's own inputs.
-      options: taken ? null : candidates(current, node),
-      taking: taken ? summarise(taken) : null,
-      save: {
-        text: node ? 'Save' : 'Add',
-        run: (fields) =>
-          change(
-            node
-              ? editStep(current, node, fields)
-              : addStep(current, { ...fields, inputs: taken ?? fields.inputs }),
-          ),
-      },
-      remove: node ? { text: 'Delete', run: () => drop([node]) } : null,
-    })
-  }
-
-  function summarise(taken) {
-    const { moved, emptied } = upheaval(current, taken)
-    return {
-      inputs: taken.map(label),
-      moved: moved.map(({ node, from }) => `${label(node)} comes out of ${label(from)}`),
-      emptied: emptied.map((step) => `${label(step)} is left empty, so it goes too`),
-    }
   }
 
   paint()

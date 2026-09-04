@@ -222,6 +222,11 @@ inside them. A qualifier drops to its own line.
 
 ## Editing
 
+- **Every part of a recipe is written where it is drawn.** No form is put over
+  the table: a row's four values are its three cells opened as fields, a step's
+  verb, note and preparations are fields in its cell, and what the recipe
+  yields, its notes and the preparations belonging to it are fields in the
+  specification.
 - **An ingredient row is written in place.** Its four values already have three
   cells drawn for them, so writing one is those cells opened as fields rather
   than a form put over the table. The fields keep the cell's own alignment and
@@ -233,9 +238,20 @@ inside them. A qualifier drops to its own line.
   are brought up to date, because they are sums of what the rows say.
 - An empty amount, unit or qualifier shows a faint placeholder (`–`, `–`, `…`),
   so an empty field can be found and hit.
-- `+ Ingredient` adds an empty row and puts the caret in it. There is no form to
-  fill in first: the row is the form, and a blank one is simply a fault until it
-  is not.
+- `+ Ingredient` adds an empty row and puts the caret in it, and `Process in
+  step` makes an unnamed step and puts the caret in that. There is no form to
+  fill in first: the thing is made and then named, and a blank one is simply a
+  fault until it is not.
+- **A step's preparations are fields in its cell.** Read, a preparation attached
+  to a step is drawn over that step's column, which is when it happens. Written,
+  it belongs with the step - it is one of the things the step says about itself,
+  and a band cell has nothing to say about which step it is attached to. So the
+  band holds nothing while writing.
+- **A note and an empty preparation stay out of sight** until the cell is reached
+  for. Both are rare, and a field on every cell of every step would be noise on a
+  table whose whole point is that it is dense.
+- Writing, a step column is wider than reading gives it: a cell being read wraps
+  its verb, and a field is one line and cuts instead.
 - A tappable cell is marked by the cursor and by the amber wash under the
   pointer - never by a colour of its own.
 - A **chosen row** takes the amber across all three of its fields. There is no
@@ -244,10 +260,14 @@ inside them. A qualifier drops to its own line.
   for. A click reaches the row through its fields, so shift still chooses from
   anywhere in it; a press does not, because holding a row is how a thumb chooses
   it and holding inside a field is how a thumb selects text.
+- **Shift, command or a long press on a step** says "these rows are what goes
+  in": it ticks what the step holds, and from there rows are ticked and unticked
+  like any others. The bar then offers `Apply` instead of `Process in step`.
 - **Deleting is done from the bar the ticked rows raise**, where what else would
   go is already spelled out. It takes the rows themselves rather than what holds
   them: `Process in step` asks what these rows belong to, because that is what a
-  new step would take, and deleting asks nothing.
+  new step would take, and deleting asks nothing. A step is deleted from the same
+  bar while its inputs are being chosen.
 - The name of the recipe is a field in the heading; its yield, notes and
   preparations are fields in the specification. A preparation that belongs to a
   step is edited in that step's form, and one that belongs to the recipe has no

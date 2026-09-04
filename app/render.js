@@ -86,6 +86,26 @@ export function renderGrid(grid, scale = 1, edit = null) {
     box.addEventListener?.('contextmenu', (event) => event?.preventDefault?.())
   }
 
+  /*
+   * A step, as a target. A plain click goes into whichever field was pointed at; shift,
+   * command or a long press says "these rows are what goes in", which is the same
+   * grammar a row is chosen with.
+   */
+  const held = (box, node) => {
+    if (!edit?.onEditStep) return box
+    box.classList.add('pickable')
+    let took = false
+    box.onclick = (event) => {
+      if (took) return void (took = false)
+      if (event?.shiftKey || event?.ctrlKey || event?.metaKey) edit.onEditStep(node)
+    }
+    onHold(box, () => {
+      took = true
+      edit.onEditStep(node)
+    })
+    return box
+  }
+
   const takes = (box, gather) => {
     if (!edit?.onChoose) return box
     const run = () => {
@@ -135,7 +155,18 @@ export function renderGrid(grid, scale = 1, edit = null) {
   // the first thing every new card is, so this is the common case, not the corner.
   if (grid.columns === 0) table.classList.add('flat')
 
-  const head = grid.band.length
+  const writing = Boolean(edit?.onField)
+
+  /*
+   * Written, a preparation attached to a step is a field in that step's cell, so the
+   * band holds only the ones belonging to the recipe - and those are written in the
+   * specification, so here they are only drawn.
+   */
+  const band = writing
+    ? grid.band.map((row) => row.filter((entry) => entry.column === 0)).filter((row) => row.length)
+    : grid.band
+
+  const head = band.length
   // The row that adds an ingredient is a row of the table like any other, so it counts
   // towards where the bottom is. Otherwise the rows above it are drawn as the last ones
   // and drop their bottom rule, and the table ends twice.
@@ -154,7 +185,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
    * So the head is row 1, the band is rows 2 to `head + 1`, and the rows of the card go
    * on starting where they always did.
    */
-  grid.band.forEach((entries, index) => {
+  band.forEach((entries, index) => {
     const ends = new Set(entries.map((entry) => entry.column + entry.columnSpan - 1))
     for (const entry of entries) {
       const box = pick(preparationField(entry.node), entry.node)
@@ -222,7 +253,9 @@ export function renderGrid(grid, scale = 1, edit = null) {
    * it arrives. That is the roll.
    */
   for (const cell of grid.cells) {
-    const box = pick(stepField(cell.node), cell.node)
+    const box = writing
+      ? held(writableStep(cell.node, edit), cell.node)
+      : pick(stepField(cell.node), cell.node)
     const holder = element('div', 'holds')
     area(box, 1, 1, 1, 1)
     holder.append(box)
@@ -386,6 +419,53 @@ function stepField(node) {
   const cell = element('div', 'step')
   cell.append(element('div', 'verb', bind(node.verb)))
   if (node.aside) cell.append(element('div', 'note', bind(node.aside)))
+  return cell
+}
+
+/**
+ * A step being written: its verb, its note, and what has to be done before it.
+ *
+ * A preparation belonging to a step is drawn over that step's column when the recipe is
+ * read, which is where it happens. Written, it belongs in the step's own cell - it is
+ * one of the things the step says about itself, and a band cell has nothing to say about
+ * which step it is attached to.
+ *
+ * The note and an empty preparation stay out of sight until the cell is reached for.
+ * Both are rare, and a field on every cell of every step would be noise on a table whose
+ * whole point is that it is dense.
+ */
+function writableStep(node, edit) {
+  const written = node.children
+    .filter((child) => child.kind === 'preparation')
+    .map((child) => (child.aside ? `${child.text} (${child.aside})` : child.text))
+
+  const read = () => ({
+    verb: verb.value,
+    aside: note.value,
+    preparations: befores.map((field) => field.value.trim()).filter(Boolean),
+  })
+
+  const make = (className, value, placeholder) => {
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.className = `field ${className}`
+    input.value = value
+    input.placeholder = placeholder
+    input.onchange = () => edit.onField(node, read())
+    // As on a row: a click reaches the cell, a press does not.
+    input.onpointerdown = (event) => event.stopPropagation()
+    return input
+  }
+
+  const verb = make('verb', node.verb, 'Step')
+  const note = make('note', node.aside ?? '', 'Note')
+  // One field per preparation, and one more, so another can be added by typing into it.
+  const befores = [...written, ''].map((line) => make('before', line, 'Before'))
+
+  edit.onDrawn?.(node, verb)
+
+  const cell = element('div', 'step')
+  cell.append(verb, note, ...befores)
   return cell
 }
 

@@ -14,7 +14,6 @@ const SHELL = [
   '/editor.js',
   '/facts.js',
   '/page.js',
-  '/sheet.js',
   '/read.js',
   '/overview.js',
   '/library.js',

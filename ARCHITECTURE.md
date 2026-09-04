@@ -231,12 +231,28 @@ rows say.
 a button that moves about is a button nobody finds twice. It adds an empty row
 and puts the caret in it; there is no form to fill in first.
 
+**A step is written in its cell too** - its verb, its note, and the preparations
+attached to it. A preparation is drawn over the step's column while the recipe is
+read, which is when it happens; written, it belongs with the step, so the band
+holds nothing while writing.
+
 **A step is built by choosing rows.** A row is chosen by holding it, or by shift
 or command clicking it - there is no column of checkboxes, because a column that
 exists only while writing is a column the table has to make room for while
 reading. Ticked rows raise a bar saying what they came to, and `Process in step`
-turns them into one. Deleting is in that bar too, where the cascade is already
-spelled out, and it takes the rows themselves rather than what holds them.
+makes an unnamed step from them and puts the caret in its verb. Deleting is in
+that bar too, where the cascade is already spelled out, and it takes the rows
+themselves rather than what holds them.
+
+**A step's inputs are chosen the same way.** Shift or a long press on a step ticks
+the rows it holds; from there they are ticked and unticked like any others, and
+`Apply` reads back what they now come to. That question is asked of the step's
+*candidates* - its own inputs, plus whatever is still loose outside it - and not
+of `claim`, which answers "what holds these rows" and would climb past the step
+being edited: from inside a step, every row of it is also every row of the step
+above. A row that belongs to no candidate is refused by name rather than dropped.
+
+There are no dialogs left in the editor. `app/sheet.js` is gone.
 
 What a row *means* is not the ingredient on it. It is whatever currently holds
 that ingredient - the rightmost cell in the row, which by right alignment is the

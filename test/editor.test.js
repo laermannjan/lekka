@@ -35,8 +35,6 @@ function open(text, refuse = null, throws = false) {
   return { screen, saved, hold: () => (release = () => {}), let_go: () => release?.() }
 }
 
-const sheet = () => one(body, (node) => node.tag === 'dialog', 'sheet')
-
 /**
  * A field of the specification, found by the label beside it. The specification is a
  * flat grid of label and value cells, so the value is the cell after the label.
@@ -106,21 +104,50 @@ function tick(screen, name, shift = false) {
 }
 
 const process = (screen) => click(screen, 'Process in step')
-const takes = (screen) => one(screen, byClass('takes'), 'takes').textContent
 
-/** The tick list. The read-only summary of what was taken is `.choice.taken`. */
-const choices = () =>
-  all(sheet())
-    .filter((node) => byClass('choice')(node) && !byClass('taken')(node))
-    .map((line) => ({
-      text: line.children[1].textContent,
-      carries: line.children[2]?.textContent ?? null,
-      box: line.children[0],
-    }))
+/** Every step cell of the one table, with the fields it is written in. */
+const stepsOf = (screen) =>
+  all(onlyTable(screen))
+    .filter(byClass('step'))
+    .map((cell) => {
+      const fields = all(cell).filter(byClass('field'))
+      return { cell, verb: fields[0], note: fields[1], before: fields.slice(2) }
+    })
+
+const stepNamed = (screen, verb) => {
+  const found = stepsOf(screen).find((step) => step.verb.value === verb)
+  if (!found)
+    throw new Error(`no step "${verb}" among ${JSON.stringify(stepsOf(screen).map((s) => s.verb.value))}`)
+  return found
+}
+
+/** Name the step that has no name yet: the one `Process in step` has just made. */
+function nameStep(screen, verb, values = {}) {
+  const step = stepNamed(screen, '')
+  step.verb.value = verb
+  if (values.note !== undefined) step.note.value = values.note
+  if (values.before !== undefined) step.before.at(-1).value = values.before
+  step.verb.onchange()
+  return step
+}
+
+/** Shift on a step says "these rows are what goes into it". */
+const openStep = (screen, verb) => tap(stepNamed(screen, verb).cell, { shiftKey: true })
+
+/** Rename a step where it stands. */
+function rename(screen, from, to) {
+  const step = stepNamed(screen, from)
+  step.verb.value = to
+  step.verb.onchange()
+}
+const takes = (screen) => one(screen, byClass('takes'), 'takes').textContent
 
 /** What the editor drew, as the card's own text does not exist until it is saved. */
 const plain = (node) => node.textContent.replace(/\u00a0/g, ' ')
-const shown = (screen) => all(screen).filter(byClass('verb')).map(plain)
+const shown = (screen) =>
+  all(screen)
+    .filter((node) => node.tag === 'input' && byClass('verb')(node))
+    .map((node) => node.value)
 /** Every ingredient row of the one table, top to bottom, as the rows now spell it. */
 const named = (screen) =>
   all(screen)
@@ -181,8 +208,7 @@ test('ticking rows and processing them builds the step', async () => {
   assert.equal(takes(screen), '250 g Mehl + 500 ml Milch')
 
   process(screen)
-  fill({ Instruction: 'verrühren' })
-  submit()
+  nameStep(screen, 'verrühren')
 
   assert.deepEqual(shown(screen), ['verrühren'])
   assert.deepEqual(faults(screen), [])
@@ -214,8 +240,7 @@ test('two strands that never meet are refused until a step joins them', () => {
     enter(screen, { name, amount: '200', unit: 'g' })
     tick(screen, name)
     process(screen)
-    fill({ Instruction: verb })
-    submit()
+    nameStep(screen, verb)
   }
 
   assert.deepEqual(shown(screen).sort(), ['braten', 'kochen'])
@@ -230,8 +255,7 @@ test('two strands that never meet are refused until a step joins them', () => {
   assert.equal(takes(screen), 'kochen + braten')
 
   process(screen)
-  fill({ Instruction: 'anrichten' })
-  submit()
+  nameStep(screen, 'anrichten')
 
   assert.deepEqual(faults(screen), [])
   assert.equal(one(screen, byText('Save'), 'Save').disabled, false)
@@ -267,19 +291,16 @@ test('every field of a row writes to the same ingredient', () => {
   assert.equal(after.aside.value, 'Type 550')
 })
 
-test('a step being edited sees its own inputs, and never the strand it sits in', () => {
+test('a step being edited starts from its own rows, and refuses the strand it sits in', () => {
   const { screen } = open(PANCAKES)
 
-  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'verrühren', 'verb'))
-  assert.deepEqual(choices().map((choice) => choice.text), ['250 g Mehl', '500 ml Milch'])
-
-  // braten holds verrühren, so offering it here would make a loop. It is not on the list.
-  assert.ok(!choices().some((choice) => choice.text.includes('braten')))
+  // Shift on the step ticks what it holds, and the bar says so.
+  openStep(screen, 'verrühren')
+  assert.equal(takes(screen), '250 g Mehl + 500 ml Milch')
 
   // Dropping an input hands it back to the waiting list rather than deleting it.
-  choices()[1].box.checked = false
-  fill({ Instruction: 'verrühren' })
-  submit()
+  tick(screen, 'Milch')
+  click(screen, 'Apply')
 
   // Milch is still a row of the same table; it has simply lost what was to its right.
   onlyTable(screen)
@@ -287,24 +308,37 @@ test('a step being edited sees its own inputs, and never the strand it sits in',
   assert.deepEqual(faults(screen), ['500 ml Milch goes into no step'])
 })
 
+test('a row already inside the step above cannot be fed to the one below it', () => {
+  const { screen } = open(WITH_BUTTER)
+
+  // Butter belongs to schmelzen, which belongs to braten, which holds verrühren.
+  // Feeding it to verrühren would be a loop, so it is refused rather than dropped.
+  openStep(screen, 'verrühren')
+  tick(screen, 'Butter')
+  click(screen, 'Apply')
+
+  assert.ok(all(screen).some((node) => node.textContent.includes('cannot go into verrühren')))
+  assert.deepEqual(shown(screen).sort(), ['braten', 'schmelzen', 'verrühren'])
+})
+
 test('deleting a step frees what it held instead of taking the strand with it', () => {
   const { screen } = open(PANCAKES)
 
-  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
-  tap(one(sheet(), byText('Delete'), 'Delete'))
+  openStep(screen, 'braten')
+  click(screen, 'Delete step')
 
   assert.deepEqual(shown(screen), ['verrühren'])
   assert.deepEqual(faults(screen), [])
 })
 
-test('a note on a step is drawn under its verb and edits in place', () => {
+test('a note on a step is a field under its verb, in the cell', () => {
   const { screen } = open(PANCAKES)
-  assert.ok(all(screen).some((node) => byClass('note')(node) && plain(node) === '2 min je Seite'))
+  const step = stepNamed(screen, 'braten')
+  assert.equal(step.note.value, '2 min je Seite')
 
-  tap(one(screen, byClass('note'), 'note'))
-  const form = fill({})
-  assert.equal(field(form, 'Instruction').value, 'braten')
-  assert.equal(field(form, 'Note').value, '2 min je Seite')
+  step.note.value = '3 min je Seite'
+  step.note.onchange()
+  assert.equal(stepNamed(screen, 'braten').note.value, '3 min je Seite')
 })
 
 test('punctuation the file would read as structure is refused while it is typed', async () => {
@@ -313,8 +347,7 @@ test('punctuation the file would read as structure is refused while it is typed'
   enter(screen, { name: 'Salz: grob', amount: '1', unit: 'TL' })
   tick(screen, 'Salz: grob')
   process(screen)
-  fill({ Instruction: 'würzen' })
-  submit()
+  nameStep(screen, 'würzen')
 
   // `- Salz: grob: 1 TL` splits at the first colon, so this card would come back as
   // salt in an amount of "grob" - and come back as the same text, so no round trip
@@ -346,8 +379,7 @@ test('the specification writes the yield, the notes and the preparations', () =>
   enter(screen, { name: 'Teig' })
   tick(screen, 'Teig')
   process(screen)
-  fill({ Instruction: 'backen' })
-  submit()
+  nameStep(screen, 'backen')
 
   type(screen, 'Yield', '1 Laib')
   type(screen, 'Before', 'Ofen vorheizen (240 °C)')
@@ -368,22 +400,20 @@ test('the name is a field of the editor, and an empty one is a fault', () => {
   assert.ok(all(screen).some((node) => node.textContent.includes('The recipe needs a name')))
 })
 
-test('the sheet is taken off the page when it closes', () => {
+test('nothing on this screen opens a dialog any more', () => {
   const { screen } = open('# Neu\n')
   enter(screen, { name: 'Teig' })
   tick(screen, 'Teig')
   process(screen)
-  assert.equal(descendants(body).filter((node) => node.tag === 'dialog').length, 1)
-  sheet().close()
+  nameStep(screen, 'kneten')
+  openStep(screen, 'kneten')
   assert.equal(descendants(body).filter((node) => node.tag === 'dialog').length, 0)
 })
 
 test('a save that arrives is said, and so is one that does not', async () => {
   const { screen, saved } = open(PANCAKES)
   const edit = () => {
-    tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
-    fill({ Instruction: 'anbraten' })
-    submit()
+    rename(screen, 'braten', 'anbraten')
   }
 
   // Nothing has changed yet, so there is nothing to save.
@@ -400,9 +430,7 @@ test('a save that arrives is said, and so is one that does not', async () => {
 
 test('a write the server refuses leaves the draft alone and says why', async () => {
   const { screen, saved } = open(PANCAKES, 'Not saved. No connection.')
-  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
-  fill({ Instruction: 'anbraten' })
-  submit()
+  rename(screen, 'braten', 'anbraten')
 
   await one(screen, byText('Save'), 'Save').onclick()
   assert.deepEqual(saved, [])
@@ -435,10 +463,7 @@ test('taking one row out of a step is said before it happens, and then done', ()
   )
 
   process(screen)
-  // The sheet says it again, next to what goes in, before it is committed.
-  assert.ok(all(sheet()).some((node) => node.textContent.includes('comes out of verrühren')))
-  fill({ Instruction: 'sieben' })
-  submit()
+  nameStep(screen, 'sieben')
 
   assert.deepEqual(shown(screen).sort(), ['braten', 'schmelzen', 'sieben', 'verrühren'])
   assert.deepEqual(faults(screen), [
@@ -459,8 +484,7 @@ test('a step left empty by the move is named, and goes with it', () => {
   assert.ok(!all(screen).some((node) => node.textContent.includes('left empty')))
 
   process(screen)
-  fill({ Instruction: 'bräunen' })
-  submit()
+  nameStep(screen, 'bräunen')
 
   assert.deepEqual(shown(screen).sort(), ['braten', 'bräunen', 'schmelzen', 'verrühren'])
 })
@@ -475,8 +499,7 @@ test('naming the last ingredient of a step warns that the step goes too', () => 
   assert.equal(takes(screen), '250 g Mehl + schmelzen')
 
   process(screen)
-  fill({ Instruction: 'mischen' })
-  submit()
+  nameStep(screen, 'mischen')
   assert.deepEqual(shown(screen).sort(), ['braten', 'mischen', 'schmelzen', 'verrühren'])
 })
 
@@ -534,8 +557,7 @@ test('a card is one table at every stage of being written', () => {
   for (const [name, verb] of [['Reis', 'kochen'], ['Hähnchen', 'braten']]) {
     tick(screen, name)
     process(screen)
-    fill({ Instruction: verb })
-    submit()
+    nameStep(screen, verb)
     onlyTable(screen)
   }
   assert.deepEqual(faults(screen), [
@@ -544,13 +566,13 @@ test('a card is one table at every stage of being written', () => {
   assert.deepEqual(named(screen), ['Reis', 'Hähnchen'])
 })
 
-test('an existing step still edits its inputs as a list', () => {
+test('a step being edited starts from everything it holds, however deep', () => {
   const { screen } = open(WITH_BUTTER)
-  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
-  assert.deepEqual(choices().map((choice) => choice.text), ['verrühren', 'schmelzen'])
+  openStep(screen, 'braten')
+  assert.equal(takes(screen), 'verrühren + schmelzen')
 })
 
-test('a step can be added before anything is ticked, and the table says so', () => {
+test('a step needs rows, and + Step says so before it does nothing', () => {
   const { screen } = open(WITH_BUTTER)
 
   // The affordance is there at rest: nothing has been ticked, and nothing needs to be.
@@ -558,24 +580,19 @@ test('a step can be added before anything is ticked, and the table says so', () 
   assert.equal(all(screen).filter(byClass('takes')).length, 0)
 
   tap(add)
-  // With nothing ticked it asks with the list, so the button never does nothing.
-  assert.deepEqual(choices().map((choice) => choice.text), ['braten'])
-  sheet().close()
+  assert.ok(all(screen).some((node) => node.textContent.includes('Tick the rows')))
 
-  // With rows ticked it takes them instead, and does not ask twice.
+  // With rows ticked it takes them, and the new step is waiting for its name.
   tick(screen, 'Butter')
   tap(one(onlyTable(screen), byText('+ Step'), '+ Step'))
-  assert.deepEqual(choices(), [])
-  assert.ok(all(sheet()).some((node) => byClass('taken')(node) && node.textContent === 'schmelzen'))
+  assert.equal(stepNamed(screen, '').verb.value, '')
+  nameStep(screen, 'sieben')
+  assert.deepEqual(shown(screen).sort(), ['braten', 'schmelzen', 'sieben', 'verrühren'])
 })
 
 test('an edit made while a save is in flight is not counted as saved', async () => {
   const { screen, saved, hold, let_go } = open(PANCAKES)
-  const edit = (from, to) => {
-    tap(one(screen, (node) => byClass('verb')(node) && node.textContent === from, from))
-    fill({ Instruction: to })
-    submit()
-  }
+  const edit = (from, to) => rename(screen, from, to)
 
   edit('braten', 'anbraten')
   hold()
@@ -678,9 +695,7 @@ test('deleting something that empties nothing does not ask', () => {
 
 test('a save that throws does not wedge the editor', async () => {
   const { screen } = open(PANCAKES, null, true)
-  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
-  fill({ Instruction: 'anbraten' })
-  submit()
+  rename(screen, 'braten', 'anbraten')
 
   await one(screen, byText('Save'), 'Save').onclick()
 
