@@ -264,7 +264,14 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false, besi
   // A trackpad scrolls freely and settles when the hand stops, so the edges grip there too.
   let resting = null
   scroll.addEventListener('scroll', () => {
-    if (pointer !== null || !box.classList.contains('reading')) return
+    if (!box.classList.contains('reading')) return
+    /*
+     * The places are measured again as the card moves, not only where it comes to rest.
+     * They name what is under them, and what is under them changes while you scroll -
+     * so a card dragged half a column showed three places describing where it had been.
+     */
+    dress(place())
+    if (pointer !== null) return
     clearTimeout(resting)
     resting = setTimeout(() => glide(place()), 140)
   }, { passive: true })
