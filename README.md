@@ -40,6 +40,20 @@ npm test
 npm run show test/cards/erdkruste.lekka 2   # draw a card in the terminal, doubled
 ```
 
+With [mise](https://mise.jdx.dev), which pins the Node version and the two
+settings a checkout runs on:
+
+```
+mise run serve       # http://localhost:8080, restarted whenever a server file changes
+mise run serve 8081  # somewhere else, for one run
+mise run test
+```
+
+`mise run serve` watches what the server imports - `server/` and the two modules
+it shares with the app - and restarts on a change to any of it. The rest of
+`app/` is read from disk on every request, so a browser reload is already enough
+there and nothing restarts for it.
+
 ## Deploying it
 
 Without cloning anything. Save this as `compose.yaml` and run

@@ -6,8 +6,15 @@ PORT = "8080"
 DATA_DIR = "./data"
 
 [tasks.serve]
-description = "App and API on $PORT, no build"
-run = "node server/main.js"
+description = "App and API on $PORT, restarted when a server file changes"
+usage = 'arg "[port]" help="Listen here instead of $PORT"'
+# `--watch` reloads on a change to anything the server imports, which is `server/` and the
+# two modules it shares with the app. It deliberately does not reach the rest of `app/`:
+# those are read from disk on every request, so a browser reload is already enough, and a
+# restart for them would drop the connection for nothing.
+#
+# The port is named once, in [env] above. An argument overrides it for one run.
+run = 'PORT="${usage_port:-$PORT}" exec node --watch server/main.js'
 
 [tasks.test]
 description = "Run the tests once"
