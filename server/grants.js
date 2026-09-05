@@ -36,7 +36,7 @@ export function openGrants(db) {
   )
   const byId = one('select id, card, kind, scope from grants where id = ?')
   const forPerson = one(
-    `select g.card as id, c.updated from grants g join cards c on c.id = g.card
+    `select g.card as id, g.scope, c.updated from grants g join cards c on c.id = g.card
       where g.kind = 'person' and g.subject = ?
         and (g.expires is null or g.expires > ?)
       order by c.updated desc`,

@@ -45,7 +45,12 @@ function head(acts) {
   return (acts ? ['Recipe', 'Delete'] : ['Recipe']).map((name) => element('span', 'label', name))
 }
 
-function row({ id, card }, { onDelete }) {
+/**
+ * A recipe somebody only let you read is still yours to open, and not yours to destroy.
+ * The cell is left empty rather than holding a control that would only refuse. Where
+ * nothing is owned at all no scope comes back, and everyone may delete everything.
+ */
+function row({ id, scope, card }, { onDelete }) {
   const link = element('a', 'name', card ? card.title : id)
   link.href = address(id)
   const name = element('span', 'card')
@@ -54,7 +59,9 @@ function row({ id, card }, { onDelete }) {
   if (!onDelete) return [name]
 
   const erase = element('span')
-  erase.append(button('Delete', 'danger', () => onDelete(id, card)))
+  if (scope === undefined || scope === 'owner')
+    erase.append(button('Delete', 'danger', () => onDelete(id, card)))
+  else erase.append(element('span', 'none', scope === 'edit' ? 'shared with you' : 'read only'))
   return [name, erase]
 }
 

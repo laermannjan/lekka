@@ -162,74 +162,10 @@ body {
 }
 
 /*
- * The collection this device holds, stamped into the masthead. It is a value, so
- * it is tinted like a tag; it is also the only way to the code that carries the
- * collection onto another device, so it is drawn like a control - ink edge,
- * offset shadow, a code mark - and reads as pressable before it is touched.
- * Hovered, it stops implying and says what it will do.
- */
-.stamp {
-  align-items: center;
-  background: var(--tint-set);
-  border: 1px solid var(--edge);
-  box-shadow: var(--press);
-  color: var(--ink);
-  cursor: pointer;
-  display: inline-flex;
-  font: 400 11px/1.7 var(--mono);
-  letter-spacing: 0.06em;
-  padding: 0 6px;
-  text-transform: uppercase;
-}
-
-.stamp .mark {
-  display: block;
-  flex: none;
-  height: 10px;
-  margin-right: 6px;
-  width: 10px;
-}
-
-.stamp .hint {
-  max-width: 0;
-  opacity: 0;
-  overflow: hidden;
-  padding-left: 0;
-  white-space: nowrap;
-}
-
-.stamp:hover,
-.stamp:focus-visible {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-.stamp:hover .hint,
-.stamp:focus-visible .hint {
-  max-width: 20ch;
-  opacity: 1;
-  padding-left: 8px;
-}
-
-.stamp:active {
-  box-shadow: none;
-  transform: translate(2px, 2px);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .stamp .hint {
-    transition:
-      max-width 170ms ease,
-      opacity 130ms ease,
-      padding-left 170ms ease;
-  }
-}
-
-/*
  * The name is the way home. There was a row of tabs here, and one of them was
  * `Cards` - a button that took you to the page you reach by clicking the name of
  * the app, which is where every masthead on the web has led for thirty years.
- * The other opened a form that the collection can offer for itself.
+ * The other opened a form the overview can offer for itself.
  */
 a.wordmark {
   color: var(--ink);
@@ -328,9 +264,8 @@ a.wordmark:hover {
  * nothing that the column heading above it has not already said, and hides the
  * one thing the row was asked for.
  *
- * The tint says what kind of identifier it is, so a card is told from a
- * collection before either is read. Dotted, because a value that was generated
- * rather than typed should not be drawn with the same edge as a control.
+ * The tint says what kind of identifier it is. Dotted, because a value that was
+ * generated rather than typed should not be drawn with the same edge as a control.
  */
 .tag {
   background: var(--paper);
@@ -485,10 +420,10 @@ button.quiet:disabled {
 }
 
 /*
- * Destruction, at the two weights it comes in. `Delete` takes the card away from
- * everyone holding its link and is filled; `Remove` only takes it out of this
- * collection and leaves the card standing, so it is the same red said quietly.
- * Both keep the ink border every pressable thing has.
+ * Destruction, at the two weights it comes in. `Delete` takes the recipe away from
+ * everyone who can open it and is filled; `Revoke` takes one person's grant and
+ * leaves the recipe standing, so it is the same red said quietly. Both keep the ink
+ * border every pressable thing has.
  */
 button.quiet.danger {
   background: var(--warning);
@@ -699,19 +634,18 @@ textarea:focus {
 }
 
 /*
- * The collection is a table, not a list. Three columns, because a recipe row has
- * one fact and two acts: what it is called, and the two things you can do to it
- * that are not the same thing. `Delete` takes the recipe away from everyone
- * holding its link; `Remove` only takes it out of this collection.
+ * The library is a table, not a list. Two columns, because a row has one fact and
+ * one act: what the recipe is called, and destroying it. There used to be a third,
+ * `Remove`, which took a recipe out of a collection without destroying it - a recipe
+ * belongs to whoever made it now rather than to a list, so it had nothing left to mean.
  *
- * It once carried the recipe's id, its key and its yield as well. All three were
- * true and none was worth a column: the id and the key are in the address bar of
- * the recipe they belong to, and a yield is read when you cook, not when you are
- * choosing what to cook.
+ * It once carried the recipe's id, its key and its yield as well. None was worth a
+ * column: the id is in the address bar of the recipe it belongs to, the key is gone,
+ * and a yield is read when you cook, not when you are choosing what to cook.
  */
 .records {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) max-content max-content;
+  grid-template-columns: minmax(160px, 1fr) max-content;
 }
 
 .records > * {
@@ -728,7 +662,7 @@ textarea:focus {
   min-height: 0;
 }
 
-.records > *:nth-child(3n) {
+.records > *:nth-child(2n) {
   border-right: 0;
 }
 
@@ -736,7 +670,7 @@ textarea:focus {
   font-weight: 600;
 }
 
-/* Someone else's collection: nothing to do to it, so it is one column of names. */
+/* A recipe you may read and not change: nothing to do to it, so one column of names. */
 .records.reading {
   grid-template-columns: 1fr;
 }
@@ -745,20 +679,7 @@ textarea:focus {
   border-right: 0;
 }
 
-/* The collections this device holds: a name and one act, so two columns rather than three. */
-.records.holding {
-  grid-template-columns: minmax(160px, 1fr) max-content;
-}
-
-.records.holding > *:nth-child(3n) {
-  border-right: 1px solid var(--rule);
-}
-
-.records.holding > *:nth-child(2n) {
-  border-right: 0;
-}
-
-/* An act with no key behind it is not drawn as a control that refuses. */
+/* An empty table still says so, rather than drawing nothing. */
 .records .none {
   color: var(--faint);
   font-size: 12px;
