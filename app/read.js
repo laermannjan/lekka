@@ -94,6 +94,15 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false, besi
     const stepWidth = (column) => widths[2 + column] || 0
 
     /*
+     * Where the three ingredient cells come to rest when the card is rolled: each holds
+     * the left edge behind the one before it. The tracks are as wide as what stands in
+     * them, so these are measurements and not settings - the stylesheet used to name the
+     * widths and could therefore also name the offsets.
+     */
+    table.style.setProperty('--amount', (widths[0] || 0) + 'px')
+    table.style.setProperty('--unit', (widths[1] || 0) + 'px')
+
+    /*
      * The last column an ingredient is still waiting in. Up to there the Done place has
      * to be a whole ingredient block wide, because one may be standing in it; past there
      * nothing wide is left and it can be no wider than the step itself, which pulls the

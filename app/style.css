@@ -842,12 +842,21 @@ textarea:focus {
   scrollbar-width: thin;
 }
 
+/*
+ * The three ingredient tracks are as wide as what stands in them and no wider.
+ *
+ * They were 58px and 54px, fixed. Fixed is wrong in both directions: `40-60 g` doubled
+ * to `80-120` did not fit 58 and wrapped, which cost the row a whole second line - and a
+ * column of `g` and `ml` had 36px of slack in it, all of it falling between the unit and
+ * the name it belongs to.
+ */
 .grid {
   display: grid;
   font-variant-numeric: tabular-nums;
   grid-auto-columns: minmax(44px, auto);
   grid-auto-rows: minmax(21px, auto);
-  grid-template-columns: 58px 54px max-content repeat(var(--columns), minmax(120px, 240px));
+  grid-template-columns:
+    max-content max-content max-content repeat(var(--columns), minmax(120px, 240px));
 }
 
 /*
@@ -863,16 +872,16 @@ textarea:focus {
  */
 .grid.choosing {
   grid-template-columns:
-    58px 54px max-content repeat(var(--columns), fit-content(240px)) 46px;
+    max-content max-content max-content repeat(var(--columns), fit-content(240px)) 46px;
   width: max-content;
 }
 
 .grid.flat {
-  grid-template-columns: 58px 54px max-content;
+  grid-template-columns: max-content max-content max-content;
 }
 
 .grid.choosing.flat {
-  grid-template-columns: 58px 54px max-content 46px;
+  grid-template-columns: max-content max-content max-content 46px;
 }
 
 .hold,
@@ -974,11 +983,23 @@ textarea:focus {
   text-align: center;
 }
 
+.amount,
+.words {
+  white-space: nowrap;
+}
+
 .amount {
   padding-right: 3px;
   text-align: right;
 }
 
+/*
+ * Tight to the amount, ordinary to the name. A unit belongs to the number before it, so
+ * 3px there against the 7px every other cell keeps - and the same 7px on the other side,
+ * because the gap between a unit and a name should be the gap between any two cells and
+ * no smaller. The 36px of slack that used to sit there was the fixed track, not the
+ * padding, and it is the track that was wrong.
+ */
 .unit {
   padding-left: 3px;
 }
@@ -1067,12 +1088,8 @@ textarea:focus {
  * and it is what the same column takes when the card is written.
  */
 .reading .grid {
-  --amount: min(12vw, 58px);
-  --unit: min(10vw, 54px);
-  --names: min(34vw, 300px);
-
   grid-template-columns:
-    var(--amount) var(--unit) var(--names)
+    max-content max-content min(34vw, 300px)
     repeat(var(--columns), fit-content(240px))
     var(--tail, 0px);
   width: max-content;

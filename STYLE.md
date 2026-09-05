@@ -164,7 +164,14 @@ one - it is a cell of the table, marked by the wash and nothing else.
 - Ingredients left aligned, steps **centred**. Centring is what makes a merge
   visible: a cell spanning four rows sits at their middle.
 - Amounts right aligned, unit grey between amount and name, qualifier grey after
-  the name.
+  the name. The unit sits **tight to the amount** - 3px where every other cell
+  keeps 7 - because a unit belongs to the number before it. The gap on the other
+  side is the ordinary one: a unit and a name should be as far apart as any two
+  cells and no nearer.
+- **The three ingredient tracks are as wide as what stands in them.** Fixed at
+  58px and 54px they were wrong in both directions: a doubled range did not fit
+  and cost its row a second line, and a column holding `g` and `ml` carried 36px
+  of slack, all of it falling between the unit and the name it belongs to.
 - An amount without a number (`nach Geschmack`) is grey, left aligned, and takes
   the amount and unit columns together.
 - Notes sit under their verb, centred, grey, balanced across lines.

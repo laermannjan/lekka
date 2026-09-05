@@ -131,8 +131,10 @@ Notes about the recipe do **not** go into the grid, and neither does what it
 yields. They describe the whole recipe rather than a point in it, so they belong
 to the specification under the table.
 
-Step columns share the remaining width equally and never fall below a minimum;
-the ingredient column takes what its content needs. The whole grid scrolls
+Step columns are as wide as what stands in them, up to 240 px; each of the three
+ingredient columns takes exactly what its own content needs. Nothing in the table
+is a fixed width - a number that grows when the recipe is scaled has to have
+somewhere to grow. The whole grid scrolls
 sideways as one.
 
 ## Example

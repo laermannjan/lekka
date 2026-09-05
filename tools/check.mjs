@@ -69,6 +69,7 @@ const LONG = await readFile(new URL('../test/cards/roggenquarkbrot.lekka', impor
  */
 const CHECKS = `
 import { parseCard } from './card.js'
+import { renderCard } from './render.js'
 import { renderReading } from './read.js'
 import { buildEditor } from './editor.js'
 import { toDraft, addIngredient } from './edit.js'
@@ -261,6 +262,42 @@ requestAnimationFrame(() => {
   check('and the two views size their columns alike',
     columns(tall).split(' ').slice(3, -1).join(' ') === columns(written).split(' ').slice(3, -1).join(' '),
     columns(tall) + '  vs  ' + columns(written))
+
+  /*
+   * Scaling a card must not cost it a line. The amount track was 58px whatever stood in
+   * it, so a doubled range did not fit and wrapped, and the row it was on
+   * grew by a whole second line - at the size a cook is most likely to be reading it.
+   */
+  for (const factor of [1, 1.5, 2]) {
+    const at = document.createElement('div')
+    document.getElementById('screen').append(at)
+    at.append(renderCard(parseCard(LONG), factor))
+    const { least, most } = linesOf(at)
+    check(\`no row gains a line at \${factor} times\`, most < least * 1.4,
+      \`\${least.toFixed(1)} to \${most.toFixed(1)}\`)
+
+    /*
+     * And it fits rather than merely refusing to wrap. Not wrapping in a track too
+     * narrow for the number spills the text over its neighbour instead of over a second
+     * line, which is not better - and a scroll width does not report it, because a cell
+     * that overflows visibly has nothing to scroll. So the text is measured itself.
+     */
+    const spills = (one) => {
+      const range = document.createRange()
+      range.selectNodeContents(one)
+      const text = range.getBoundingClientRect()
+      const cell = one.getBoundingClientRect()
+      const style = getComputedStyle(one)
+      return (
+        text.left < cell.left + Number.parseFloat(style.paddingLeft) - 1 ||
+        text.right > cell.right - Number.parseFloat(style.paddingRight) + 1
+      )
+    }
+    const over = [...at.querySelectorAll('.amount, .unit, .words')]
+      .filter((one) => one.textContent && spills(one))
+      .map((one) => one.className + ' "' + one.textContent + '"')
+    check(\`and every amount fits its own cell at \${factor} times\`, over.length === 0, over.join(', '))
+  }
 
   const table = narrow.querySelector('.grid')
   const prep = table.querySelector('.preparation')
