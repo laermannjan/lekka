@@ -57,7 +57,7 @@ test('an invite from somebody says who asked you in', () => {
   assert.equal(fields(form).length, 2)
 })
 
-test('the device list names this browser and refuses to revoke it', () => {
+test('every browser gets the same control, and only the word changes', () => {
   const now = new Date().toISOString()
   const old = new Date(Date.now() - 3 * 86400000).toISOString()
   const list = [
@@ -79,25 +79,27 @@ test('the device list names this browser and refuses to revoke it', () => {
   assert.match(said, /last seen today/)
   assert.match(said, /last seen 3 days ago/)
 
-  const buttons = all(box).filter(byClass('danger'))
-  assert.equal(buttons.length, 1, 'only the other browser offers Revoke')
-  tap(buttons[0])
-  assert.deepEqual(revoked, ['bbb'])
-
-  const signOut = one(
-    box,
-    (node) => node.tag === 'button' && node.textContent === 'Sign out of this browser',
-    'the sign-out button',
+  const ends = all(box).filter(byClass('danger'))
+  assert.deepEqual(
+    ends.map((node) => node.textContent),
+    ['Sign out', 'Revoke'],
+    'the browser you are holding says Sign out; the others say Revoke',
   )
-  tap(signOut)
-  assert.equal(out, 1)
-})
 
-test('a browser that is not in the list yet still gets a sign-out', () => {
-  const box = devices([], null, { onRevoke: () => {}, onSignOut: () => {}, onInvite: async () => null })
-  body.replaceChildren(box)
-  assert.equal(all(box).filter(byClass('danger')).length, 0)
-  assert.match(text(box), /Sign out of this browser/)
+  tap(ends[0])
+  assert.equal(out, 1, 'and it ends this one')
+  assert.deepEqual(revoked, [])
+
+  tap(ends[1])
+  assert.deepEqual(revoked, ['bbb'])
+  assert.equal(out, 1)
+
+  assert.equal(
+    all(box).filter((node) => node.tag === 'button' && node.textContent === 'Sign out of this browser')
+      .length,
+    0,
+    'and there is no second way to do it sitting under the table',
+  )
 })
 
 test('inviting somebody hands you a link, once', async () => {
@@ -147,4 +149,11 @@ test('the household screen removes anybody but you, and says what that costs', (
   assert.equal(drops.length, 1, 'you are not on the list of people you can remove')
   tap(drops[0])
   assert.deepEqual(removed, ['rita'])
+})
+
+test('a list with nothing in it offers nothing to end', () => {
+  const box = devices([], null, { onRevoke: () => {}, onSignOut: () => {}, onInvite: async () => null })
+  body.replaceChildren(box)
+  assert.equal(all(box).filter(byClass('danger')).length, 0)
+  assert.match(text(box), /Invite someone/)
 })

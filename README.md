@@ -162,7 +162,9 @@ list of browsers you are signed in on:
   their own name and password when they open it, and arrive with an empty library.
   It works once and expires in an hour; only its hash is stored, so a lost link is
   reissued rather than recovered.
-- **Sign out of this browser** ends this session, and **Revoke** ends another one.
+- **Sign out** on the row for the browser you are holding, **Revoke** on any other -
+  the same act, aimed at a different machine. Either stops that browser reading
+  anything new; neither reaches the recipes already on it.
 - **People**, for whoever keeps the instance, lists everybody and removes somebody.
   Removing them ends their sessions and hands any recipe they owned to you, because
   a recipe left with no owner is one nobody could reach again.

@@ -190,9 +190,10 @@ recipe belongs to whoever made it now rather than to a list, so it had nothing
 left to mean. The last row is where the table grows: `Import` for a recipe that
 exists somewhere already, `Create` for one that does not.
 
-Your own name is in the masthead where a collection used to be, and opens the list
-of browsers signed in as you - which is also where you sign out, revoke another
-browser, and hand somebody a way in. It is absent under `NONE`, where there is
+Your own name is in the masthead where a collection used to be, and opens the list of
+browsers signed in as you. Ending one is the same act wherever it is aimed, so it is
+the same control in the same place on every row: `Sign out` on the browser you are
+holding, `Revoke` on any other. It is also where you hand somebody a way in. It is absent under `NONE`, where there is
 nobody to be.
 
 `app/qr.js` draws a QR code in some four hundred lines with no dependency - the

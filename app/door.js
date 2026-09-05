@@ -73,9 +73,13 @@ export function joining({ invite, onJoin }) {
 }
 
 /**
- * Every browser signed in as you, the one reading this named as itself. Signing out ends
- * this browser; revoking ends another, and stops it reading anything new - it does not
- * reach the recipes already on that machine, and the wording says so.
+ * Every browser signed in as you, the one reading this named as itself.
+ *
+ * Ending one is the same act wherever it is aimed, so it is the same control in the same
+ * place on every row - only the word changes, because ending the browser you are holding
+ * is called signing out and ending one across the house is called revoking. It stops
+ * that browser reading anything new; it does not reach the recipes already on it, and
+ * the confirmation says so.
  */
 export function devices(list, here, { onRevoke, onSignOut, onInvite }) {
   const box = element('div', 'list')
@@ -87,12 +91,10 @@ export function devices(list, here, { onRevoke, onSignOut, onInvite }) {
       element('span', 'name', mine ? `${row.label} · this one` : row.label),
       element('span', 'aside', `last seen ${when(row.seen)}`),
     )
-    if (!mine) {
-      const drop = element('button', 'quiet danger', 'Revoke')
-      drop.type = 'button'
-      drop.onclick = () => onRevoke(row.id)
-      line.append(drop)
-    }
+    const drop = element('button', 'quiet danger', mine ? 'Sign out' : 'Revoke')
+    drop.type = 'button'
+    drop.onclick = () => (mine ? onSignOut() : onRevoke(row.id))
+    line.append(drop)
     box.append(line)
   }
 
@@ -103,11 +105,7 @@ export function devices(list, here, { onRevoke, onSignOut, onInvite }) {
   someone.type = 'button'
   someone.onclick = () => hand(shown, onInvite())
 
-  const out = element('button', 'quiet', 'Sign out of this browser')
-  out.type = 'button'
-  out.onclick = () => onSignOut()
-
-  box.append(element('div', 'bar after', undefined, [someone, out]), shown)
+  box.append(element('div', 'bar after', undefined, [someone]), shown)
   return box
 }
 
