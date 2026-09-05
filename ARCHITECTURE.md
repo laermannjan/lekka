@@ -84,6 +84,14 @@ is what a shared link is about. `app/link.js` is the one place that knows the
 shape. Older links, with the token as a path segment, are read and rewritten on
 arrival.
 
+Somebody new arrives through an invite, which is one table and one screen with two
+outcomes. A `device` invite adds another browser to the person who made it, and asks
+for nothing: only they could have made it, so the link is the whole proof. A `person`
+invite makes somebody new, who chooses the name and password they will sign in with.
+The operator's first-boot link is not a row - there is nobody yet to have issued it -
+but it answers at the same address as the `person` invite it is, so the screen that
+opens a link never has to know where the link came from.
+
 Under `AUTH` and `GRANT` a browser is a session: an opaque token in an `HttpOnly`
 cookie, and a row naming the person it belongs to. `Secure` is set only over a
 connection that is one, because the deployment this is written for is a LAN over
@@ -157,9 +165,10 @@ recipe belongs to whoever made it now rather than to a list, so it had nothing
 left to mean. The last row is where the table grows: `Import` for a recipe that
 exists somewhere already, `Create` for one that does not.
 
-Your own name is stamped into the masthead where a collection used to be, and
-opens the list of browsers signed in as you. It is absent under `NONE`, where
-there is nobody to be.
+Your own name is in the masthead where a collection used to be, and opens the list
+of browsers signed in as you - which is also where you sign out, revoke another
+browser, and hand somebody a way in. It is absent under `NONE`, where there is
+nobody to be.
 
 `app/qr.js` draws a QR code in some four hundred lines with no dependency - the
 app has no build step and a policy that loads nothing from elsewhere, so the

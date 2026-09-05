@@ -6,6 +6,7 @@ import { newId } from '../app/id.js'
 import { guarded, mode as readMode } from './access.js'
 import { openDb } from './db.js'
 import { openGrants } from './grants.js'
+import { openInvites } from './invites.js'
 import { openPeople } from './people.js'
 import { openStore } from './store.js'
 import { handler } from './http.js'
@@ -28,6 +29,7 @@ const store = await openStore(directory, db, grants).open()
  * no access control simply never has a row in them, and every route below sees `null`. */
 const mode = readMode(process.env.ACCESS_CONTROL)
 const people = guarded(mode) ? openPeople(db) : null
+const invites = guarded(mode) ? openInvites(db) : null
 
 /* An instance with a door and nobody behind it needs a first person, and reaching the
  * port first must not be what decides who that is. The operator reads this out of the
@@ -51,6 +53,7 @@ const server = createServer(
   handler(store, {
     app: fileURLToPath(new URL('../app', import.meta.url)),
     people,
+    invites,
     grants,
     mode,
     bootstrap,

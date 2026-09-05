@@ -10,6 +10,7 @@ const CARD = /^\/api\/cards\/([^/]+)$/
 const SHARE = /^\/api\/cards\/([^/]+)\/grants$/
 const GRANT = /^\/api\/grants\/([a-z0-9]{1,64})$/
 const SESSION = /^\/api\/sessions\/([a-z0-9]{1,64})$/
+const INVITE = /^\/api\/invites\/([a-z0-9]{1,64})$/
 const ID = /^[a-z0-9-]{1,64}$/
 
 /** The address a shared recipe is read at, in either shape the app has ever written. */
@@ -41,6 +42,7 @@ export function handler(
   {
     app,
     people = null,
+    invites = null,
     grants = null,
     mode = 'NONE',
     bootstrap = null,
@@ -56,13 +58,16 @@ export function handler(
     tries: limiter({ every: MINUTE, most: triesPerMinute }),
     trustProxy,
   }
-  const options = { app, people, grants, mode, bootstrap, createToken, maxBytes, limits }
+  const options = { app, people, invites, grants, mode, bootstrap, createToken, maxBytes, limits }
 
   return async (request, response) => {
     try {
       await route(store, options, request, response)
     } catch (error) {
       if (error instanceof Refusal) return send(response, error.status, 'text/plain', error.message)
+      // A refusal is expected and says so to the caller. Anything else is a bug, and a
+      // 500 with no trace anywhere is a bug nobody can find.
+      console.error('lekka:', error)
       send(response, 500, 'text/plain', 'server error')
     }
   }
@@ -98,7 +103,7 @@ async function route(store, options, request, response) {
   if (forged(request)) throw new Refusal(403, 'cross-site request refused')
   const session = options.people?.session(cookie(request, COOKIE)) ?? null
 
-  if (path.startsWith('/api/session') || path === '/api/me' || path === '/api/people')
+  if (path.startsWith('/api/session') || path.startsWith('/api/invite') || path === '/api/me')
     return peopleRoute(options, request, response, path, session)
 
   if (path === '/api/cards') {
@@ -149,7 +154,7 @@ async function route(store, options, request, response) {
  * that a guessed link is, since both are somebody trying strings.
  */
 async function peopleRoute(options, request, response, path, session) {
-  const { people, mode, bootstrap } = options
+  const { people, invites, mode, bootstrap } = options
   if (!people) throw missing()
   const secure = encrypted(request, options.limits.trustProxy)
 
@@ -164,19 +169,52 @@ async function peopleRoute(options, request, response, path, session) {
     })
   }
 
-  /* The first person on an empty instance is admitted by a token the operator reads out
-   * of the logs, so that reaching the port first is not the same as owning the box. */
-  if (path === '/api/people') {
+  /* Made by somebody who is already in. `device` is another browser for them; `person`
+   * is somebody new, who picks their own name and password when they open it. */
+  if (path === '/api/invites') {
     if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
-    const { name, password, token } = parse(await body(request, options))
-    if (!people.empty()) throw new Refusal(409, 'this instance already has people')
-    if (!bootstrap || !same(String(token ?? ''), bootstrap))
-      throw new Refusal(401, 'a bootstrap link is required')
+    if (!session) throw new Refusal(401, 'sign in first')
+    const { kind } = parse(await body(request, options))
+    if (!['device', 'person'].includes(kind))
+      throw new Refusal(400, 'an invite is for a device or a person')
+    return json(response, 201, invites.make(kind, session.person))
+  }
+
+  const asInvite = INVITE.exec(path)
+  if (asInvite) {
+    const token = asInvite[1]
+    /* The operator's bootstrap link is not a row - it lives in the process, because
+     * there is nobody yet to have issued it. It answers here as the person invite it is,
+     * so the screen that opens a link never has to know where the link came from. */
+    const first = () => Boolean(bootstrap) && people.empty() && same(token, bootstrap)
+
+    if (request.method === 'GET') {
+      const found = invites.read(token)
+      if (found) return json(response, 200, { kind: found.kind, who: found.who })
+      if (first()) return json(response, 200, { kind: 'person', who: null, first: true })
+      throw missing()
+    }
+    if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
+    if (!options.limits.tries.charge(who(options, request)))
+      throw new Refusal(429, 'too many requests')
+
+    const found = invites.spend(token)
+    if (!found && !first()) throw missing()
+
+    /* Another browser for a person already here needs no name and no password: the
+     * invite is the proof, since only they could have made it. */
+    if (found?.kind === 'device') {
+      const them = people.person(found.person)
+      if (!them) throw missing()
+      return json(response, 201, { id: them.id, name: them.name }, cookieFor(people, them, request, secure))
+    }
+
+    const { name, password } = parse(await body(request, options))
     named(name)
     strong(password)
+    if (people.named(name.trim())) throw new Refusal(409, 'somebody here already signs in as that')
     const person = people.add(name.trim(), password)
-    const held = people.mint(person.id, label(request))
-    return json(response, 201, { id: person.id, name: person.name }, { 'set-cookie': keep(held, secure) })
+    return json(response, 201, { id: person.id, name: person.name }, cookieFor(people, person, request, secure))
   }
 
   if (path === '/api/sessions') {
@@ -214,6 +252,11 @@ async function peopleRoute(options, request, response, path, session) {
   }
 
   throw missing()
+}
+
+/** A person, and the browser they are now signed in on. */
+function cookieFor(people, person, request, secure) {
+  return { 'set-cookie': keep(people.mint(person.id, label(request)), secure) }
 }
 
 function parse(text) {

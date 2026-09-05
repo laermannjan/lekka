@@ -1,11 +1,12 @@
 /**
- * The screens an instance with a door needs: signing in, making the first person, and
- * the list of browsers that are still signed in.
+ * The screens an instance with a door needs: signing in, opening a join link, and the
+ * list of browsers that are still signed in.
  *
  * They live apart from `main.js` because none of them is about a recipe. Every one is a
  * form and a button, and each hands its answer back rather than deciding what happens
  * next - the router owns that, the way it owns every other screen.
  */
+import { linkOut } from './handoff.js'
 
 /** A field with its name beside it, in the same two-column frame a card's notes use. */
 function field(name, type, { value = '', hint = null, focus = false } = {}) {
@@ -52,20 +53,40 @@ export function signIn({ onSignIn }) {
 }
 
 /**
- * The first person on an instance, made from the link the operator read out of the logs.
- * The token is in the fragment, so it never reaches the server in a request line or a
- * log of its own - it is spent in a body, once.
+ * A join link, opened. The server has already said what it is for, so this screen only
+ * has to say it back and take the one thing it still needs.
+ *
+ * A `device` link needs nothing at all: it was made by the person it belongs to, and
+ * only they could have made it, so the link is the whole proof. A `person` link is where
+ * somebody new chooses the name and password they will sign in with from then on.
  */
-export function firstPerson({ token, onCreate }) {
+export function joining({ invite, onJoin }) {
+  if (invite.kind === 'device') {
+    const box = element('form', 'list')
+    const add = element('button', 'go', 'Add this browser')
+    add.type = 'submit'
+    box.append(
+      element('div', 'band', `This link adds the browser you are reading it on to ${invite.who}'s recipes. No password needed - it was made from a browser already signed in.`),
+      element('div', 'bar after', undefined, [add]),
+    )
+    box.onsubmit = (event) => {
+      event.preventDefault()
+      onJoin(null)
+    }
+    return box
+  }
+
   const name = field('Name', 'text', { hint: 'what to call you', focus: true })
   const password = field('Password', 'password', { hint: 'at least 12 characters' })
-  name.input.autocomplete = 'username'
   password.input.autocomplete = 'new-password'
+
   return form(
     [name, password],
-    'Make this person',
-    () => onCreate(name.input.value.trim(), password.input.value, token),
-    'Nobody has signed in here yet. This link makes the first person, and then stops working.',
+    'Join',
+    () => onJoin({ name: name.input.value.trim(), password: password.input.value }),
+    invite.first
+      ? 'Nobody has signed in here yet. This link makes the first person, and then stops working.'
+      : `${invite.who} invited you. Pick a name and a password, and they are yours from now on.`,
   )
 }
 
@@ -74,7 +95,7 @@ export function firstPerson({ token, onCreate }) {
  * this browser; revoking ends another, and stops it reading anything new - it does not
  * reach the recipes already on that machine, and the wording says so.
  */
-export function devices(list, here, { onRevoke, onSignOut }) {
+export function devices(list, here, { onRevoke, onSignOut, onInvite }) {
   const box = element('div', 'list')
 
   for (const row of list) {
@@ -92,10 +113,39 @@ export function devices(list, here, { onRevoke, onSignOut }) {
     box.append(line)
   }
 
+  const shown = element('div', 'list')
+  shown.hidden = true
+
+  /* Two buttons, one flow. What differs is only what redeeming the link does, and that
+   * is decided here, by whoever is holding a browser that is already signed in. */
+  const another = element('button', 'quiet', 'Add another browser')
+  another.onclick = () => hand(shown, onInvite('device'))
+  const someone = element('button', 'quiet', 'Invite someone')
+  someone.onclick = () => hand(shown, onInvite('person'))
+
   const out = element('button', 'quiet', 'Sign out of this browser')
   out.onclick = () => onSignOut()
-  box.append(element('div', 'bar after', undefined, [out]))
+
+  box.append(
+    element('div', 'bar after', undefined, [another, someone, out]),
+    shown,
+  )
   return box
+}
+
+async function hand(box, asked) {
+  const made = await asked
+  if (!made) return
+  const url = new URL(`/join#${made.token}`, location.origin).href
+  box.replaceChildren(
+    linkOut(
+      url,
+      made.kind === 'device'
+        ? 'Open this on the other browser. It works once, and until it expires.'
+        : 'Send this to them. It works once, and until it expires.',
+    ),
+  )
+  box.hidden = false
 }
 
 /** Rough on purpose: a device list wants "yesterday", not a timestamp to the second. */

@@ -9,6 +9,7 @@ import { openDb } from '../server/db.js'
 import { openGrants } from '../server/grants.js'
 import { openStore } from '../server/store.js'
 import { openPeople } from '../server/people.js'
+import { openInvites } from '../server/invites.js'
 import { handler } from '../server/http.js'
 
 const CARD = '# Dinkelquarkbrot (1 Kastenbrot)\n\n- backen\n  - Mehl: 300 g\n'
@@ -25,8 +26,9 @@ async function serve(mode, options = {}) {
   const grants = openGrants(db)
   const store = await openStore(directory, db, grants).open()
   const people = mode === 'NONE' ? null : openPeople(db)
+  const invites = mode === 'NONE' ? null : openInvites(db)
   const server = createServer(
-    handler(store, { people, grants, mode, bootstrap: BOOTSTRAP, ...options }),
+    handler(store, { people, invites, grants, mode, bootstrap: BOOTSTRAP, ...options }),
   ).listen(0)
   await new Promise((done) => server.once('listening', done))
   const base = `http://localhost:${server.address().port}`
@@ -53,6 +55,7 @@ async function serve(mode, options = {}) {
     call,
     grants,
     people,
+    invites,
     cookie: () => jar.get('one'),
     close: () => {
       server.close()
@@ -62,9 +65,9 @@ async function serve(mode, options = {}) {
 }
 
 const signUp = (call, name = 'Jan') =>
-  call('/api/people', {
+  call(`/api/invites/${BOOTSTRAP}`, {
     method: 'POST',
-    body: JSON.stringify({ name, password: 'a long enough passphrase', token: BOOTSTRAP }),
+    body: JSON.stringify({ name, password: 'a long enough passphrase' }),
   })
 
 const signIn = (call, name = 'Jan', password = 'a long enough passphrase') =>
@@ -100,21 +103,24 @@ test('the first person needs the operator’s link, and only ever once', async (
   assert.equal(before.person, null)
   assert.equal(before.mode, 'AUTH')
 
-  const wrong = await call('/api/people', {
+  const wrong = await call('/api/invites/notthelinkatall', {
     method: 'POST',
-    body: JSON.stringify({ name: 'Mallory', password: 'a long enough passphrase', token: 'no' }),
+    body: JSON.stringify({ name: 'Mallory', password: 'a long enough passphrase' }),
   })
-  assert.equal(wrong.status, 401, 'reaching the port first is not enough')
+  assert.equal(wrong.status, 404, 'reaching the port first is not enough')
 
-  const short = await call('/api/people', {
+  const short = await call(`/api/invites/${BOOTSTRAP}`, {
     method: 'POST',
-    body: JSON.stringify({ name: 'Jan', password: 'short', token: BOOTSTRAP }),
+    body: JSON.stringify({ name: 'Jan', password: 'short' }),
   })
   assert.equal(short.status, 400)
 
+  const asked = await (await call(`/api/invites/${BOOTSTRAP}`)).json()
+  assert.deepEqual(asked, { kind: 'person', who: null, first: true }, 'the link says what it is')
+
   assert.equal((await signUp(call)).status, 201)
   assert.equal((await (await call('/api/me')).json()).person.name, 'Jan')
-  assert.equal((await signUp(call, 'Rita')).status, 409, 'the link does not open a second time')
+  assert.equal((await signUp(call, 'Rita')).status, 404, 'the link does not open a second time')
 })
 
 test('AUTH is one door with everything shared behind it', async (t) => {
@@ -422,4 +428,127 @@ test('sharing does not exist where nothing is owned', async (t) => {
     const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
     assert.equal((await call(`/api/cards/${id}/grants`)).status, 404, mode)
   }
+})
+
+test('an invite adds another browser to the person who made it', async (t) => {
+  const { call, close } = await serve('AUTH')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const made = await call('/api/invites', { method: 'POST', body: '{"kind":"device"}' })
+  assert.equal(made.status, 201)
+  const invite = await made.json()
+  assert.equal(invite.kind, 'device')
+  assert.equal(invite.token.length, 22)
+
+  // A browser that has never been here, holding only the link.
+  const said = await (await call(`/api/invites/${invite.token}`, { as: null })).json()
+  assert.deepEqual(said, { kind: 'device', who: 'Jan' }, 'and it says whose it will be')
+
+  const joined = await call(`/api/invites/${invite.token}`, { as: null, method: 'POST' })
+  assert.equal(joined.status, 201)
+  assert.equal((await joined.json()).name, 'Jan', 'the same person, not a new one')
+
+  const fresh = cookieOf(joined)
+  assert.equal((await (await call('/api/me', { as: fresh })).json()).person.name, 'Jan')
+  assert.equal(
+    (await (await call('/api/sessions', { as: fresh })).json()).length,
+    2,
+    'and it shows up in his own list of browsers',
+  )
+
+  assert.equal(
+    (await call(`/api/invites/${invite.token}`, { as: null, method: 'POST' })).status,
+    404,
+    'spent once and gone',
+  )
+})
+
+test('an invite makes somebody new, who picks their own name and password', async (t) => {
+  const { call, close } = await serve('AUTH')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const invite = await (
+    await call('/api/invites', { method: 'POST', body: '{"kind":"person"}' })
+  ).json()
+  assert.equal(invite.kind, 'person')
+
+  const said = await (await call(`/api/invites/${invite.token}`, { as: null })).json()
+  assert.deepEqual(said, { kind: 'person', who: 'Jan' }, 'and says who is asking them in')
+
+  const joined = await call(`/api/invites/${invite.token}`, {
+    as: null,
+    method: 'POST',
+    body: JSON.stringify({ name: 'Rita', password: 'a different passphrase' }),
+  })
+  assert.equal(joined.status, 201)
+  assert.equal((await joined.json()).name, 'Rita')
+
+  const hers = cookieOf(joined)
+  assert.equal((await (await call('/api/me', { as: hers })).json()).person.name, 'Rita')
+  assert.equal(
+    (await (await call('/api/sessions', { as: hers })).json()).length,
+    1,
+    'her own browser, not a share of his',
+  )
+  assert.equal(
+    (await signIn(call, 'Rita', 'a different passphrase')).status,
+    201,
+    'and she can sign in again by herself',
+  )
+})
+
+test('an invite is made only by somebody already inside, and only of the two kinds', async (t) => {
+  const { call, close } = await serve('AUTH')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  assert.equal(
+    (await call('/api/invites', { as: null, method: 'POST', body: '{"kind":"person"}' })).status,
+    401,
+    'a stranger cannot invite anybody',
+  )
+  for (const kind of ['owner', '', 'admin'])
+    assert.equal(
+      (await call('/api/invites', { method: 'POST', body: JSON.stringify({ kind }) })).status,
+      400,
+      kind,
+    )
+})
+
+test('a name somebody already signs in under is refused, not silently merged', async (t) => {
+  const { call, close } = await serve('AUTH')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const invite = await (
+    await call('/api/invites', { method: 'POST', body: '{"kind":"person"}' })
+  ).json()
+
+  const clash = await call(`/api/invites/${invite.token}`, {
+    as: null,
+    method: 'POST',
+    body: JSON.stringify({ name: 'jan', password: 'a different passphrase' }),
+  })
+  assert.equal(clash.status, 409)
+})
+
+test('an expired invite is worth nothing', async (t) => {
+  const { call, invites, people, close } = await serve('AUTH')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const jan = people.named('Jan')
+  const stale = invites.make('person', jan.id, -1)
+
+  assert.equal((await call(`/api/invites/${stale.token}`, { as: null })).status, 404)
+  assert.equal(
+    (await call(`/api/invites/${stale.token}`, {
+      as: null,
+      method: 'POST',
+      body: JSON.stringify({ name: 'Rita', password: 'a different passphrase' }),
+    })).status,
+    404,
+  )
 })

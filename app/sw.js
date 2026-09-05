@@ -16,6 +16,7 @@ const SHELL = [
   '/page.js',
   '/door.js',
   '/share.js',
+  '/handoff.js',
   '/read.js',
   '/overview.js',
   '/link.js',

@@ -62,6 +62,16 @@ create table if not exists sessions (
 );
 
 create index if not exists sessions_person on sessions (person);
+
+/* How somebody new arrives: another browser for a person already here, or a person who
+ * is not. Single use and short lived, so the table is small and mostly empty. */
+create table if not exists invites (
+  token   text primary key,
+  kind    text not null,
+  person  text references people(id) on delete cascade,
+  created text not null,
+  expires text not null
+);
 `
 
 export function openDb(file) {

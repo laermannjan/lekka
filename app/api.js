@@ -21,9 +21,22 @@ export async function signOut() {
   return send('DELETE', '/api/sessions')
 }
 
-/** The first person on an instance, admitted by the link the operator read in the logs. */
-export async function firstPerson(name, password, token) {
-  return send('POST', '/api/people', { body: JSON.stringify({ name, password, token }) })
+/** What a join link is for, before anybody acts on it. */
+export async function invite(token) {
+  return send('GET', `/api/invites/${token}`)
+}
+
+/** Made by somebody already inside: another browser for them, or somebody new. */
+export async function makeInvite(kind) {
+  return send('POST', '/api/invites', { body: JSON.stringify({ kind }) })
+}
+
+/**
+ * Spending one. A device invite needs nothing said - the link is the proof. A person
+ * invite is where somebody new picks the name and password they will sign in with.
+ */
+export async function redeem(token, who = null) {
+  return send('POST', `/api/invites/${token}`, { body: who ? JSON.stringify(who) : undefined })
 }
 
 export async function sessions() {

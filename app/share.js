@@ -1,4 +1,4 @@
-import { svg } from './qr.js'
+import { linkOut } from './handoff.js'
 import { address } from './link.js'
 
 /**
@@ -122,41 +122,11 @@ function says(grant) {
   return `${what} · until ${grant.expires.slice(0, 10)}`
 }
 
-/**
- * The one moment the token exists in a form anybody can copy. The link is drawn as a QR
- * as well, because the person it is for is usually holding a phone and the alternative is
- * reading twenty-two characters out loud.
- */
+/** The one moment the token exists in a form anybody can copy. */
 function showToken(box, id, token) {
-  const link = new URL(address(id, token), location.origin).href
-
-  const code = element('div', 'code')
-  try {
-    code.innerHTML = svg(link)
-  } catch {
-    // Too long to draw is not a reason to withhold the link itself.
-  }
-
-  const shown = element('input')
-  shown.type = 'text'
-  shown.readOnly = true
-  shown.value = link
-
-  const copy = element('button', 'quiet', 'Copy')
-  copy.onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(link)
-      copy.textContent = 'Copied'
-    } catch {
-      shown.select()
-      copy.textContent = 'Press ⌘C'
-    }
-  }
-
+  const url = new URL(address(id, token), location.origin).href
   box.replaceChildren(
-    element('div', 'row', 'This link, once. It is not stored, so it cannot be shown again.'),
-    element('div', 'row wide', undefined, [shown, copy]),
-    element('div', 'row wide', undefined, [code]),
+    linkOut(url, 'This link, once. It is not stored, so it cannot be shown again.'),
   )
   box.hidden = false
 }

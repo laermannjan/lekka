@@ -92,6 +92,7 @@ not hardened for the open internet.
 | `PORT` | 8080 | |
 | `DATA_DIR` | `./data` | the only thing to back up |
 | `ACCESS_CONTROL` | `NONE` | how much of it this instance does - see below. `AUTH` and `GRANT` print a one-time link on first boot, which is how the first person is made |
+
 | `CREATE_TOKEN` | unset | when set, creating a card needs `Authorization: Bearer <token>` |
 | `MAX_CARD_BYTES` | 65536 | largest card accepted |
 | `MAX_CREATES_PER_HOUR` | unset | creations one address may make in an hour; unset means no limit |
@@ -133,6 +134,25 @@ One setting decides, and it names the mechanism rather than how secret it feels.
 | `NONE` | no door | everyone who reaches the port reads, writes and deletes every recipe. The library is the whole server |
 | `AUTH` | one door | everyone signed in does the same. Nothing behind the door is anybody's in particular |
 | `GRANT` | one door, and owners | a recipe answers to a grant. Yours are yours; the rest you were given |
+
+### Getting in, and letting others in
+
+`AUTH` and `GRANT` print a link on first boot - `Open /join#… to make the first
+one` - and whoever opens it becomes the first person and picks their password.
+It works once.
+
+After that, everything happens from **your name in the masthead**, which opens the
+list of browsers you are signed in on:
+
+- **Add another browser** hands you a link that adds the browser you open it on to
+  *you*. No second password, no second account - it was made from a browser already
+  signed in, and that is the whole proof.
+- **Invite someone** hands you a link for somebody else, who picks their own name
+  and password when they open it. They arrive with an empty library.
+- **Sign out of this browser** ends this session, and **Revoke** ends another one.
+
+Both links work once and expire in an hour. Only the hash is stored, so a lost link
+is reissued rather than recovered.
 
 Under `GRANT` a grant is one row saying *this subject may do this, until taken
 back*. The subject is a person, who signs in as themselves, or a link, which is

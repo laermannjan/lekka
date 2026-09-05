@@ -5,7 +5,7 @@ import * as api from './api.js'
 import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
 import { section, specification } from './page.js'
-import { devices as renderDevices, firstPerson as firstPersonForm, signIn as signInForm } from './door.js'
+import { devices as renderDevices, joining as joiningForm, signIn as signInForm } from './door.js'
 import { shareSheet } from './share.js'
 import { address, arrive } from './link.js'
 
@@ -42,11 +42,13 @@ let instance = { mode: 'NONE', empty: false, person: null, session: null }
 async function start() {
   const here = arrive()
 
+  const link = joinLink()
+  if (instance.mode !== 'NONE' && link) return showJoining(link)
+
   if (instance.mode !== 'NONE' && !instance.person) {
     // The address is left alone, so whatever link brought you here opens the moment you
     // are through the door.
-    if (instance.empty) return showFirstPerson(joining())
-    return showSignIn()
+    return showSignIn(instance.empty ? 'first' : null)
   }
 
   if (here.kind === 'card') return showCard(here.id, here.token)
@@ -60,52 +62,67 @@ async function start() {
   return showOverview()
 }
 
-/** The operator's one-time link, carried in the fragment so it reaches no log. */
-function joining() {
+/** A join link's token, carried in the fragment so it reaches no log. */
+function joinLink() {
   if (location.pathname !== '/join') return null
   return location.hash.length > 1 ? location.hash.slice(1) : null
 }
 
 function showSignIn(message = null) {
   page('/')
+  const first =
+    message === 'first'
+      ? band(
+          'Nobody has signed in here yet. The link that makes the first person is in the server’s log.',
+          'warning',
+        )
+      : null
   show(
-    message ? band(message, 'warning') : null,
+    first ?? (message ? band(message, 'warning') : null),
     section('Sign in'),
     signInForm({
-      onSignIn: async (name, password) => {
-        try {
-          await api.signIn(name, password)
-        } catch (error) {
-          return showSignIn(
-            error instanceof api.ApiError && error.status === 401
-              ? 'That name and password do not match.'
-              : reason(error),
-          )
-        }
-        instance = await api.me()
-        return start()
-      },
+      onSignIn: signedIn,
     }),
   )
 }
 
-function showFirstPerson(token) {
-  page(location.pathname)
-  if (!token)
+async function signedIn(name, password) {
+  try {
+    await api.signIn(name, password)
+  } catch (error) {
+    return showSignIn(
+      error instanceof api.ApiError && error.status === 401
+        ? 'That name and password do not match.'
+        : reason(error),
+    )
+  }
+  instance = await api.me()
+  return start()
+}
+
+/**
+ * A link somebody was sent, whatever kind it is. The server says which, so the screen
+ * never has to guess and a spent or expired one says so before anybody fills a form in.
+ */
+async function showJoining(token) {
+  page('/join')
+  const invite = await api.invite(token).catch(() => null)
+  if (!invite)
     return show(
-      section('Sign in'),
-      band('Nobody has signed in here yet. The link that makes the first person is in the server’s log.', 'warning'),
+      section('Join'),
+      band('This link has been used already, or it has expired. Ask for another.', 'warning'),
+      signInForm({ onSignIn: signedIn }),
     )
 
   show(
-    section('First person'),
-    firstPersonForm({
-      token,
-      onCreate: async (name, password) => {
+    section(invite.kind === 'device' ? 'Add this browser' : 'Join'),
+    joiningForm({
+      invite,
+      onJoin: async (who) => {
         try {
-          await api.firstPerson(name, password, token)
+          await api.redeem(token, who)
         } catch (error) {
-          showFirstPerson(token)
+          showJoining(token)
           return notice(reason(error))
         }
         instance = await api.me()
@@ -127,6 +144,10 @@ async function showDevices() {
       onRevoke: async (id) => {
         if (await attempt(() => api.revokeSession(id), 'It was not revoked.') === FAILED) return
         showDevices()
+      },
+      onInvite: async (kind) => {
+        const made = await attempt(() => api.makeInvite(kind), 'No link was made.')
+        return made === FAILED ? null : made
       },
       onSignOut: async () => {
         await api.signOut().catch(() => {})
