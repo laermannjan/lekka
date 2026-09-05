@@ -81,7 +81,9 @@ volumes:
 From a checkout, `cd deploy && docker compose up -d` does the same, and
 uncommenting `build: ..` there builds the image yourself.
 
-One container, no database. **Read [the threat model](ARCHITECTURE.md#threat-model)
+One container, no dependencies. Recipes are `.lekka` files you can read with `cat`;
+everything around them lives in `data/lekka.db`, which is SQLite built into Node.
+**Read [the threat model](ARCHITECTURE.md#threat-model)
 first**: this is built for a network you already trust, a LAN or a VPN, and it is
 not hardened for the open internet.
 

@@ -1,39 +1,10 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
-import { DatabaseSync } from 'node:sqlite'
 
 import { newId } from '../app/id.js'
+import { inside } from './db.js'
 
 const TOKEN_LENGTH = 22
 const HOUR = 60 * 60 * 1000
-
-/* One row per way in. A password keeps its digest here; an OIDC subject will be another
- * kind with an empty secret, so growing a second provider never changes the lookup. */
-const SCHEMA = `
-create table if not exists people (
-  id      text primary key,
-  name    text not null,
-  created text not null
-);
-
-create table if not exists credentials (
-  kind   text not null,
-  handle text not null,
-  person text not null references people(id) on delete cascade,
-  secret text not null,
-  primary key (kind, handle)
-);
-
-create table if not exists sessions (
-  id      text primary key,
-  token   text not null unique,
-  person  text not null references people(id) on delete cascade,
-  label   text not null,
-  created text not null,
-  seen    text not null
-);
-
-create index if not exists sessions_person on sessions (person);
-`
 
 /**
  * People, the ways they sign in, and the browsers they are signed in on. Rows rather
@@ -41,12 +12,7 @@ create index if not exists sessions_person on sessions (person);
  * one shape a directory is bad at. Cards stay on disk, where they can still be grepped,
  * diffed and rsynced.
  */
-export function openPeople(file) {
-  const db = new DatabaseSync(file)
-  db.exec('pragma journal_mode = wal')
-  db.exec('pragma foreign_keys = on')
-  db.exec(SCHEMA)
-
+export function openPeople(db) {
   const one = (sql) => db.prepare(sql)
   const find = one('select id, name, created from people where id = ?')
   const byHandle = one('select person, secret from credentials where kind = ? and handle = ?')
@@ -87,15 +53,10 @@ export function openPeople(file) {
     add(name, password) {
       const id = newId()
       const now = new Date().toISOString()
-      db.exec('begin immediate')
-      try {
+      inside(db, () => {
         addPerson.run(id, name, now)
         addCredential.run('password', handle(name), id, digest(password))
-        db.exec('commit')
-      } catch (error) {
-        db.exec('rollback')
-        throw error
-      }
+      })
       return { id, name, created: now }
     },
 
@@ -139,10 +100,6 @@ export function openPeople(file) {
     /** Signing out drops the one browser asking, by the token it presented. */
     drop(token) {
       if (token) dropToken.run(hash(token))
-    },
-
-    close() {
-      db.close()
     },
   }
 }

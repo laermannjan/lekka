@@ -8,13 +8,15 @@ import { fileURLToPath } from 'node:url'
 
 import { mkdir, writeFile } from 'node:fs/promises'
 
+import { openDb } from '../server/db.js'
 import { openStore } from '../server/store.js'
 import { handler } from '../server/http.js'
 
 const CARD = '# Dinkelquarkbrot (1 Kastenbrot)\n\n- backen\n  - Mehl: 300 g\n'
 
 async function serve(options = {}) {
-  const store = await openStore(await mkdtemp(join(tmpdir(), 'lekka-'))).open()
+  const where = await mkdtemp(join(tmpdir(), 'lekka-'))
+  const store = await openStore(where, openDb(join(where, 'lekka.db'))).open()
   const server = createServer(handler(store, options)).listen(0)
   await new Promise((done) => server.once('listening', done))
   const base = `http://localhost:${server.address().port}`

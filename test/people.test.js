@@ -4,10 +4,12 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { openDb } from '../server/db.js'
 import { openPeople } from '../server/people.js'
 
 async function people() {
-  return openPeople(join(await mkdtemp(join(tmpdir(), 'lekka-')), 'lekka.db'))
+  const db = openDb(join(await mkdtemp(join(tmpdir(), 'lekka-')), 'lekka.db'))
+  return { ...openPeople(db), close: () => db.close() }
 }
 
 test('the first person turns an empty instance into one with an owner', async (t) => {
@@ -82,12 +84,14 @@ test('one person cannot revoke another person’s browser', async (t) => {
 
 test('a token survives reopening the file', async (t) => {
   const file = join(await mkdtemp(join(tmpdir(), 'lekka-')), 'lekka.db')
-  const first = openPeople(file)
+  const firstDb = openDb(file)
+  const first = openPeople(firstDb)
   const jan = first.add('Jan', 'a long enough passphrase')
   const token = first.mint(jan.id, 'a browser')
-  first.close()
+  firstDb.close()
 
-  const again = openPeople(file)
-  t.after(() => again.close())
+  const againDb = openDb(file)
+  const again = openPeople(againDb)
+  t.after(() => againDb.close())
   assert.equal(again.session(token).person, jan.id)
 })

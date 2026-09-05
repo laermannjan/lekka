@@ -4,6 +4,7 @@ import { extname, join, normalize } from 'node:path'
 
 import { parseCard, ParseError } from '../app/card.js'
 import { clear, cookie, COOKIE, encrypted, forged, keep, may, mayCreate } from './access.js'
+import { tag } from './store.js'
 import { limiter, source } from './limit.js'
 
 const CARD = /^\/api\/cards\/([^/]+)$/
@@ -314,41 +315,13 @@ async function collectionRoute(store, options, request, response, id, key, sessi
   if (request.method !== 'PUT') throw new Refusal(405, 'method not allowed')
 
   const { text } = rows(await body(request, options), options)
-  return alone(id, async () => {
-    agrees(request, tag(await collections.read(id)))
-    await collections.write(id, text)
-    return send(response, 204, null, '', { etag: tag(text) })
-  })
-}
-
-const writing = new Map()
-
-/**
- * Reading the tag, checking it and writing is one move. One process, so a chain per
- * collection is enough: without it both devices read the same tag and both write.
- */
-function alone(id, work) {
-  const done = (writing.get(id) ?? Promise.resolve()).then(work, work)
-  const settled = done.then(
-    () => {},
-    () => {},
-  )
-  writing.set(id, settled)
-  settled.then(() => {
-    if (writing.get(id) === settled) writing.delete(id)
-  })
-  return done
-}
-
-/** A collection is changed from two devices, so a write must name the version it grew from. */
-function agrees(request, current) {
   const sent = request.headers['if-match']
   if (!sent) throw new Refusal(428, 'if-match required')
-  if (sent !== '*' && sent !== current) throw new Refusal(412, 'the collection has changed')
-}
 
-function tag(text) {
-  return `"${createHash('sha256').update(text ?? '').digest('hex').slice(0, 16)}"`
+  const answer = collections.swap(id, text, sent)
+  if (answer === 'gone') throw missing()
+  if (answer === 'changed') throw new Refusal(412, 'the collection has changed')
+  return send(response, 204, null, '', { etag: tag(text) })
 }
 
 async function create(shelf, response, { text, label }, owner = null) {

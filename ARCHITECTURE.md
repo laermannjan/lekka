@@ -81,32 +81,46 @@ Under `public` there is no login, no session, no cookie. Consequences to keep:
 
 ## Storage
 
-One card is one file, named by its id. Get-by-id is the only access pattern, so
-a directory is the database. Next to the card lies its envelope: the key hash,
-and when it was created, changed and last read. The envelope is not part of the
-card format.
+One card is one file, named by its id. Everything else is a row.
 
 ```
 data/cards/dinkelquarkbrot-7kmq2rxvbn.lekka
-data/cards/dinkelquarkbrot-7kmq2rxvbn.meta.json
-data/collections/purely-mellow-rhubarb-cypk.json
+data/lekka.db
 ```
 
-Collections are the same shelf with a different extension, so key hashing,
-atomic writes and expiry are written once and serve both.
+The split is deliberate and it is the only one. **A recipe is a file** because
+being able to grep, diff, `rsync` and hand-restore one is the property this whole
+project is built on, and a blob column throws that away for nothing. **Everything
+around a recipe is a row** - the key hash, who owns it, when it was created,
+changed and last read, what a collection holds, who is signed in - because those
+are small, numerous, and read by more than one column. Asking a directory "what
+does this person own" means opening every envelope in it; asking an index means
+one query.
 
-Every write goes to a temporary file and is renamed into place, which is atomic:
-a power cut leaves the old card or the new one, never half of either. Reading a
-record refreshes its `touched` stamp, at most once a day, so that an optional
-`TTL_DAYS` sweep can delete what nobody has opened without ever deleting what is
-in use. Unset, nothing is ever swept. The sweep also reaps what an interrupted
-write left behind - a body with no envelope, a temporary whose rename never
-happened - since nothing can reach either.
+`node:sqlite` ships with Node, so this is still a server with no dependencies and
+one container. Node 22 prints an experimental warning for it on boot; that goes
+away on Node 24.
 
-There is no state anywhere else. A server started against an existing data
-directory is immediately serving every link in it.
+`records` holds cards and collections together, since they differ only in where
+the body lives: a card's is the file, a collection's is the `body` column. A card
+is written to a temporary and renamed into place, which is atomic - a power cut
+leaves the old card or the new one, never half of either. A collection is written
+inside a transaction that re-reads its version first, so two browsers saving at
+once cannot overwrite each other even if you run a second copy of the server.
 
-The directory is the only copy. It must be a volume, and it must be backed up.
+Reading a record refreshes its `touched` stamp, at most once a day, so that an
+optional `TTL_DAYS` sweep can delete what nobody has opened without ever deleting
+what is in use. Unset, nothing is ever swept. The sweep also reaps what an
+interrupted write left behind - a `.lekka` file no row points at, a temporary
+whose rename never happened - since nothing can reach either.
+
+A data directory written before this carries `.meta.json` envelopes and a
+`collections/` folder. They are read into the database once, on first boot, and
+then never again; the `.lekka` files are left exactly where they are. The server
+says what it adopted and what is now safe to delete.
+
+The directory is the only copy. It must be a volume, and it must be backed up -
+the database included.
 
 ## The pipeline
 
@@ -590,8 +604,8 @@ What follows from that:
 - The link is still the only way to a card, because a link is how you hand a
   recipe to someone, not because we expect the network to be hostile.
 - The operator has the data directory. That is the administration interface:
-  `ls`, `cat`, `rm`, and a backup. Building a second one over HTTP would only
-  add a way in.
+  `ls` and `cat` for the recipes, `sqlite3 data/lekka.db` for everything around
+  them, and a backup. Building a second one over HTTP would only add a way in.
 
 Still worth getting right on a trusted network, because these are bugs rather
 than attacks:
@@ -628,7 +642,7 @@ of these is our own bug to find.
 | Accounts as the only way in | A collection link does what an account would, and under `ACCESS=public` it still is the whole story. A door is opt-in, not the price of entry. |
 | An admin interface over the cards | The operator has the data directory; `ls`, `cat` and `rm` need no code and cannot be reached from the network. Reading other people's recipes is not a feature. |
 | A card belonging to a collection | Ownership would mean the server must know who holds what. A collection holds links, so the only question is ever whether you hold a key. |
-| A database | Get by id is the only access pattern, and rename is already atomic. A directory of text files can be grepped, diffed, rsynced and restored by hand. |
+| Recipes in a database | A card stays a `.lekka` file, so it can be grepped, diffed, rsynced and restored by hand. Only what surrounds a card became rows, once "what does this person own" turned into a question a directory could not answer without opening every file in it. |
 
 ## What is worth adding, in this order
 

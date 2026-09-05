@@ -3,60 +3,119 @@ import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:
 import { join } from 'node:path'
 
 import { newId } from '../app/id.js'
+import { inside } from './db.js'
 import { cardId, collectionId } from './names.js'
 
 const KEY_LENGTH = 22
 const DAY = 24 * 60 * 60 * 1000
+const ID = /^[a-z0-9-]{1,64}$/
 
-/** Two shelves of the same kind. Get by id is the only way in; there is no listing. */
-export function openStore(directory) {
+/**
+ * Two shelves of the same kind. A card's body is a file; a collection's is a column.
+ * Everything else about both - the key hash, the owner, the three dates - is a row.
+ */
+export function openStore(directory, db) {
   return {
-    cards: shelf(join(directory, 'cards'), '.lekka', cardId),
-    collections: shelf(join(directory, 'collections'), '.json', collectionId),
+    cards: shelf(db, 'card', { directory: join(directory, 'cards'), extension: '.lekka', nextId: cardId }),
+    collections: shelf(db, 'collection', { nextId: collectionId }),
     async open() {
       await this.cards.open()
       await this.collections.open()
+      // What an older data directory brought with it, so the operator can be told.
+      this.adopted = await adopt(db, directory)
       return this
     },
   }
 }
 
-function shelf(directory, extension, nextId) {
-  const body = (id) => join(directory, id + extension)
-  const envelope = (id) => join(directory, `${id}.meta.json`)
+/** The version a write has to name, so two browsers cannot overwrite each other blind. */
+export function tag(text) {
+  return `"${createHash('sha256').update(text ?? '').digest('hex').slice(0, 16)}"`
+}
 
-  const meta = async (id) => {
-    if (!/^[a-z0-9-]{1,64}$/.test(id ?? '')) return null
-    try {
-      return JSON.parse(await readFile(envelope(id), 'utf8'))
-    } catch {
-      return null
-    }
-  }
+function shelf(db, kind, { directory = null, extension = '', nextId }) {
+  const path = (id) => join(directory, id + extension)
 
-  const put = async (path, text) => {
-    const temporary = `${path}.${newId(6)}`
+  const find = db.prepare('select * from records where kind = ? and id = ?')
+  const add = db.prepare(
+    'insert into records (kind, id, hash, owner, body, created, updated, touched) values (?, ?, ?, ?, ?, ?, ?, ?)',
+  )
+  const put = db.prepare(
+    'update records set body = ?, updated = ?, touched = ? where kind = ? and id = ?',
+  )
+  const drop = db.prepare('delete from records where kind = ? and id = ?')
+  const stamp = db.prepare('update records set touched = ? where kind = ? and id = ?')
+  const owned = db.prepare(
+    'select id, updated from records where kind = ? and owner = ? order by updated desc',
+  )
+  const older = db.prepare('select id from records where kind = ? and touched < ?')
+
+  const row = (id) => (ID.test(id ?? '') ? (find.get(kind, id) ?? null) : null)
+
+  /** A body goes to a temporary and is renamed into place, which a power cut cannot tear. */
+  const write = async (id, text) => {
+    const temporary = `${path(id)}.${newId(6)}`
     await writeFile(temporary, text)
-    await rename(temporary, path)
+    await rename(temporary, path(id))
   }
 
   return {
     async open() {
-      await mkdir(directory, { recursive: true })
+      if (directory) await mkdir(directory, { recursive: true })
     },
 
     async create(text, label, owner = null) {
       let id = nextId(label)
-      while (await meta(id)) id = nextId(label)
+      while (row(id)) id = nextId(label)
 
       const key = newId(KEY_LENGTH)
       const now = new Date().toISOString()
-      await put(body(id), text)
-      await put(
-        envelope(id),
-        JSON.stringify({ key: hash(key), owner, created: now, updated: now, touched: now }),
-      )
+      // The file first: a body with no row is unreachable and the sweep reaps it, while
+      // a row with no body is a card that opens to nothing.
+      if (directory) await write(id, text)
+      add.run(kind, id, hash(key), owner, directory ? null : text, now, now, now)
       return { id, key }
+    },
+
+    async read(id) {
+      const found = row(id)
+      if (!found) return null
+      if (!directory) return found.body
+      return readFile(path(id), 'utf8').catch(() => null)
+    },
+
+    async write(id, text) {
+      if (!row(id)) return false
+      const now = new Date().toISOString()
+      if (directory) await write(id, text)
+      put.run(directory ? null : text, now, now, kind, id)
+      return true
+    },
+
+    /**
+     * A body swapped only if it still says what the writer thought it did. One
+     * transaction rather than a queue in this process, so two of them cannot interleave
+     * even if somebody runs a second copy of the server.
+     */
+    swap(id, text, expected) {
+      return inside(db, () => {
+        const found = find.get(kind, id)
+        if (!found) return 'gone'
+        if (expected !== '*' && tag(found.body) !== expected) return 'changed'
+        const now = new Date().toISOString()
+        put.run(text, now, now, kind, id)
+        return 'written'
+      })
+    },
+
+    async remove(id) {
+      if (directory && ID.test(id ?? '')) await unlink(path(id)).catch(() => {})
+      drop.run(kind, id)
+    },
+
+    async verify(id, key) {
+      const found = row(id)
+      return found ? same(found.hash, hash(key ?? '')) : false
     },
 
     /**
@@ -65,88 +124,99 @@ function shelf(directory, extension, nextId) {
      * out of what they already had.
      */
     async owner(id) {
-      const found = await meta(id)
-      return found ? (found.owner ?? null) : null
+      return row(id)?.owner ?? null
     },
 
-    /**
-     * What one person owns here, by reading the envelopes. A directory is still the
-     * index: a household keeps shelves in the tens, and the alternative is a second
-     * place that says who owns what, which is a second place to be wrong.
-     */
+    /** What one person owns here. An index, not a walk of the directory. */
     async mine(person) {
-      if (!person) return []
-      const names = await readdir(directory).catch(() => [])
-      const found = []
-      for (const name of names) {
-        if (!name.endsWith('.meta.json')) continue
-        const id = name.slice(0, -'.meta.json'.length)
-        const envelope = await meta(id)
-        if (envelope?.owner === person) found.push({ id, updated: envelope.updated })
-      }
-      return found.sort((a, b) => String(b.updated).localeCompare(String(a.updated)))
-    },
-
-    async read(id) {
-      if (!(await meta(id))) return null
-      return readFile(body(id), 'utf8').catch(() => null)
-    },
-
-    async write(id, text) {
-      const found = await meta(id)
-      if (!found) return false
-      const now = new Date().toISOString()
-      await put(body(id), text)
-      await put(envelope(id), JSON.stringify({ ...found, updated: now, touched: now }))
-      return true
-    },
-
-    async remove(id) {
-      await unlink(body(id)).catch(() => {})
-      await unlink(envelope(id)).catch(() => {})
-    },
-
-    async verify(id, key) {
-      const found = await meta(id)
-      return found ? same(found.key, hash(key ?? '')) : false
+      return person ? owned.all(kind, person) : []
     },
 
     /** Reads keep a record alive, but at most one write a day. */
     async touch(id) {
-      const found = await meta(id)
+      const found = row(id)
       if (!found) return
       const now = new Date()
       if (now - new Date(found.touched) < DAY) return
-      await put(envelope(id), JSON.stringify({ ...found, touched: now.toISOString() }))
+      stamp.run(now.toISOString(), kind, id)
     },
 
     /**
-     * Also reaps what an interrupted write left behind: a body with no envelope is
-     * unreachable, since everything here is found through the envelope, and a temporary
-     * belongs to a rename that never happened.
+     * What nobody has opened goes, and so does what an interrupted write left behind: a
+     * body with no row is unreachable, since everything is found through the row, and a
+     * temporary belongs to a rename that never happened.
      */
     async sweep(days) {
       const limit = Date.now() - days * DAY
-      const names = await readdir(directory)
-      const kept = new Set()
+      for (const { id } of older.all(kind, new Date(limit).toISOString())) await this.remove(id)
+      if (!directory) return
 
-      for (const name of names) {
-        if (!name.endsWith('.meta.json')) continue
-        const id = name.slice(0, -'.meta.json'.length)
-        const found = await meta(id)
-        if (found && new Date(found.touched).getTime() < limit) await this.remove(id)
-        else kept.add(id)
-      }
-
-      for (const name of names) {
-        if (name.endsWith('.meta.json')) continue
+      const kept = new Set(
+        db.prepare('select id from records where kind = ?').all(kind).map((one) => one.id),
+      )
+      for (const name of await readdir(directory).catch(() => [])) {
         if (name.endsWith(extension) && kept.has(name.slice(0, -extension.length))) continue
-        const path = join(directory, name)
-        const found = await stat(path).catch(() => null)
-        if (found?.isFile() && found.mtimeMs < limit) await unlink(path).catch(() => {})
+        const file = join(directory, name)
+        const found = await stat(file).catch(() => null)
+        if (found?.isFile() && found.mtimeMs < limit) await unlink(file).catch(() => {})
       }
     },
   }
+}
+
+/**
+ * The envelopes and collection files a data directory made before this, read once into
+ * the database. The `.lekka` files are left exactly where they are, because they are
+ * still the body of every card; the `.meta.json` files beside them, and the collection
+ * directory entire, stop being read and can be deleted once you are happy.
+ */
+export async function adopt(db, directory) {
+  const done = db.prepare("select value from settings where name = 'adopted'").get()
+  if (done) return { cards: 0, collections: 0 }
+
+  const counted = { cards: 0, collections: 0 }
+  const add = db.prepare(
+    'insert or ignore into records (kind, id, hash, owner, body, created, updated, touched) values (?, ?, ?, ?, ?, ?, ?, ?)',
+  )
+
+  for (const [kind, folder, extension] of [
+    ['card', join(directory, 'cards'), '.lekka'],
+    ['collection', join(directory, 'collections'), '.json'],
+  ]) {
+    for (const name of await readdir(folder).catch(() => [])) {
+      if (!name.endsWith('.meta.json')) continue
+      const id = name.slice(0, -'.meta.json'.length)
+      if (!ID.test(id)) continue
+
+      const envelope = await readFile(join(folder, name), 'utf8')
+        .then(JSON.parse)
+        .catch(() => null)
+      if (!envelope?.key) continue
+
+      const body =
+        kind === 'collection'
+          ? await readFile(join(folder, id + extension), 'utf8').catch(() => null)
+          : null
+      if (kind === 'collection' && body === null) continue
+
+      add.run(
+        kind,
+        id,
+        envelope.key,
+        envelope.owner ?? null,
+        body,
+        envelope.created ?? new Date().toISOString(),
+        envelope.updated ?? envelope.created ?? new Date().toISOString(),
+        envelope.touched ?? envelope.created ?? new Date().toISOString(),
+      )
+      counted[kind === 'card' ? 'cards' : 'collections']++
+    }
+  }
+
+  db.prepare("insert into settings (name, value) values ('adopted', ?)").run(
+    new Date().toISOString(),
+  )
+  return counted
 }
 
 function hash(key) {

@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 import { newId } from '../app/id.js'
 import { mode as readMode } from './access.js'
+import { openDb } from './db.js'
+import { openPeople } from './people.js'
 import { openStore } from './store.js'
 import { handler } from './http.js'
 
@@ -17,15 +19,19 @@ function number(value, fallback) {
 
 const port = number(process.env.PORT, 8080)
 const directory = process.env.DATA_DIR ?? './data'
-const store = await openStore(directory).open()
+const db = openDb(join(directory, 'lekka.db'))
+const store = await openStore(directory, db).open()
 
-/* Loaded only where it is used: an instance with no door opens no database, and does not
- * make the reader wonder about the experimental warning `node:sqlite` prints on import. */
+if (store.adopted.cards || store.adopted.collections)
+  console.log(
+    `Adopted ${store.adopted.cards} cards and ${store.adopted.collections} collections into lekka.db. ` +
+      `The .meta.json files and ${join(directory, 'collections')} are no longer read and can be deleted.`,
+  )
+
+/* People exist only where there is a door. The tables are always there; a public
+ * instance simply never has a row in them, and every route below sees `null`. */
 const mode = readMode(process.env.ACCESS)
-const people =
-  mode === 'public'
-    ? null
-    : (await import('./people.js')).openPeople(join(directory, 'people.db'))
+const people = mode === 'public' ? null : openPeople(db)
 
 /* An instance with a door and nobody behind it needs a first person, and reaching the
  * port first must not be what decides who that is. The operator reads this out of the

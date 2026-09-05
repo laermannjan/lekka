@@ -21,6 +21,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { openDb } from '../server/db.js'
 import { openStore } from '../server/store.js'
 import { handler } from '../server/http.js'
 
@@ -418,7 +419,7 @@ const driver = join(app, '_drive.js')
 const index = await readFile(join(app, 'index.html'), 'utf8')
 
 const data = await mkdtemp(join(tmpdir(), 'lekka-check-'))
-const store = await openStore(data).open()
+const store = await openStore(data, openDb(join(data, 'lekka.db'))).open()
 const server = createServer(handler(store, { app, createToken: null, maxBytes: 65536 }))
 
 let failed = 0

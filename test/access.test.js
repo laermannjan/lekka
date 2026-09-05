@@ -5,6 +5,7 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { openDb } from '../server/db.js'
 import { openStore } from '../server/store.js'
 import { openPeople } from '../server/people.js'
 import { handler } from '../server/http.js'
@@ -19,8 +20,9 @@ const BOOTSTRAP = 'bootstraptokenxyz2345'
  */
 async function serve(mode, options = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'lekka-'))
-  const store = await openStore(directory).open()
-  const people = mode === 'public' ? null : openPeople(join(directory, 'people.db'))
+  const db = openDb(join(directory, 'lekka.db'))
+  const store = await openStore(directory, db).open()
+  const people = mode === 'public' ? null : openPeople(db)
   const server = createServer(
     handler(store, { people, mode, bootstrap: BOOTSTRAP, ...options }),
   ).listen(0)
@@ -53,7 +55,7 @@ async function serve(mode, options = {}) {
     people,
     close: () => {
       server.close()
-      people?.close()
+      db.close()
     },
   }
 }
