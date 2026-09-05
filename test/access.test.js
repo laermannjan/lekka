@@ -652,3 +652,33 @@ test('adopting never takes a recipe that somebody else owns', async (t) => {
   assert.equal(grants.may(hersOwn.id, { person: rita.id }, 'owner'), true, 'still hers')
 })
 
+
+test('a refused join does not burn the link', async (t) => {
+  const { call, close } = await serve('LOGIN')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const invite = await (await call('/api/invites', { method: 'POST', body: '{}' })).json()
+  const at = `/api/invites/${invite.token}`
+
+  // Everything the form can get wrong, none of which is the link's fault.
+  for (const [body, status] of [
+    [{ name: 'Rita', password: 'short' }, 400],
+    [{ name: '', password: 'a long enough passphrase' }, 400],
+    [{ name: 'Jan', password: 'a long enough passphrase' }, 409],
+  ]) {
+    assert.equal(
+      (await call(at, { as: null, method: 'POST', body: JSON.stringify(body) })).status,
+      status,
+    )
+    assert.equal((await call(at, { as: null })).status, 200, `the link still works after ${status}`)
+  }
+
+  const joined = await call(at, {
+    as: null,
+    method: 'POST',
+    body: JSON.stringify({ name: 'Rita', password: 'a long enough passphrase' }),
+  })
+  assert.equal(joined.status, 201, 'and getting it right still works')
+  assert.equal((await call(at, { as: null })).status, 404, 'only then is it spent')
+})

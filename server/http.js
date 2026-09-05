@@ -226,13 +226,17 @@ async function peopleRoute(store, options, request, response, path, session) {
       throw new Refusal(429, 'too many requests')
 
     const starting = first()
-    const found = invites.spend(token)
-    if (!found && !starting) throw missing()
+    if (!invites.read(token) && !starting) throw missing()
 
     const { name, password } = parse(await body(request, options))
     named(name)
     strong(password)
     if (people.named(name.trim())) throw new Refusal(409, 'somebody here already signs in as that')
+
+    /* Spent only once it is certain to be worth something. Spending it first meant a
+     * password two characters short took the link with it, and the person who had been
+     * invited needed a new one to try again. */
+    invites.spend(token)
     const person = people.add(name.trim(), password)
 
     /* Recipes made before the door went up belong to nobody, and under `GRANT` that

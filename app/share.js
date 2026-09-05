@@ -2,10 +2,8 @@
  * Who holds this recipe, and handing it to somebody else.
  *
  * It is one dialog rather than a screen, because sharing is something you do *to* the
- * recipe you are looking at and then stop doing. Two ways to give, and they are different
- * things rather than two spellings of one: naming a person makes a grant that survives
- * the link being forwarded and is taken back in one act; naming nobody mints a link,
- * which is whoever holds it until it expires or is revoked.
+ * recipe you are looking at and then stop doing. Everybody it can be given to is on the
+ * instance already and is offered by name, with what they hold beside it.
  *
  * There is no way to hand a recipe to somebody with no account here. That was a link
  * addressed to a token rather than to a person, and it never worked from a browser that
