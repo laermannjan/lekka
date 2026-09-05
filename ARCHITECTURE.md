@@ -31,9 +31,9 @@ Two kinds of thing are stored, and both are addressed the same way:
 | Link | May |
 |---|---|
 | `/r/<id>` | read a card |
-| `/r/<id>/<key>` | read and write it |
+| `/r/<id>#<key>` | read and write it |
 | `/c/<name>` | read a collection, with every key in it stripped out |
-| `/c/<name>/<key>` | read and write it; opening this adopts it on the device |
+| `/c/<name>#<key>` | read and write it; opening this adopts it on the device |
 
 A **collection is a list of card links and nothing else.** Cards do not belong to
 it, so there is one permission rule for the whole system: do you hold the key for
@@ -62,8 +62,16 @@ There is no login, no session, no cookie. Consequences to keep:
   "all cards" endpoint would make the secret pointless.
 - The link is the state. It stays in the address bar, so you always see what you
   hold, a bookmark keeps its rights, and reloading changes nothing.
-- A secret in a path lands in browser history and proxy logs. Send
-  `Referrer-Policy: no-referrer` so it does not leak outward on a click.
+- **The key is in the fragment**, which is the one part of an address a browser sends
+  nowhere: not in the request line, not in a header, not in a `Referer`. A key in the
+  path is a key in the access log of every machine between the phone and the disk, and
+  `Referrer-Policy: no-referrer` only stops it leaking outward on a click, never inward
+  on the request itself. It is still in browser history, and it is still one paste away
+  from the wrong group chat - this is hygiene against infrastructure, not against people.
+
+  The id stays in the path, because the server does need that: it names the file, and it
+  is what a shared link is about. `app/link.js` is the one place that knows the shape.
+  The older links, with the key as a path segment, are read and rewritten on arrival.
 
 ## Storage
 
@@ -122,9 +130,21 @@ the table grows: `Import` for a recipe that exists somewhere already, `Create`
 for one that does not.
 
 The collection's own name is stamped into the masthead, beside the app's. A
-person holds one collection, so it belongs to the app rather than to a screen and
-is said once. It is also the way to the code that carries the collection onto
+person works in one collection at a time, so it belongs to the app rather than to
+a screen and is said once. It is also the way to the code that carries the collection onto
 another device, so it is drawn as a control and says so before it is pressed.
+
+Under the recipes, when the device holds more than one collection, is the list of the
+others: the same table one column narrower, a name and the one act that is not opening
+it. `library.js` has kept that list since the beginning and nothing ever drew it, so a
+device that had opened two collections could only ever see the second. It is said only
+when there is more than one, because the masthead already stamps the one in use and a
+table offering a single choice is a table asking a question with one answer. `Forget`
+drops the link from this device and nothing else; there is no `Delete`, because dropping
+the last link to a collection is already as final as an act gets.
+
+What was in a collection is kept per collection rather than once, so switching between
+them works with no network.
 
 That stamp opens a dialog: the full link written out, a copy
 button, and the same link as a QR code to scan with a phone. It was once an
@@ -448,6 +468,17 @@ already belongs to them. Then it drops privileges and `exec`s the server, which
 is therefore PID 1 and shuts down cleanly on `SIGTERM`. This is what lets any
 mount work with no setup while the server itself never runs as root.
 
+One thing is rendered on the server, and only one: the `<head>` of a shared card.
+`/r/<id>` comes back with the recipe's name in a `<title>` and an `og:title`, so a link
+pasted into a chat unfurls as what it is - and it is the half of the page that never
+wants the key, since the id names the card and the fragment stays on the device. The
+table is not rendered here and never will be: it is scaled, fitted and edited against a
+screen this machine cannot see, and a second renderer would have to agree with
+`render.js` cell for cell forever. The same route sends `X-Robots-Tag: noindex`, because
+a recipe is unlisted rather than public - an unfurler reads the tags because a person
+deliberately pasted the link, and a crawler that finds it in a forum thread is told to
+leave it out.
+
 The app never knows its own address: every request it makes is a root-relative
 path on its own origin. Put it behind any proxy under any name and nothing needs
 configuring.
@@ -541,6 +572,13 @@ What follows from that:
 - Everyone who can reach the port can create cards. On a household network that
   is the household. `CREATE_TOKEN` narrows it if you want, but it is an extra,
   not a defence.
+- **The limits in `server/limit.js` are off unless set**, and on a trusted network they
+  should stay off: a recipe box that starts refusing its owner is worse than no limit at
+  all. Two acts are counted when they are on, because two are the whole surface - making
+  records, and following links to nothing. A 404 is either a link that has gone or a link
+  that was guessed, and the answer is arranged so that nobody can tell which, so both are
+  counted. They are a `Map` in one process, which is the same thing `alone()` already
+  assumes: run one process, or neither holds.
 - The link is still the only way to a card, because a link is how you hand a
   recipe to someone, not because we expect the network to be hostile.
 - The operator has the data directory. That is the administration interface:

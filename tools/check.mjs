@@ -379,6 +379,19 @@ const after = (wait) => new Promise((go) => setTimeout(go, wait))
 
 addEventListener('load', async () => {
   await after(700)
+
+  /*
+   * The link this page was opened at carried the key in the path, the way every link
+   * handed out before the move did. It still opens, and the address it leaves behind is
+   * the one that keeps the key out of every request from here on.
+   */
+  check('a key in the path is read, and rewritten into the fragment',
+    location.pathname.startsWith('/r/') && !location.pathname.slice(3).includes('/') && location.hash.length > 1,
+    location.pathname + ' + ' + location.hash)
+  check('and the foot does not read it out', !document.getElementById('where').textContent.includes(location.hash.slice(1)),
+    document.getElementById('where').textContent)
+  check('and the recipe is open for writing, so the key was kept', Boolean(named('Edit')))
+
   check('reading, the masthead holds the scale and the fit', acts().length > 0,
     acts().map((one) => one.textContent).join(' | '))
 

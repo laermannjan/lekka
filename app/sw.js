@@ -17,6 +17,7 @@ const SHELL = [
   '/read.js',
   '/overview.js',
   '/library.js',
+  '/link.js',
   '/id.js',
   '/qr.js',
   '/manifest.webmanifest',

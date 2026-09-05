@@ -742,6 +742,19 @@ textarea:focus {
   border-right: 0;
 }
 
+/* The collections this device holds: a name and one act, so two columns rather than three. */
+.records.holding {
+  grid-template-columns: minmax(160px, 1fr) max-content;
+}
+
+.records.holding > *:nth-child(3n) {
+  border-right: 1px solid var(--rule);
+}
+
+.records.holding > *:nth-child(2n) {
+  border-right: 0;
+}
+
 /* An act with no key behind it is not drawn as a control that refuses. */
 .records .none {
   color: var(--faint);

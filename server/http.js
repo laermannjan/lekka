@@ -3,10 +3,17 @@ import { readFile, readdir } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
 import { parseCard, ParseError } from '../app/card.js'
+import { limiter, source } from './limit.js'
 
 const CARD = /^\/api\/cards\/([^/]+)$/
 const COLLECTION = /^\/api\/collections\/([^/]+)$/
 const ID = /^[a-z0-9-]{1,64}$/
+
+/** The address a shared recipe is read at, in either shape the app has ever written. */
+const READ = /^\/r\/([a-z0-9-]{1,64})(?:\/|$)/
+
+const MINUTE = 60 * 1000
+const HOUR = 60 * MINUTE
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -26,10 +33,28 @@ const HEADERS = {
 }
 
 /** A store plus some settings become a request handler. Knows no environment. */
-export function handler(store, { app, createToken = null, maxBytes = 65536 } = {}) {
+export function handler(
+  store,
+  {
+    app,
+    createToken = null,
+    maxBytes = 65536,
+    maxRows = 0,
+    createsPerHour = 0,
+    triesPerMinute = 0,
+    trustProxy = false,
+  } = {},
+) {
+  const limits = {
+    creates: limiter({ every: HOUR, most: createsPerHour }),
+    tries: limiter({ every: MINUTE, most: triesPerMinute }),
+    trustProxy,
+  }
+  const options = { app, createToken, maxBytes, maxRows, limits }
+
   return async (request, response) => {
     try {
-      await route(store, { app, createToken, maxBytes }, request, response)
+      await route(store, options, request, response)
     } catch (error) {
       if (error instanceof Refusal) return send(response, error.status, 'text/plain', error.message)
       send(response, 500, 'text/plain', 'server error')
@@ -65,20 +90,47 @@ async function route(store, options, request, response) {
   if (path === '/api/cards' || path === '/api/collections') {
     if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
     allowed(options, request)
+    if (!options.limits.creates.charge(who(options, request)))
+      throw new Refusal(429, 'too many requests')
     return path === '/api/cards'
       ? create(store.cards, response, card(await body(request, options)))
-      : create(store.collections, response, rows(await body(request, options)))
+      : create(store.collections, response, rows(await body(request, options), options))
   }
 
   const asCard = CARD.exec(path)
-  if (asCard) return cardRoute(store, options, request, response, asCard[1], key)
+  if (asCard)
+    return guessing(options, request, () =>
+      cardRoute(store, options, request, response, asCard[1], key),
+    )
 
   const asCollection = COLLECTION.exec(path)
-  if (asCollection) return collectionRoute(store, options, request, response, asCollection[1], key)
+  if (asCollection)
+    return guessing(options, request, () =>
+      collectionRoute(store, options, request, response, asCollection[1], key),
+    )
 
   if (path.startsWith('/api/')) throw missing()
   if (request.method !== 'GET') throw new Refusal(405, 'method not allowed')
-  return statics(options.app, path, response)
+  return statics(store, options.app, path, response)
+}
+
+const who = (options, request) => source(request, options.limits.trustProxy)
+
+/**
+ * A 404 from these routes is either a link that has gone or a link that was guessed, and
+ * the two answer alike on purpose. So both are counted, and only both can be: telling
+ * them apart is the thing the answer is arranged not to do. A person following a dead
+ * bookmark makes one of these. Only a machine makes a thousand.
+ */
+async function guessing(options, request, work) {
+  const asker = who(options, request)
+  if (options.limits.tries.spent(asker)) throw new Refusal(429, 'too many requests')
+  try {
+    return await work()
+  } catch (error) {
+    if (error instanceof Refusal && error.status === 404) options.limits.tries.charge(asker)
+    throw error
+  }
 }
 
 async function cardRoute(store, options, request, response, id, key) {
@@ -120,7 +172,7 @@ async function collectionRoute(store, options, request, response, id, key) {
   }
   if (request.method !== 'PUT') throw new Refusal(405, 'method not allowed')
 
-  const { text } = rows(await body(request, options))
+  const { text } = rows(await body(request, options), options)
   return alone(id, async () => {
     agrees(request, tag(await collections.read(id)))
     await collections.write(id, text)
@@ -173,7 +225,7 @@ function card(text) {
 }
 
 /** A collection is a list of links and nothing else. */
-function rows(text) {
+function rows(text, { maxRows = 0 } = {}) {
   let value
   try {
     value = JSON.parse(text || '[]')
@@ -181,6 +233,7 @@ function rows(text) {
     throw new Refusal(400, 'not json')
   }
   if (!Array.isArray(value)) throw new Refusal(400, 'not a list')
+  if (maxRows > 0 && value.length > maxRows) throw new Refusal(413, 'too many rows')
 
   const clean = value.map((row) => {
     if (!ID.test(row?.id ?? '')) throw new Refusal(400, 'a row needs an id')
@@ -231,22 +284,32 @@ async function body(request, { maxBytes }) {
  * think to change. What a person actually wants of that corner is which build they are
  * looking at, which is the question a stale version number cannot answer.
  */
-async function page(app, response) {
-  const source = await readFile(join(app, 'index.html'), 'utf8')
-  send(response, 200, TYPES['.html'], source.replace('%VERSION%', await version(app)))
+async function page(app, response, { title = null, unlisted = false } = {}) {
+  const html = await readFile(join(app, 'index.html'), 'utf8')
+  const version = await stamp(app)
+  send(
+    response,
+    200,
+    TYPES['.html'],
+    html
+      .replace('%VERSION%', () => version)
+      .replace('%HEAD%', () => head(title)),
+    unlisted ? { 'x-robots-tag': 'noindex' } : {},
+  )
 }
 
 /** The worker's cache version is a hash of the app, so a changed file is a new cache. */
 async function worker(app, response) {
   if (!app) throw missing()
   const source = await readFile(join(app, 'sw.js'), 'utf8')
-  send(response, 200, TYPES['.js'], source.replace('%VERSION%', await version(app)), {
+  const version = await stamp(app)
+  send(response, 200, TYPES['.js'], source.replace('%VERSION%', () => version), {
     'cache-control': 'no-cache',
     'service-worker-allowed': '/',
   })
 }
 
-async function version(app) {
+async function stamp(app) {
   const digest = createHash('sha256')
   await walk(app, '', digest)
   return digest.digest('hex').slice(0, 12)
@@ -262,11 +325,61 @@ async function walk(root, inside, digest) {
   }
 }
 
-async function statics(app, path, response) {
+/**
+ * The only thing the server renders, and the only thing it needs to.
+ *
+ * The table is drawn in the browser and stays there: it is scaled, fitted and edited
+ * against a screen this machine cannot see, and a second renderer here would have to
+ * agree with `render.js` cell for cell forever. But a link pasted into a chat is opened
+ * by something that reads the head and runs no script, and the head is the half of the
+ * page that never wants the key - the id names the card, the fragment stays on the phone.
+ * So a shared recipe can say what it is without the secret leaving the device.
+ */
+function head(title) {
+  const name = title ?? 'lekka'
+  return [
+    `<title>${escaped(name)}</title>`,
+    `<meta property="og:title" content="${escaped(name)}" />`,
+    `<meta property="og:type" content="${title ? 'article' : 'website'}" />`,
+  ].join('\n    ')
+}
+
+const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }
+
+/** A recipe is named by whoever wrote it, so its name is text, not markup. */
+function escaped(text) {
+  return text.replace(/[&<>"]/g, (character) => ESCAPES[character])
+}
+
+/**
+ * What a shared card says about itself. A card that is not there still answers as the
+ * app, because the app is what says `No recipe under this link` - a 404 here would
+ * replace that with the server's own bare words.
+ */
+async function named(store, id) {
+  const text = await store.cards.read(id).catch(() => null)
+  if (text === null) return null
+  try {
+    return parseCard(text).title
+  } catch {
+    return null
+  }
+}
+
+async function statics(store, app, path, response) {
   if (!app) throw missing()
   // The page is stamped, so it is served by the one place that stamps it - by name here,
   // and by falling through below for every address the app answers for itself.
   if (path === '/' || path === '/index.html') return page(app, response)
+
+  /*
+   * A recipe is unlisted, not public. The link is how you hand it to someone, so an
+   * unfurler reading the tags is reading them because a person deliberately pasted it;
+   * a crawler that finds the same link in a forum thread is told to leave it out.
+   */
+  const shared = READ.exec(path)
+  if (shared)
+    return page(app, response, { title: await named(store, shared[1]), unlisted: true })
 
   const file = join(app, normalize(path))
   if (!file.startsWith(app)) throw new Refusal(403, 'forbidden')

@@ -1,12 +1,13 @@
 import { parseCard, ParseError } from './card.js'
 import { renderReading } from './read.js'
-import { renderOverview } from './overview.js'
+import { renderHeld, renderOverview } from './overview.js'
 import * as api from './api.js'
 import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
 import { section, specification } from './page.js'
-import { cache, cached, collection, rows, setRows, useCollection } from './library.js'
+import { cache, cached, collection, forget, known, rows, setRows, useCollection } from './library.js'
 import { svg } from './qr.js'
+import { address, arrive } from './link.js'
 
 const SCALES = [
   [0.5, '½×'],
@@ -20,23 +21,17 @@ const acts = document.getElementById('acts')
 const screen = document.getElementById('screen')
 const where = document.getElementById('where')
 
-const CARD = /^\/r\/([^/]+)(?:\/([^/]+))?/
-const COLLECTION = /^\/c\/([^/]+)(?:\/([^/]+))?/
-
 start()
 register()
 
 async function start() {
-  const path = location.pathname
-  const card = CARD.exec(path)
-  if (card) return showCard(card[1], card[2])
-
-  const found = COLLECTION.exec(path)
-  if (found) return showCollection(found[1], found[2])
+  const here = arrive()
+  if (here.kind === 'card') return showCard(here.id, here.key)
+  if (here.kind === 'collection') return showCollection(here.id, here.key)
 
   // The foot says `/new` while a fresh recipe is being written, so the address has to
   // mean it: without this, opening it lands on the overview under a foot saying `/new`.
-  if (path === '/new') return showWriting()
+  if (here.path === '/new') return showWriting()
 
   return showOverview()
 }
@@ -46,11 +41,11 @@ async function showOverview() {
   const held = collection()
   if (!held) return show(section('Recipes'), welcome())
 
-  let list = rows()
+  let list = rows(held.id)
   let note = null
   try {
     list = (await api.readCollection(held.id, held.key)).rows
-    setRows(list)
+    setRows(held.id, list)
   } catch {
     note = band('Offline. Showing the recipes this device remembers.')
   }
@@ -64,7 +59,31 @@ async function showOverview() {
       onImport: () => showImport(held),
       onCreate: () => showWriting(),
     }),
+    ...heldCollections(held),
   )
+}
+
+/**
+ * Said only when there is more than one, because the masthead already stamps the one in
+ * use. A single collection is not a choice, and a table offering it is a table asking a
+ * question with one answer.
+ */
+function heldCollections(held) {
+  const all = known()
+  if (all.length < 2) return []
+  return [
+    section('Collections'),
+    renderHeld(all, held.id, {
+      onUse: (entry) => {
+        useCollection(entry)
+        showOverview()
+      },
+      onForget: (id) => {
+        forget(id)
+        showOverview()
+      },
+    }),
+  ]
 }
 
 async function showCollection(id, key) {
@@ -81,7 +100,7 @@ async function showCollection(id, key) {
     )
 
   useCollection({ id, key })
-  setRows(list)
+  setRows(id, list)
   history.replaceState(null, '', '/')
   return showOverview()
 }
@@ -117,7 +136,7 @@ async function showCard(id, key, state = {}) {
    * nearer still to what it changes - but that cell is held at the left edge while the
    * card rolls, so the switch was dragged out over the middle of the table.
    */
-  page(key ? `/r/${id}/${key}` : `/r/${id}`, scales(id, key, here), fitting.button)
+  page(`/r/${id}`, scales(id, key, here), fitting.button)
   show(
     section(card.title, card.yields),
     body(card, id, key, here, fitting.tell),
@@ -187,7 +206,7 @@ function showEditor(id, key, draft) {
    * re-reads the recipe from the server. Pressing one while writing threw the draft away
    * without so much as asking, which is the one thing `Cancel` exists to prevent.
    */
-  page(id ? `/r/${id}/${key}` : '/new')
+  page(id ? `/r/${id}` : '/new')
 
   show(
     buildEditor({
@@ -213,8 +232,8 @@ function showEditor(id, key, draft) {
         id = made.id
         key = made.key
         keep(id, text)
-        history.replaceState(null, '', `/r/${id}/${key}`)
-        page(`/r/${id}/${key}`)
+        history.replaceState(null, '', address('/r/', id, key))
+        page(`/r/${id}`)
 
         // The recipe is saved either way. A collection that would not take it is said
         // out loud rather than reported as a failed save.
@@ -279,7 +298,7 @@ function keeper(id, key, state) {
     return create
   }
 
-  const list = rows()
+  const list = rows(held.id)
   const found = list.find((row) => row.id === id)
   /*
    * Nothing at all when the recipe is already kept. A status has no business in a row of
@@ -329,7 +348,7 @@ async function change(held, edit) {
     const next = edit(current)
     try {
       await api.writeCollection(held.id, held.key, next, version)
-      setRows(next)
+      setRows(held.id, next)
       return next
     } catch (error) {
       if (error.status !== 412) throw error
@@ -477,18 +496,18 @@ function mark() {
 }
 
 function showShare(held) {
-  const address = new URL(`/c/${held.id}/${held.key}`, location.origin).href
+  const link = new URL(address('/c/', held.id, held.key), location.origin).href
   const box = element('dialog', 'sheet')
 
   const code = element('div', 'code')
   try {
-    code.innerHTML = svg(address)
+    code.innerHTML = svg(link)
   } catch {
     code.replaceChildren(element('p', 'note', 'The link is too long for a code.'))
   }
 
   // Written out in full and wrapped, because a link one cannot read is a link one cannot type.
-  const field = element('p', 'address', address)
+  const field = element('p', 'address', link)
   const select = () => {
     const range = document.createRange()
     range.selectNodeContents(field)
@@ -504,7 +523,7 @@ function showShare(held) {
   const copy = element('button', 'quiet', 'Copy link')
   copy.onclick = async () => {
     try {
-      await navigator.clipboard.writeText(address)
+      await navigator.clipboard.writeText(link)
       copy.textContent = 'Copied'
     } catch {
       select()

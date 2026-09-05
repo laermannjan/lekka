@@ -22,11 +22,22 @@ if (days > 0) {
   setInterval(sweep, DAY).unref()
 }
 
+/*
+ * The limits are all off by default, because a household network already has one: the
+ * people who can reach the port are the household, and a recipe box that starts refusing
+ * its owner is worse than no limit at all. A public address sets them, and `TTL_DAYS`
+ * stays off with them - a server that deletes what it was given because nobody opened it
+ * lately is a promise, not a default.
+ */
 const server = createServer(
   handler(store, {
     app: fileURLToPath(new URL('../app', import.meta.url)),
     createToken: process.env.CREATE_TOKEN || null,
     maxBytes: number(process.env.MAX_CARD_BYTES, 65536),
+    maxRows: number(process.env.MAX_COLLECTION_ROWS, 0),
+    createsPerHour: number(process.env.MAX_CREATES_PER_HOUR, 0),
+    triesPerMinute: number(process.env.MAX_TRIES_PER_MINUTE, 0),
+    trustProxy: process.env.TRUST_PROXY === '1',
   }),
 )
 

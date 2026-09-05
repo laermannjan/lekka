@@ -1,6 +1,6 @@
 const CURRENT = 'lekka:collection'
 const KNOWN = 'lekka:collections'
-const ROWS = 'lekka:rows'
+const ROWS = 'lekka:rows:'
 const CARD = 'lekka:card:'
 
 const load = (key, fallback) => JSON.parse(localStorage.getItem(key) ?? fallback)
@@ -14,19 +14,37 @@ export function collection() {
 export function useCollection(entry) {
   save(CURRENT, entry)
   save(KNOWN, [entry, ...known().filter((other) => other.id !== entry.id)])
-  save(ROWS, [])
 }
 
+/**
+ * Every collection this device has opened, the one in use first.
+ *
+ * The list has been kept since the beginning and was never shown. It is what makes a
+ * second collection possible without anything on the server changing: a card belongs to
+ * no collection, so being in two lists is not a special case, it is the ordinary one.
+ *
+ * The one in use is folded in rather than assumed to be there, because a device that
+ * adopted a collection before this list existed holds a `CURRENT` and no `KNOWN`.
+ */
 export function known() {
-  return load(KNOWN, '[]')
+  const held = collection()
+  const rest = load(KNOWN, '[]')
+  if (!held) return rest
+  return [held, ...rest.filter((other) => other.id !== held.id)]
 }
 
-export function rows() {
-  return load(ROWS, '[]')
+export function forget(id) {
+  save(KNOWN, load(KNOWN, '[]').filter((other) => other.id !== id))
+  if (collection()?.id === id) localStorage.removeItem(CURRENT)
 }
 
-export function setRows(list) {
-  save(ROWS, list)
+/** A copy of what was in a collection, per collection, so switching works with no network. */
+export function rows(id) {
+  return load(ROWS + id, '[]')
+}
+
+export function setRows(id, list) {
+  save(ROWS + id, list)
 }
 
 /** A copy of every card seen, so a card opens again without a network. */
