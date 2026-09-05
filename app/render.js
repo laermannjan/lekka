@@ -79,11 +79,11 @@ export function renderGrid(grid, scale = 1, edit = null) {
   // the first thing every new card is, so this is the common case, not the corner.
   if (grid.columns === 0) table.classList.add('flat')
 
-  // The band holds only what belongs to the recipe; a step's own preparations are drawn
-  // in its cell. Those are written in the specification, so here they are only drawn.
   const band = grid.band
-
   const head = band.length
+  // With preparations above it the head is no longer the first row of the table, so it
+  // needs a rule of its own on top; without them the box around the table draws one.
+  if (head > 0) table.classList.add('banded')
   // The row that adds an ingredient is a row of the table like any other, so it counts
   // towards where the bottom is. Otherwise the rows above it are drawn as the last ones
   // and drop their bottom rule, and the table ends twice.

@@ -112,9 +112,18 @@ body {
   display: flex;
   flex-direction: column;
   margin: 0 auto;
-  max-width: 1080px;
+  /*
+   * As wide as the card needs, between a comfortable minimum and the screen.
+   *
+   * It was 1080px whatever the screen was, so a recipe eight columns deep rolled a step
+   * at a time on a monitor with room for all of it twice over. A sheet is a sheet, but a
+   * sheet you have to scroll when the desk is empty is a rule kept past its reason.
+   */
+  max-width: min(100%, 2400px);
   min-height: calc(100dvh - 2 * clamp(10px, 2.2vw, 28px));
+  min-width: min(100%, 1080px);
   padding: 12px clamp(11px, 1.6vw, 18px) 10px;
+  width: fit-content;
 }
 
 /* ---- masthead ----------------------------------------------------------- */
@@ -272,6 +281,14 @@ a.wordmark:hover {
 
 .section .title {
   border: 1px solid transparent;
+}
+
+/* What the recipe makes, beside what it is called - which is where the format writes it,
+   and it is the one fact about a recipe you want before you have read any of it. */
+.section .yields {
+  color: var(--grey);
+  font-weight: 400;
+  margin-left: 9px;
 }
 
 /*
@@ -945,6 +962,12 @@ textarea:focus {
 .grid .label {
   background: var(--paper);
   border-bottom: 1px solid var(--edge) !important;
+}
+
+/* Preparations stand above the head, so the head is closed on both sides. Without them
+   it is the first row of the table and the box around it draws the line. */
+.grid.banded .label {
+  border-top: 1px solid var(--edge);
 }
 
 

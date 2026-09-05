@@ -208,9 +208,15 @@ that fits is drawn whole; only one that does not scrolls sideways.
 
 ## The sheet
 
-One sheet, at most 1080 px, always the same width, with a 1 px ink edge. The
-table inside it may be wider than the screen and scroll; the sheet never moves,
-so the page keeps its edges however long the recipe is.
+One sheet with a 1 px ink edge, **as wide as the card needs**: at least 1080 px,
+at most the screen, never more than 2400. A recipe that would fit is not made to
+scroll because a rule said the paper was 1080 - `roggenquarkbrot` is eight
+columns deep and rolled a step at a time on a monitor with room for it twice
+over. A short recipe still gets the 1080, so the paper does not stretch to hold
+four lines.
+
+The table inside it may still be wider than the screen and scroll; the sheet
+itself never moves, so the page keeps its edges however long the recipe is.
 
 - **Masthead**: the app's name at 18 px 700, which is the way home; the
   collection stamped beside it; page actions on the right. Closed by a rule of
@@ -223,6 +229,18 @@ so the page keeps its edges however long the recipe is.
   line inside it. Two frames is how a printed page says "read this one thing
   first" without a second size or a heavier weight. It sits under the masthead
   and above the heading, because it is about the page, not about the recipe.
+
+**What the card says about itself** is under the table: read, its notes and
+nothing else. It carried a block of sums too - how long the recipe takes, what it
+weighs, how many rows and steps it has - and they were true and nobody wanted
+them. A cook reads the table; a count of the rows in it describes the drawing
+rather than the food. Written, every one of them is back, because that is the
+only place the yield, the notes and the recipe's own preparations can be typed,
+and the sums are where the arithmetic is checked while it is being written.
+
+**What the recipe makes is beside its name**, which is where the format writes it
+(`# Roggenquarkbrot (1 Kastenbrot)`), and inside the name's own box so the
+heading is one line high whether it is read or written.
 
 ## The other screens
 

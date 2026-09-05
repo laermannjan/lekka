@@ -70,6 +70,7 @@ const LONG = await readFile(new URL('../test/cards/roggenquarkbrot.lekka', impor
 const CHECKS = `
 import { parseCard } from './card.js'
 import { renderCard } from './render.js'
+import { specification } from './page.js'
 import { renderReading } from './read.js'
 import { buildEditor } from './editor.js'
 import { toDraft, addIngredient } from './edit.js'
@@ -298,6 +299,30 @@ requestAnimationFrame(() => {
       .map((one) => one.className + ' "' + one.textContent + '"')
     check(\`and every amount fits its own cell at \${factor} times\`, over.length === 0, over.join(', '))
   }
+
+  /*
+   * The head of the table is closed on both sides. Preparations stand above it, so it is
+   * no longer the first row and the box around the table no longer draws its top rule.
+   */
+  const banded = tall.querySelector('.grid')
+  const shut = getComputedStyle(banded.querySelector('.label.heading')).borderTopWidth
+  check('the head of a table with preparations over it has a rule above it',
+    banded.classList.contains('banded') && shut !== '0px', banded.className + ' ' + shut)
+
+  /*
+   * What the card says about itself, read: its notes and nothing else. The sums are for
+   * writing, where they are the one place the arithmetic is checked.
+   */
+  const labels = (root) =>
+    [...root.querySelectorAll('.spec > .label')].map((one) => one.textContent).filter(Boolean)
+  const reading = document.createElement('div')
+  document.getElementById('screen').append(reading)
+  reading.append(specification(parseCard(LONG)))
+  check('read, the card says only its notes', labels(reading).every((one) => one.startsWith('Note')),
+    labels(reading).join(' '))
+  check('written, it says everything there is to type into',
+    labels(written).includes('Yield') && labels(written).some((one) => one.startsWith('Before')),
+    labels(written).join(' '))
 
   const table = narrow.querySelector('.grid')
   const prep = table.querySelector('.preparation')

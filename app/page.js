@@ -10,9 +10,19 @@ import { duration, facts, mass, volume } from './facts.js'
  * heading and a specification without going back through the router.
  */
 
-/** A name, and a dashed rule out to the edge of the sheet. */
-export function section(title) {
-  return element('div', 'section', undefined, [element('span', 'title', title)])
+/**
+ * A name, and a dashed rule out to the edge of the sheet.
+ *
+ * What the recipe yields is said beside the name, which is where the format itself puts
+ * it (`# Roggenquarkbrot (1 Kastenbrot)`). It used to be a row of the specification, and
+ * a recipe that says what it makes should say so where it says what it is.
+ */
+export function section(title, yields = null) {
+  // Inside the name's own box, not under it: the heading is one line high whether it is
+  // read or written, so `Edit` does not move the table down by the height of a second.
+  const name = element('span', 'title', title)
+  if (yields) name.append(element('span', 'yields', yields))
+  return element('div', 'section', undefined, [name])
 }
 
 /**
@@ -38,16 +48,16 @@ export function nameSection(title, onRename) {
 }
 
 /**
- * What the app knows about the recipe on the screen.
+ * What the card says about itself.
  *
- * Only what is worth reading. Row counts and byte counts describe the drawing rather
- * than the food, and a box repeating what the table beside it already shows is the kind
- * of decoration this is meant to avoid. A row with no answer for this recipe is left out
- * rather than filled with a dash - ribs are measured in racks and cups, and a weight of
- * nothing is noise.
+ * Read, that is its notes and nothing else. It held a block of sums as well - how long
+ * the recipe takes, what it weighs, how many rows and steps it has - and they were
+ * true, and nobody needed them. A cook reads the table; a count of the rows in it is a
+ * fact about the drawing rather than about the food.
  *
- * Rows a person wrote become fields while the recipe is being written; rows worked out
- * from it stay text, because there is nothing to type into a sum.
+ * Written, every one of them is a field, because this is the only place the yield, the
+ * notes and the recipe's own preparations can be typed. The sums come back with them:
+ * while a recipe is being written they are the one place the arithmetic is checked.
  */
 export function specification(card, edit = null) {
   const found = facts(card)
@@ -57,13 +67,19 @@ export function specification(card, edit = null) {
   const preparations = (card.preparations ?? []).map(written)
   const preps = edit ? [...preparations, ''] : preparations
 
+  const sums = edit
+    ? [
+        ...pair('Yield', card.yields ?? '', (text) => edit.onYields(text)),
+        ...pair('Time', duration(found.minutes)),
+        ...pair('Weight', mass(found.grams)),
+        ...pair('Liquid', volume(found.millilitres)),
+        ...pair('Ingredients', count(found.ingredients)),
+        ...pair('Steps', count(found.steps)),
+      ]
+    : []
+
   const rows = [
-    ...pair('Yield', card.yields ?? '', edit && ((text) => edit.onYields(text))),
-    ...pair('Time', duration(found.minutes)),
-    ...pair('Weight', mass(found.grams)),
-    ...pair('Liquid', volume(found.millilitres)),
-    ...pair('Ingredients', count(found.ingredients)),
-    ...pair('Steps', count(found.steps)),
+    ...sums,
     ...notes.flatMap((note, index) =>
       pair(
         notes.length > 1 ? `Note ${index + 1}` : 'Note',
@@ -71,13 +87,15 @@ export function specification(card, edit = null) {
         edit && ((text) => edit.onNotes(replace(card.notes, index, text))),
       ),
     ),
-    ...preps.flatMap((prep, index) =>
-      pair(
-        preps.length > 1 ? `Before ${index + 1}` : 'Before',
-        prep,
-        edit && ((text) => edit.onPreparations(replace(preparations, index, text))),
-      ),
-    ),
+    ...(edit
+      ? preps.flatMap((prep, index) =>
+          pair(
+            preps.length > 1 ? `Before ${index + 1}` : 'Before',
+            prep,
+            (text) => edit.onPreparations(replace(preparations, index, text)),
+          ),
+        )
+      : []),
   ]
 
   if (rows.length === 0) return null
@@ -85,7 +103,7 @@ export function specification(card, edit = null) {
   if (rows.length % 2) rows.push({ label: element('span', 'label'), value: element('span', 'value') })
 
   return element('div', '', undefined, [
-    section('Specification'),
+    section(edit ? 'Specification' : 'Notes'),
     element('div', 'spec', undefined, rows.flatMap(({ label, value }) => [label, value])),
   ])
 }

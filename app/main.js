@@ -119,7 +119,7 @@ async function showCard(id, key, state = {}) {
    */
   page(key ? `/r/${id}/${key}` : `/r/${id}`, scales(id, key, here), fitting.button)
   show(
-    section(card.title),
+    section(card.title, card.yields),
     body(card, id, key, here, fitting.tell),
     // What changes the recipe itself sits past it, out of the way of reading.
     after(composer(id, key, card), keeper(id, key, here)),

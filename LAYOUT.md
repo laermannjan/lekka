@@ -93,6 +93,10 @@ the grid is simply blank.
 
 ## Around the grid
 
+The head is **closed on both sides** when preparations stand above it: it is no
+longer the first row of the table, so the box around the table no longer draws
+its top rule. Without preparations it is the first row and the box does.
+
 Above the ingredient rows, in this order:
 
 1. the **preparations**, each a tag over the column of the step it comes before,
