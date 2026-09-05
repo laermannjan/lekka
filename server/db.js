@@ -48,6 +48,10 @@ create table if not exists people (
   created text not null
 );
 
+/* At most one, enforced here rather than trusted to the code that writes it: the index
+ * covers only the rows that are the operator, so a second one cannot be inserted. */
+create unique index if not exists people_operator on people (admin) where admin = 1;
+
 create table if not exists credentials (
   kind   text not null,
   handle text not null,

@@ -197,9 +197,12 @@ async function peopleRoute(store, options, request, response, path, session) {
   if (asPerson) {
     if (request.method !== 'DELETE') throw new Refusal(405, 'method not allowed')
     if (!session || !people.admin(session.person)) throw missing()
-    if (asPerson[1] === session.person)
-      throw new Refusal(409, 'somebody has to keep the instance; this is you')
     if (!people.person(asPerson[1])) throw missing()
+    /* Whoever keeps the instance cannot be removed from inside it - not by themselves,
+     * and not by anybody else. There is one of them, and an instance without one has
+     * nobody who can ever remove anybody again. */
+    if (people.admin(asPerson[1]))
+      throw new Refusal(409, 'the person who keeps this instance cannot be removed here')
     people.remove(asPerson[1], session.person)
     return send(response, 204)
   }

@@ -94,7 +94,11 @@ where the link came from.
 The first person to arrive keeps the instance: a flag on the row, set because they
 were first, and the only thing it buys is seeing everybody and removing somebody. It
 is a flag rather than a role table because there are two kinds of person here and no
-third one coming. Removing somebody takes their sessions, credentials and invites
+third one coming. There is at most one, held by a partial unique index over the rows
+that have it, so a second cannot be written even by a hand at the database - and that
+one cannot be removed through the app at all, since an instance with nobody keeping
+it has nobody who can ever remove anybody again. Handing it over is `sqlite3`, which
+the README spells out. Removing somebody takes their sessions, credentials and invites
 with the foreign keys; their grants take two paths, since what they were *lent* goes
 with them and what they *owned* is handed to whoever removed them.
 

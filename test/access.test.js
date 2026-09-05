@@ -53,6 +53,7 @@ async function serve(mode, options = {}) {
 
   return {
     call,
+    db,
     store,
     grants,
     people,
@@ -614,4 +615,47 @@ test('recipes made before there was a door are taken by the first person in', as
     [...before].sort(),
     'and they are in his library',
   )
+})
+
+test('the person who keeps the instance cannot be removed from inside it', async (t) => {
+  const { call, people, close } = await serve('LOGIN')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const jan = (await (await call('/api/me')).json()).person
+  assert.equal(jan.admin, true)
+
+  const refused = await call(`/api/people/${jan.id}`, { method: 'DELETE' })
+  assert.equal(refused.status, 409, 'not by themselves')
+  assert.match(await refused.text(), /cannot be removed/)
+
+  // Nor by anybody else, even if a second operator somehow existed to try.
+  people.add('Rita', 'a different passphrase')
+  const rita = people.named('Rita')
+  const hers = cookieOf(await signIn(call, 'Rita', 'a different passphrase'))
+  assert.equal(
+    (await call(`/api/people/${jan.id}`, { as: hers, method: 'DELETE' })).status,
+    404,
+    'and somebody who does not keep it cannot remove anybody at all',
+  )
+  assert.equal(people.person(jan.id).name, 'Jan')
+  void rita
+})
+
+test('there is one operator, and the database is what says so', async (t) => {
+  const { db, people, close } = await serve('LOGIN')
+  t.after(close)
+
+  const jan = people.add('Jan', 'a long enough passphrase')
+  assert.equal(jan.admin, true)
+  const rita = people.add('Rita', 'a different passphrase')
+  assert.equal(rita.admin, false, 'the second to arrive is not one')
+
+  // Not a rule the code remembers to apply - a rule the index will not let it break.
+  assert.throws(
+    () => db.prepare('update people set admin = 1 where id = ?').run(rita.id),
+    /UNIQUE|constraint/i,
+    'a second operator cannot be written at all',
+  )
+  assert.equal(people.admin(rita.id), false)
 })

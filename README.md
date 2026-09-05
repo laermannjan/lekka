@@ -142,8 +142,18 @@ one` - and whoever opens it becomes the first person and picks their password.
 It works once.
 
 Whoever opens that first link **keeps the instance**: they are the one who can see
-everybody on it and remove somebody. Nobody grants that and nobody is promoted into
-it - on a box you own, whoever set it up is who set it up.
+everybody on it and remove somebody. There is exactly one, which the database
+enforces rather than the code remembering to, and they cannot be removed from
+inside the app - not by themselves, not by anybody. An instance with nobody keeping
+it has nobody who can ever remove anybody again.
+
+Handing that over is a thing you do on the box, in the order the index requires:
+
+```
+sqlite3 data/lekka.db \
+  "update people set admin = 0 where admin = 1; \
+   update people set admin = 1 where name = 'Rita';"
+```
 
 After that, everything happens from **your name in the masthead**, which opens the
 list of browsers you are signed in on:
