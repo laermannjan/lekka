@@ -1,30 +1,23 @@
-/** The shape of a link: the id in the path, which the server needs, the key in the
- * fragment, which no browser sends anywhere. */
+/**
+ * The shape of a link: the id, and nothing else. A recipe used to carry a secret in the
+ * fragment - a key, and then a grant token - which is how it was opened by somebody who
+ * held no account. Nothing is addressed to a string any more, so the address is a name.
+ */
 
 const CARD = /^\/r\/([^/]+)(?:\/([^/]+))?/
-const COLLECTION = /^\/c\/([^/]+)(?:\/([^/]+))?/
 
-export function address(stem, id, key) {
-  return key ? `${stem}${id}#${key}` : `${stem}${id}`
+export function address(id) {
+  return `/r/${id}`
 }
 
-/** Where we are, and what we hold. Links written before the key moved carry it as a
- * path segment; those are read, and rewritten. */
+/** Where we are. An older link with something trailing is read for its id and rewritten. */
 export function arrive() {
   const path = location.pathname
-  const held = location.hash.length > 1 ? location.hash.slice(1) : null
-
-  for (const [kind, pattern, stem] of [
-    ['card', CARD, '/r/'],
-    ['collection', COLLECTION, '/c/'],
-  ]) {
-    const found = pattern.exec(path)
-    if (!found) continue
-    const [, id, inPath] = found
-    const key = inPath ?? held
-    if (inPath) history.replaceState(null, '', address(stem, id, key))
-    return { kind, id, key, path: stem + id }
+  const found = CARD.exec(path)
+  if (found) {
+    const [, id, trailing] = found
+    if (trailing || location.hash) history.replaceState(null, '', address(id))
+    return { kind: 'card', id, path: address(id) }
   }
-
   return { kind: null, path }
 }

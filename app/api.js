@@ -5,6 +5,60 @@ export class ApiError extends Error {
   }
 }
 
+/** What this instance is, and who the browser is on it. Answers in every mode. */
+export async function me() {
+  const response = await fetch('/api/me')
+  if (response.status === 404) return { mode: 'NONE', empty: false, person: null, session: null }
+  if (!response.ok) throw new ApiError(response.status, await response.text())
+  return response.json()
+}
+
+export async function signIn(name, password) {
+  return send('POST', '/api/sessions', { body: JSON.stringify({ name, password }) })
+}
+
+export async function signOut() {
+  return send('DELETE', '/api/sessions')
+}
+
+/** What a join link is for, before anybody acts on it. */
+export async function invite(token) {
+  return send('GET', `/api/invites/${token}`)
+}
+
+/** Made by anybody already inside, for somebody who is not here yet. */
+export async function makeInvite() {
+  return send('POST', '/api/invites', { body: '{}' })
+}
+
+/** Everybody here. Any signed-in person may ask, because that is who they can share with. */
+export async function people() {
+  return send('GET', '/api/people')
+}
+
+/** Only the person who keeps the instance. What they owned comes to whoever removes them. */
+export async function removePerson(id) {
+  return send('DELETE', `/api/people/${id}`)
+}
+
+/** Spending one: where somebody new picks the name and password they sign in with. */
+export async function redeem(token, who) {
+  return send('POST', `/api/invites/${token}`, { body: JSON.stringify(who) })
+}
+
+export async function sessions() {
+  return send('GET', '/api/sessions')
+}
+
+export async function revokeSession(id) {
+  return send('DELETE', `/api/sessions/${id}`)
+}
+
+/** The library: every recipe here, or the ones you hold, depending on the instance. */
+export async function cards() {
+  return send('GET', '/api/cards')
+}
+
 export async function createCard(text) {
   return send('POST', '/api/cards', { body: text })
 }
@@ -13,31 +67,26 @@ export async function readCard(id) {
   return send('GET', `/api/cards/${id}`, { text: true })
 }
 
-export async function writeCard(id, key, text) {
-  return send('PUT', `/api/cards/${id}`, { key, body: text })
+export async function writeCard(id, text) {
+  return send('PUT', `/api/cards/${id}`, { body: text })
 }
 
-export async function deleteCard(id, key) {
-  return send('DELETE', `/api/cards/${id}`, { key })
+/** Who holds this recipe. Only its owner may ask, and a 404 is how the server says so. */
+export async function grantsOn(id) {
+  return send('GET', `/api/cards/${id}/grants`)
 }
 
-export async function createCollection(rows = []) {
-  return send('POST', '/api/collections', { body: JSON.stringify(rows) })
+/** Hand it to somebody here. A grant always has a name on it. */
+export async function share(id, { name, scope = 'read', days = null } = {}) {
+  return send('POST', `/api/cards/${id}/grants`, { body: JSON.stringify({ name, scope, days }) })
 }
 
-/** Comes back with the version tag a later write has to name. */
-export async function readCollection(id, key) {
-  const response = await call('GET', `/api/collections/${id}`, { key })
-  return { rows: await response.json(), version: response.headers.get('etag') }
+export async function revokeGrant(id) {
+  return send('DELETE', `/api/grants/${id}`)
 }
 
-export async function writeCollection(id, key, rows, version) {
-  const response = await call('PUT', `/api/collections/${id}`, {
-    key,
-    body: JSON.stringify(rows),
-    version,
-  })
-  return response.headers.get('etag')
+export async function deleteCard(id) {
+  return send('DELETE', `/api/cards/${id}`)
 }
 
 async function send(method, path, options) {
@@ -46,13 +95,15 @@ async function send(method, path, options) {
   return options?.text ? response.text() : response.json()
 }
 
-async function call(method, path, { key, body, version } = {}) {
+async function call(method, path, { body } = {}) {
   const response = await fetch(path, {
     method,
     body,
     headers: {
-      ...(key ? { authorization: `Bearer ${key}` } : {}),
-      ...(version ? { 'if-match': version } : {}),
+      // A cookie is sent whether or not the page meant to ask, so a write says out loud
+      // that it came from here. No cross-site form can set a header, and the preflight
+      // this forces is one a stranger's page cannot satisfy.
+      ...(method === 'GET' ? {} : { 'x-lekka': '1' }),
     },
   })
   if (!response.ok) throw new ApiError(response.status, await response.text())

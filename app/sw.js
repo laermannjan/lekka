@@ -14,9 +14,11 @@ const SHELL = [
   '/editor.js',
   '/form.js',
   '/page.js',
+  '/door.js',
+  '/share.js',
+  '/handoff.js',
   '/read.js',
   '/overview.js',
-  '/library.js',
   '/link.js',
   '/id.js',
   '/qr.js',
@@ -43,7 +45,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event
   if (request.method !== 'GET' || !request.url.startsWith(self.location.origin)) return
-  if (new URL(request.url).pathname.startsWith('/api/collections')) return
+
+  /* Who you are is never answered from a cache. A stale "signed in" is worse than no
+   * answer: the app would draw a library it cannot load, instead of the sign-in screen. */
+  const { pathname } = new URL(request.url)
+  if (pathname === '/api/me' || pathname.startsWith('/api/sessions')) return
 
   event.respondWith(
     fetch(request)

@@ -3,10 +3,15 @@ import { readFile, readdir } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
 import { parseCard, ParseError } from '../app/card.js'
+import { clear, cookie, COOKIE, encrypted, forged, guarded, keep, may, mayCreate } from './access.js'
 import { limiter, source } from './limit.js'
 
 const CARD = /^\/api\/cards\/([^/]+)$/
-const COLLECTION = /^\/api\/collections\/([^/]+)$/
+const SHARE = /^\/api\/cards\/([^/]+)\/grants$/
+const GRANT = /^\/api\/grants\/([a-z0-9]{1,64})$/
+const SESSION = /^\/api\/sessions\/([a-z0-9]{1,64})$/
+const INVITE = /^\/api\/invites\/([a-z0-9]{1,64})$/
+const PERSON = /^\/api\/people\/([a-z0-9]{1,64})$/
 const ID = /^[a-z0-9-]{1,64}$/
 
 /** The address a shared recipe is read at, in either shape the app has ever written. */
@@ -37,9 +42,13 @@ export function handler(
   store,
   {
     app,
+    people = null,
+    invites = null,
+    grants = null,
+    mode = 'NONE',
+    bootstrap = null,
     createToken = null,
     maxBytes = 65536,
-    maxRows = 0,
     createsPerHour = 0,
     triesPerMinute = 0,
     trustProxy = false,
@@ -50,13 +59,16 @@ export function handler(
     tries: limiter({ every: MINUTE, most: triesPerMinute }),
     trustProxy,
   }
-  const options = { app, createToken, maxBytes, maxRows, limits }
+  const options = { app, people, invites, grants, mode, bootstrap, createToken, maxBytes, limits }
 
   return async (request, response) => {
     try {
       await route(store, options, request, response)
     } catch (error) {
       if (error instanceof Refusal) return send(response, error.status, 'text/plain', error.message)
+      // A refusal is expected and says so to the caller. Anything else is a bug, and a
+      // 500 with no trace anywhere is a bug nobody can find.
+      console.error('lekka:', error)
       send(response, 500, 'text/plain', 'server error')
     }
   }
@@ -84,34 +96,233 @@ async function route(store, options, request, response) {
   const path = decode(new URL(request.url, 'http://lekka').pathname)
   const key = bearer(request)
 
+  /* Both answer before anything asks who you are: one is how a supervisor learns the
+   * process is up, the other is app code the browser needs to fetch the login screen. */
   if (path === '/healthz') return send(response, 200, 'text/plain', 'ok')
   if (path === '/sw.js') return worker(options.app, response)
 
-  if (path === '/api/cards' || path === '/api/collections') {
+  if (forged(request)) throw new Refusal(403, 'cross-site request refused')
+  const session = options.people?.session(cookie(request, COOKIE)) ?? null
+
+  if (
+    path.startsWith('/api/session') ||
+    path.startsWith('/api/invite') ||
+    path.startsWith('/api/people') ||
+    path === '/api/me'
+  )
+    return peopleRoute(store, options, request, response, path, session)
+
+  if (path === '/api/cards') {
+    /* The library. Where nothing is owned everybody sees everything, which is what
+     * `NONE` and `LOGIN` mean; under `GRANT` you see what a grant names you on. A library
+     * is always somebody's, so unlike a single recipe it is never opened by a token. */
+    if (request.method === 'GET') {
+      if (options.mode === 'NONE') return json(response, 200, store.all())
+      if (!session) throw new Refusal(401, 'sign in first')
+      return json(
+        response,
+        200,
+        options.mode === 'GRANT' ? options.grants.cards(session.person) : store.all(),
+      )
+    }
+
     if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
+    if (!mayCreate(options.mode, session)) throw new Refusal(401, 'sign in first')
     allowed(options, request)
     if (!options.limits.creates.charge(who(options, request)))
       throw new Refusal(429, 'too many requests')
-    return path === '/api/cards'
-      ? create(store.cards, response, card(await body(request, options)))
-      : create(store.collections, response, rows(await body(request, options), options))
+    return create(store, response, card(await body(request, options)), session?.person ?? null)
   }
+
+  const asShare = SHARE.exec(path)
+  if (asShare)
+    return guessing(options, request, () =>
+      shareRoute(store, options, request, response, asShare[1], session),
+    )
+
+  const asGrant = GRANT.exec(path)
+  if (asGrant) return grantRoute(options, request, response, asGrant[1], session)
 
   const asCard = CARD.exec(path)
   if (asCard)
     return guessing(options, request, () =>
-      cardRoute(store, options, request, response, asCard[1], key),
-    )
-
-  const asCollection = COLLECTION.exec(path)
-  if (asCollection)
-    return guessing(options, request, () =>
-      collectionRoute(store, options, request, response, asCollection[1], key),
+      cardRoute(store, options, request, response, asCard[1], session),
     )
 
   if (path.startsWith('/api/')) throw missing()
   if (request.method !== 'GET') throw new Refusal(405, 'method not allowed')
-  return statics(store, options.app, path, response)
+  return statics(store, options, path, response, session)
+}
+
+/**
+ * Signing in, signing out, and the list of browsers that are still signed in. A wrong
+ * name and a wrong password answer alike, and both are charged against the same counter
+ * that a guessed link is, since both are somebody trying strings.
+ */
+async function peopleRoute(store, options, request, response, path, session) {
+  const { people, invites, mode, bootstrap } = options
+  if (!people) throw missing()
+  const secure = encrypted(request, options.limits.trustProxy)
+
+  if (path === '/api/me') {
+    if (request.method !== 'GET') throw new Refusal(405, 'method not allowed')
+    return json(response, 200, {
+      mode,
+      empty: people.empty(),
+      person: session
+        ? { id: session.person, name: session.name, admin: people.admin(session.person) }
+        : null,
+      // Named so the device list can say which row is the browser reading it.
+      session: session ? { id: session.id, label: session.label } : null,
+    })
+  }
+
+  /* Made by anybody already inside. There is nothing here for a second browser of your
+   * own: signing in is that already. */
+  if (path === '/api/invites') {
+    if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
+    if (!session) throw new Refusal(401, 'sign in first')
+    return json(response, 201, invites.make(session.person))
+  }
+
+  /* Everybody here. Any signed-in person may look, because sharing a recipe means
+   * picking one of them by name; only the one who keeps the instance may remove. */
+  if (path === '/api/people') {
+    if (request.method !== 'GET') throw new Refusal(405, 'method not allowed')
+    if (!session) throw new Refusal(401, 'sign in first')
+    return json(response, 200, people.all())
+  }
+
+  const asPerson = PERSON.exec(path)
+  if (asPerson) {
+    if (request.method !== 'DELETE') throw new Refusal(405, 'method not allowed')
+    if (!session || !people.admin(session.person)) throw missing()
+    if (!people.person(asPerson[1])) throw missing()
+    /* Whoever keeps the instance cannot be removed from inside it - not by themselves,
+     * and not by anybody else. There is one of them, and an instance without one has
+     * nobody who can ever remove anybody again. */
+    if (people.admin(asPerson[1]))
+      throw new Refusal(409, 'the person who keeps this instance cannot be removed here')
+    people.remove(asPerson[1], session.person)
+    return send(response, 204)
+  }
+
+  const asInvite = INVITE.exec(path)
+  if (asInvite) {
+    const token = asInvite[1]
+    /* The operator's bootstrap link is not a row - it lives in the process, because
+     * there is nobody yet to have issued it. It answers here as the person invite it is,
+     * so the screen that opens a link never has to know where the link came from. */
+    const first = () => Boolean(bootstrap) && people.empty() && same(token, bootstrap)
+
+    if (request.method === 'GET') {
+      const found = invites.read(token)
+      if (found) return json(response, 200, { who: found.who })
+      if (first()) return json(response, 200, { who: null, first: true })
+      throw missing()
+    }
+    if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
+    if (!options.limits.tries.charge(who(options, request)))
+      throw new Refusal(429, 'too many requests')
+
+    const starting = first()
+    if (!invites.read(token) && !starting) throw missing()
+
+    const { name, password } = parse(await body(request, options))
+    named(name)
+    strong(password)
+    if (people.named(name.trim())) throw new Refusal(409, 'somebody here already signs in as that')
+
+    /* Spent only once it is certain to be worth something. Spending it first meant a
+     * password two characters short took the link with it, and the person who had been
+     * invited needed a new one to try again. */
+    invites.spend(token)
+    const person = people.add(name.trim(), password)
+
+    /* Recipes made before the door went up belong to nobody, and under `GRANT` that
+     * means nobody can reach them. The first person to arrive takes them, which is the
+     * one moment where an answer is obvious: there is nobody else it could be. */
+    if (starting) options.grants.adopt(person.id)
+
+    return json(response, 201, { id: person.id, name: person.name }, cookieFor(people, person, request, secure))
+  }
+
+  if (path === '/api/sessions') {
+    if (request.method === 'GET') {
+      if (!session) throw new Refusal(401, 'sign in first')
+      return json(response, 200, people.sessions(session.person))
+    }
+    if (request.method === 'POST') {
+      if (!options.limits.tries.charge(who(options, request)))
+        throw new Refusal(429, 'too many requests')
+      const { name, password } = parse(await body(request, options))
+      const person = people.verify(String(name ?? ''), String(password ?? ''))
+      if (!person) throw new Refusal(401, 'wrong name or password')
+      const held = people.mint(person.id, label(request))
+      return json(
+        response,
+        201,
+        { id: person.id, name: person.name },
+        { 'set-cookie': keep(held, secure) },
+      )
+    }
+    if (request.method === 'DELETE') {
+      people.drop(cookie(request, COOKIE))
+      return send(response, 204, null, '', { 'set-cookie': clear(secure) })
+    }
+    throw new Refusal(405, 'method not allowed')
+  }
+
+  const asSession = SESSION.exec(path)
+  if (asSession) {
+    if (request.method !== 'DELETE') throw new Refusal(405, 'method not allowed')
+    if (!session) throw new Refusal(401, 'sign in first')
+    if (!people.revoke(session.person, asSession[1])) throw missing()
+    return send(response, 204)
+  }
+
+  throw missing()
+}
+
+/** A person, and the browser they are now signed in on. */
+function cookieFor(people, person, request, secure) {
+  return { 'set-cookie': keep(people.mint(person.id, label(request)), secure) }
+}
+
+function parse(text) {
+  try {
+    const value = JSON.parse(text)
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error()
+    return value
+  } catch {
+    throw new Refusal(400, 'expected an object')
+  }
+}
+
+function named(name) {
+  if (typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 64)
+    throw new Refusal(400, 'a name between 1 and 64 characters')
+}
+
+/** Long rather than clever: a household picks a passphrase, not a symbol from each class. */
+function strong(password) {
+  if (typeof password !== 'string' || password.length < 12)
+    throw new Refusal(400, 'a password of at least 12 characters')
+}
+
+/** The browser names itself, roughly, so a device list has something to show. */
+function label(request) {
+  const agent = String(request.headers['user-agent'] ?? '')
+  for (const [pattern, name] of [
+    [/iPhone/, 'an iPhone'],
+    [/iPad/, 'an iPad'],
+    [/Android/, 'an Android phone'],
+    [/Macintosh/, 'a Mac'],
+    [/Windows/, 'a Windows PC'],
+    [/Linux/, 'a Linux machine'],
+  ])
+    if (pattern.test(agent)) return name
+  return 'a browser'
 }
 
 const who = (options, request) => source(request, options.limits.trustProxy)
@@ -129,85 +340,93 @@ async function guessing(options, request, work) {
   }
 }
 
-async function cardRoute(store, options, request, response, id, key) {
-  const { cards } = store
-  if (request.method === 'GET') {
-    const text = await cards.read(id)
-    if (text === null) throw missing()
-    await cards.touch(id)
-    return send(response, 200, 'text/plain; charset=utf-8', text)
-  }
+/**
+ * Who holds a recipe, and handing it to somebody else. Only its owner may look or give:
+ * a person granted `edit` may change the recipe, never who else can see it.
+ *
+ * Refusals are 404, the answer a recipe that is not there gives, so that asking who holds
+ * somebody else's card cannot even tell you the card exists.
+ */
+async function shareRoute(store, options, request, response, id, session) {
+  const { mode, grants, people } = options
+  if (mode !== 'GRANT') throw missing()
+  if (!store.has(id)) throw missing()
+  if (!session || !grants.may(id, { person: session.person }, 'owner')) throw missing()
 
-  if (!(await cards.verify(id, key))) throw missing()
-  if (request.method === 'DELETE') {
-    await cards.remove(id)
-    return send(response, 204)
-  }
-  if (request.method !== 'PUT') throw new Refusal(405, 'method not allowed')
+  if (request.method === 'GET') return json(response, 200, grants.on(id))
+  if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
 
-  await cards.write(id, card(await body(request, options)).text)
+  const { name = null, scope = 'read', days = null } = parse(await body(request, options))
+  if (!['read', 'edit'].includes(scope))
+    throw new Refusal(400, 'a grant reads or edits; owning is not given away')
+  const expires = days === null ? null : expiry(days)
+
+  /* Always somebody, never a string. A recipe cannot be handed to a person with no
+   * account here, so a grant always has a name on it and can always be taken back from
+   * one of them. */
+  if (name === null) throw new Refusal(400, 'a grant needs somebody to belong to')
+  const person = people?.named(String(name))
+  if (!person) throw new Refusal(404, 'nobody here signs in under that name')
+  if (person.id === session.person) throw new Refusal(409, 'you already own this one')
+
+  return json(
+    response,
+    201,
+    grants.give(id, { person: person.id, scope, by: session.person, expires }),
+  )
+}
+
+/** Taking one back. Only the owner of the recipe it sits on, and never the owner grant. */
+async function grantRoute(options, request, response, id, session) {
+  const { mode, grants } = options
+  if (mode !== 'GRANT') throw missing()
+  if (request.method !== 'DELETE') throw new Refusal(405, 'method not allowed')
+
+  const found = grants.find(id)
+  if (!found) throw missing()
+  if (!session || !grants.may(found.card, { person: session.person }, 'owner')) throw missing()
+  if (found.scope === 'owner')
+    throw new Refusal(409, 'a recipe cannot be left with no owner; delete it instead')
+
+  grants.revoke(id)
   return send(response, 204)
 }
 
-async function collectionRoute(store, options, request, response, id, key) {
-  const { collections } = store
-  const held = await collections.verify(id, key)
+function expiry(days) {
+  const many = Number(days)
+  if (!Number.isFinite(many) || many <= 0 || many > 3650)
+    throw new Refusal(400, 'an expiry between 1 and 3650 days')
+  return new Date(Date.now() + many * 24 * 60 * 60 * 1000).toISOString()
+}
+
+async function cardRoute(store, options, request, response, id, session) {
+  const { mode, grants } = options
+  const person = session?.person ?? null
+
+  if (!store.has(id)) throw missing()
+  const allowed = (need) => may(mode, session, () => grants.may(id, { person }, need))
 
   if (request.method === 'GET') {
-    const text = await collections.read(id)
+    if (!allowed('read')) throw missing()
+    const text = await store.read(id)
     if (text === null) throw missing()
-    await collections.touch(id)
-    const list = JSON.parse(text)
-    return json(response, 200, held ? list : strip(list), held ? { etag: tag(text) } : {})
+    await store.touch(id)
+    return send(response, 200, 'text/plain; charset=utf-8', text)
   }
 
-  if (!held) throw missing()
+  if (!allowed('edit')) throw missing()
   if (request.method === 'DELETE') {
-    await collections.remove(id)
+    await store.remove(id)
     return send(response, 204)
   }
   if (request.method !== 'PUT') throw new Refusal(405, 'method not allowed')
 
-  const { text } = rows(await body(request, options), options)
-  return alone(id, async () => {
-    agrees(request, tag(await collections.read(id)))
-    await collections.write(id, text)
-    return send(response, 204, null, '', { etag: tag(text) })
-  })
+  await store.write(id, card(await body(request, options)).text)
+  return send(response, 204)
 }
 
-const writing = new Map()
-
-/**
- * Reading the tag, checking it and writing is one move. One process, so a chain per
- * collection is enough: without it both devices read the same tag and both write.
- */
-function alone(id, work) {
-  const done = (writing.get(id) ?? Promise.resolve()).then(work, work)
-  const settled = done.then(
-    () => {},
-    () => {},
-  )
-  writing.set(id, settled)
-  settled.then(() => {
-    if (writing.get(id) === settled) writing.delete(id)
-  })
-  return done
-}
-
-/** A collection is changed from two devices, so a write must name the version it grew from. */
-function agrees(request, current) {
-  const sent = request.headers['if-match']
-  if (!sent) throw new Refusal(428, 'if-match required')
-  if (sent !== '*' && sent !== current) throw new Refusal(412, 'the collection has changed')
-}
-
-function tag(text) {
-  return `"${createHash('sha256').update(text ?? '').digest('hex').slice(0, 16)}"`
-}
-
-async function create(shelf, response, { text, label }) {
-  return json(response, 201, await shelf.create(text, label))
+async function create(store, response, { text, label }, owner = null) {
+  return json(response, 201, await store.create(text, label, owner))
 }
 
 /** A card is stored only if it parses; validation is parsing. */
@@ -220,29 +439,7 @@ function card(text) {
   }
 }
 
-/** A collection is a list of links and nothing else. */
-function rows(text, { maxRows = 0 } = {}) {
-  let value
-  try {
-    value = JSON.parse(text || '[]')
-  } catch {
-    throw new Refusal(400, 'not json')
-  }
-  if (!Array.isArray(value)) throw new Refusal(400, 'not a list')
-  if (maxRows > 0 && value.length > maxRows) throw new Refusal(413, 'too many rows')
 
-  const clean = value.map((row) => {
-    if (!ID.test(row?.id ?? '')) throw new Refusal(400, 'a row needs an id')
-    if (row.key !== undefined && typeof row.key !== 'string')
-      throw new Refusal(400, 'a key is a string')
-    return row.key === undefined ? { id: row.id } : { id: row.id, key: row.key }
-  })
-  return { text: JSON.stringify(clean), label: null }
-}
-
-function strip(list) {
-  return list.map(({ id }) => ({ id }))
-}
 
 function allowed({ createToken }, request) {
   if (createToken && !same(bearer(request) ?? '', createToken))
@@ -343,8 +540,8 @@ function escaped(text) {
 }
 
 /** A card that is not there still answers as the app, which is what says so in words. */
-async function named(store, id) {
-  const text = await store.cards.read(id).catch(() => null)
+async function titleOf(store, id) {
+  const text = await store.read(id).catch(() => null)
   if (text === null) return null
   try {
     return parseCard(text).title
@@ -353,17 +550,25 @@ async function named(store, id) {
   }
 }
 
-async function statics(store, app, path, response) {
+async function statics(store, options, path, response, session) {
+  const { app, mode } = options
   if (!app) throw missing()
   // The page is stamped, so it is served by the one place that stamps it - by name here,
   // and by falling through below for every address the app answers for itself.
   if (path === '/' || path === '/index.html') return page(app, response)
 
   // A recipe is unlisted, not public: tags for the chat it was pasted into, `noindex`
-  // for the crawler that finds the link in a forum thread.
+  // for the crawler that finds the link in a forum thread. Once there is a door, the
+  // title is behind it too - the fragment key never reaches the server, so this markup
+  // is the one place a closed instance could still say what a card is called.
   const shared = READ.exec(path)
-  if (shared)
-    return page(app, response, { title: await named(store, shared[1]), unlisted: true })
+  if (shared) {
+    const open = mode === 'NONE' || (mode === 'LOGIN' && session)
+    return page(app, response, {
+      title: open ? await titleOf(store, shared[1]) : null,
+      unlisted: true,
+    })
+  }
 
   const file = join(app, normalize(path))
   if (!file.startsWith(app)) throw new Refusal(403, 'forbidden')

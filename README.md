@@ -32,7 +32,7 @@ The documents that define it: [FORMAT.md](FORMAT.md) for the file,
 
 ## Running it
 
-Node 22 or newer. No dependencies, no build step.
+Node 24 or newer, for the built-in SQLite. No dependencies, no build step.
 
 ```
 npm run serve        # http://localhost:8080, restarted when a server file changes
@@ -81,7 +81,9 @@ volumes:
 From a checkout, `cd deploy && docker compose up -d` does the same, and
 uncommenting `build: ..` there builds the image yourself.
 
-One container, no database. **Read [the threat model](ARCHITECTURE.md#threat-model)
+One container, no dependencies. Recipes are `.lekka` files you can read with `cat`;
+everything around them lives in `data/lekka.db`, which is SQLite built into Node.
+**Read [the threat model](ARCHITECTURE.md#threat-model)
 first**: this is built for a network you already trust, a LAN or a VPN, and it is
 not hardened for the open internet.
 
@@ -89,9 +91,10 @@ not hardened for the open internet.
 |---|---|---|
 | `PORT` | 8080 | |
 | `DATA_DIR` | `./data` | the only thing to back up |
+| `ACCESS_CONTROL` | `NONE` | how much of it this instance does - see below. `LOGIN` and `GRANT` print a one-time link on first boot, which is how the first person is made |
+
 | `CREATE_TOKEN` | unset | when set, creating a card needs `Authorization: Bearer <token>` |
 | `MAX_CARD_BYTES` | 65536 | largest card accepted |
-| `MAX_COLLECTION_ROWS` | unset | most recipes one collection may hold; unset means no cap |
 | `MAX_CREATES_PER_HOUR` | unset | creations one address may make in an hour; unset means no limit |
 | `MAX_TRIES_PER_MINUTE` | unset | links one address may follow to nothing in a minute; unset means no limit |
 | `TRUST_PROXY` | unset | set to `1` behind a reverse proxy, so the two limits above count the forwarded address rather than the proxy |
@@ -122,36 +125,79 @@ uid 1000, put your own ids in `deploy/.env`:
 printf 'PUID=%s\nPGID=%s\n' "$(id -u)" "$(id -g)" > deploy/.env
 ```
 
-## Links are the rights
+## Who may open what
 
-There are no accounts. A link is what grants access, so treat one like a key.
+One setting decides, and it names the mechanism rather than how secret it feels.
 
-| | |
-|---|---|
-| `/r/<id>` | read a card |
-| `/r/<id>#<key>` | read and edit it |
-| `/c/<name>` | read a collection, with every edit key stripped out |
-| `/c/<name>#<key>` | read and change it; opening this adopts the collection on the device |
+| `ACCESS_CONTROL` | | |
+|---|---|---|
+| `NONE` | no door | everyone who reaches the port reads, writes and deletes every recipe. The library is the whole server |
+| `LOGIN` | one door | everyone signed in does the same. Nothing behind the door is anybody's in particular |
+| `GRANT` | one door, and owners | a recipe answers to a grant. Yours are yours; the rest you were given |
 
-The key is after the `#`, which is the one part of an address a browser sends
-nowhere: not in the request line, not in a `Referer`, so not into an access log,
-a proxy or a CDN. The older shape, with the key as a path segment, is still read
-and is rewritten on arrival, so links already handed out keep working.
+### Getting in, and letting others in
 
-A collection is a list of card links, and that is all it is. Cards do not belong
-to it.
+`LOGIN` and `GRANT` print a link on first boot - `Open /join#… to make the first
+one` - and whoever opens it becomes the first person and picks their password.
+It works once.
+
+Whoever opens that first link **keeps the instance**: they are the one who can see
+everybody on it and remove somebody. There is exactly one, which the database
+enforces rather than the code remembering to, and they cannot be removed from
+inside the app - not by themselves, not by anybody. An instance with nobody keeping
+it has nobody who can ever remove anybody again.
+
+Handing that over is a thing you do on the box, in the order the index requires:
+
+```
+sqlite3 data/lekka.db \
+  "update people set admin = 0 where admin = 1; \
+   update people set admin = 1 where name = 'Rita';"
+```
+
+After that, everything happens from **your name in the masthead**, which opens the
+list of browsers you are signed in on:
+
+- **Invite someone** hands you a link for somebody who is not here yet. They pick
+  their own name and password when they open it, and arrive with an empty library.
+  It works once and expires in an hour; only its hash is stored, so a lost link is
+  reissued rather than recovered.
+- **Sign out** on the row for the browser you are holding, **Revoke** on any other -
+  the same act, aimed at a different machine. Either stops that browser reading
+  anything new; neither reaches the recipes already on it.
+- **People**, for whoever keeps the instance, lists everybody and removes somebody.
+  Removing them ends their sessions and hands any recipe they owned to you, because
+  a recipe left with no owner is one nobody could reach again.
+
+There is nothing for adding a second browser of your own, because signing in is that
+already.
+
+Recipes made while `ACCESS_CONTROL` was `NONE` belong to nobody, and under `GRANT` a
+recipe nobody owns is one nobody can reach. Whoever keeps the instance takes them, on
+every start rather than only the first, so turning the door off for an afternoon and
+back on again does not strand what was written in between. The log says how many.
+
+Under `GRANT` a grant is one row saying *this person may do this, until taken back*.
+`Share` on a recipe you own lists everyone who holds it, and offers everybody else on
+the instance with what they already hold beside their name - so choosing is done with
+the answer in front of you. Choosing somebody who already holds something changes what
+they hold rather than adding a second row, and taking it back from one of them takes it
+back from one of them.
+
+**Sharing is by name, and only inside the instance.** There is no way to hand a recipe
+to somebody with no account here. A recipe's address is `/r/<id>` and the id is a name
+rather than a secret: it opens for whoever a grant names, and answers 404 to everybody
+else, signed in or not.
 
 ## The data directory
 
 ```
-data/cards/dinkelquarkbrot-7kmq2rxvbn.lekka        the card
-data/cards/dinkelquarkbrot-7kmq2rxvbn.meta.json    key hash and timestamps
-data/collections/purely-mellow-rhubarb-cypk.json
+data/cards/dinkelquarkbrot-7kmq2rxvbn.lekka    the recipe, and the only file
+data/lekka.db                                  everything else
 ```
 
-The file name is the link, so the directory can be read by eye. A card is the
-`.lekka` file and the `.meta.json` beside it; a server started against an
-existing directory needs nothing else, because there is no state anywhere but
-here.
+A recipe is a file you can `cat`, `grep`, `diff` and restore by hand. Its id, its
+dates, who owns it, who else may open it, and who is signed in are rows in
+`lekka.db`, which is the SQLite built into Node - still no dependencies.
 
-Back this directory up. It is the only copy.
+Back this directory up. It is the only copy, the database included.
