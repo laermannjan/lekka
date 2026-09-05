@@ -32,7 +32,7 @@ The documents that define it: [FORMAT.md](FORMAT.md) for the file,
 
 ## Running it
 
-Node 22 or newer. No dependencies, no build step.
+Node 24 or newer, for the built-in SQLite. No dependencies, no build step.
 
 ```
 npm run serve        # http://localhost:8080, restarted when a server file changes

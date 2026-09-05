@@ -98,8 +98,8 @@ does this person own" means opening every envelope in it; asking an index means
 one query.
 
 `node:sqlite` ships with Node, so this is still a server with no dependencies and
-one container. Node 22 prints an experimental warning for it on boot; that goes
-away on Node 24.
+one container. It is why the project is pinned to Node 24: the module is stable
+there, and prints an experimental warning on every boot under 22.
 
 `records` holds cards and collections together, since they differ only in where
 the body lives: a card's is the file, a collection's is the `body` column. A card
