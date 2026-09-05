@@ -18,7 +18,7 @@ import { renderCard } from './render.js'
  * it was set in at the cost of seeing it all - so the two are exclusive, and fitting turns
  * the reading affordances off because there is nowhere left to scroll to.
  */
-export function renderReading(card, scale, at, { onAt, onFits, fit = false } = {}) {
+export function renderReading(card, scale, at, { onAt, onFits, fit = false, beside = null } = {}) {
   const box = element('div', 'read')
 
   // Done, Now and Next name places on the screen rather than columns, so they cannot
@@ -31,7 +31,7 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false } = {
   places.append(done, now, nextPlace)
 
   const scroll = element('div', 'scroll')
-  const table = renderCard(card, scale)
+  const table = renderCard(card, scale, null, beside)
   scroll.append(table)
   box.append(places, scroll)
 

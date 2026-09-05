@@ -103,37 +103,34 @@ async function showCard(id, key, state = {}) {
 
   const fitting = fitter(id, key, here)
 
-  page(key ? `/r/${id}/${key}` : `/r/${id}`)
   /*
-   * Nothing between the heading and the table but the heading itself.
+   * No row of controls above the table, and none below it either.
    *
-   * The scale and the fit used to sit above it, beside what they change - which was the
-   * right instinct and the wrong place, because writing has nothing to put there and the
-   * table jumped up by the height of that row the moment `Edit` was pressed, out from
-   * under the pointer that had just pressed it. Under the table both views begin at the
-   * same line, and the page has one row of furniture instead of two.
+   * The scale sits in the heading cell of the ingredient column, which heads the amounts
+   * it multiplies - beside what it changes in the strictest sense, and costing the page
+   * no row of its own. Fitting acts on the page rather than on the recipe, so it goes to
+   * the masthead where printing does.
    *
-   * The two kinds are still told apart, by a gap: what changes how the recipe is drawn
-   * on the left, what changes the recipe itself past it.
+   * They were a bar between the heading and the table, which was the right instinct in
+   * the wrong place: writing has nothing to put there, so the table rose by the height
+   * of that row the moment `Edit` was pressed - out from under the pointer that pressed
+   * it. Now there is no row to lose.
    */
+  page(key ? `/r/${id}/${key}` : `/r/${id}`, fitting.button)
   show(
     section(card.title),
-    body(card, id, key, here, fitting.tell),
-    after(
-      scales(id, key, here),
-      fitting.button,
-      element('span', 'spring'),
-      composer(id, key, card),
-      keeper(id, key, here),
-    ),
+    body(card, id, key, here, fitting.tell, scales(id, key, here)),
+    // What changes the recipe itself sits past it, out of the way of reading.
+    after(composer(id, key, card), keeper(id, key, here)),
     specification(card),
   )
 }
 
-function body(card, id, key, state, onFits) {
+function body(card, id, key, state, onFits, beside) {
   // Reading is a scroll, not a redraw: the place is only kept so that changing the scale
   // comes back to the step the cook was standing on.
   return renderReading(card, state.scale, state.at, {
+    beside,
     fit: state.fit,
     onFits,
     onAt: (at) => {
@@ -563,11 +560,6 @@ function show(...parts) {
 
 function band(message, kind = '') {
   return element('div', `band ${kind}`.trim(), message)
-}
-
-function bar(...parts) {
-  const kept = parts.filter(Boolean)
-  return kept.length ? element('div', 'bar', undefined, kept) : null
 }
 
 function after(...parts) {

@@ -939,6 +939,24 @@ textarea:focus {
 }
 
 /*
+ * The heading of the ingredient column, and the scale beside it. The scale multiplies
+ * the amounts and this cell heads the column they stand in, so it is beside what it
+ * changes - and it takes no row of the page to say so. It is pushed to the right of the
+ * cell, away from the word, so the head still reads as a head.
+ */
+.grid .label.heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding-block: 1px;
+}
+
+.grid .label.heading .switch button {
+  padding: 0 7px;
+}
+
+/*
  * A preparation, over the column of the step it comes before.
  *
  * It sits above the head of the table, which is where it happens: the head names when a
@@ -1073,10 +1091,17 @@ textarea:focus {
 .reading .hold > .unit,
 .reading .hold > .name,
 .reading .hold > .words,
-.reading .holds > .step {
+.reading .holds > .step,
+.reading .grid > .label.heading {
   background: var(--paper);
   position: sticky;
   z-index: 1;
+}
+
+/* The head of the ingredient column holds the left edge with the cells under it, so the
+   scale is still there to reach when the card has been rolled along. */
+.reading .grid > .label.heading {
+  left: 0;
 }
 
 .reading .hold > .amount,

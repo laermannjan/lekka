@@ -10,9 +10,16 @@ import { formatAmount, scaleAmount } from './amount.js'
 const NAME_COLUMN = 3
 const UNIT = /(\d)\s+(?=[^\s\d]{1,3}(?:[\s,]|$))/g
 
-/** A card as a table. Column 0 of the grid is the three ingredient columns. */
-export function renderCard(card, scale = 1, edit = null) {
-  return renderGrid(buildGrid(card), scale, edit)
+/**
+ * A card as a table. Column 0 of the grid is the three ingredient columns.
+ *
+ * `beside` is a control put in the heading cell, next to the word `Ingredient`. The
+ * scale lives there: it multiplies the amounts, and that cell heads the column the
+ * amounts are in, so it is beside what it changes in the strictest sense there is - and
+ * it costs the page no row of its own.
+ */
+export function renderCard(card, scale = 1, edit = null, beside = null) {
+  return renderGrid(buildGrid(card), scale, edit, beside)
 }
 
 /**
@@ -41,7 +48,7 @@ export function renderCard(card, scale = 1, edit = null) {
  * the words it replaces: it wraps at a different width, so the text reflowed in the one
  * cell being looked at. The column of boxes went the same way. Both are in the form now.
  */
-export function renderGrid(grid, scale = 1, edit = null) {
+export function renderGrid(grid, scale = 1, edit = null, beside = null) {
   // A slice of the card numbers its columns with the places they hold in the whole of
   // it, so the header still says when this is.
   const numbers = grid.numbers ?? Array.from({ length: grid.columns }, (_, index) => index + 1)
@@ -111,7 +118,9 @@ export function renderGrid(grid, scale = 1, edit = null) {
   })
 
   // The reading view puts steps in this column too, so it names it for what it holds.
-  const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
+  const label = element('div', 'label heading')
+  label.append(element('span', 'said', grid.heading ?? 'Ingredient'))
+  if (beside) label.append(beside)
   label.style.gridColumn = `1 / ${lead + 1}`
   label.style.gridRow = String(head + 1)
   table.append(label)

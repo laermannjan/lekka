@@ -129,9 +129,15 @@ Sorted by what it touches, which settles every question of placement:
 
 | touches | goes |
 |---|---|
-| the page | the masthead, beside the name |
-| how the recipe is drawn | above the table, beside what it changes - the scale, `Fit to screen` |
+| the page | the masthead, beside the name - `Fit to screen` |
+| a column of the recipe | that column's own heading cell - the scale |
 | the recipe itself | below the table, out of the way of reading - `Edit`, `Save`, `Done` |
+
+**Beside what it changes means inside the table when the thing it changes is in
+the table.** The scale multiplies the amounts, and the heading cell of the
+ingredient column heads the column the amounts stand in - so it goes there, and
+the page keeps a row it would otherwise have spent. Fitting is not that: it acts
+on the page, so it goes where page acts go.
 
 A control that would do nothing is not drawn. `Fit to screen` is offered only on a
 recipe that does not fit, and `Cancel` reads `Done` when there is nothing to
@@ -318,12 +324,20 @@ inside them. A qualifier drops to its own line.
 - `+ Ingredient` adds an empty row and opens the form on it. There is no form to
   fill in first: the thing is made and then named, and a blank one is simply a
   fault until it is not.
-- **Nothing sits between the heading and the table.** The scale and the fit used
-  to, beside what they change - the right instinct in the wrong place, because
-  writing has nothing to put there and the table jumped up by the height of that
-  row the moment `Edit` was pressed, out from under the pointer that pressed it.
-  They are under the table now, with a gap between them and the acts that change
-  the recipe itself.
+- **No row of controls above the table, and none below it.** The scale sits in
+  the heading cell of the ingredient column, which heads the amounts it
+  multiplies - beside what it changes in the strictest sense there is, and
+  costing the page no row of its own. It holds the left edge with that column
+  when the card is rolled along, so it is still there to reach.
+
+  Fitting acts on the page rather than on the recipe, so it goes to the masthead
+  where printing does. Only `Edit` and `Save to collection` sit under the table:
+  acts that change the recipe, past the thing they act on.
+
+  They were a bar between the heading and the table - the right instinct in the
+  wrong place, because writing has nothing to put there, so the table rose by the
+  height of that row the moment `Edit` was pressed, out from under the pointer
+  that pressed it. There is no row to lose now.
 - **The name is the same box read and written**: same height, same baseline, same
   left edge. Pressing `Edit` puts a field around the name it is already on.
 - **`Save` and `Cancel` are the only buttons on the page**, under the table where
