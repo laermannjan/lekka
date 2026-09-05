@@ -34,7 +34,8 @@ A step spans from the first to the last row of its own subtree.
 ## The ingredient column
 
 Column 0 is not one column but three: amount, unit, then name with its
-qualifier. They are narrow and fixed, so that names line up down the card.
+qualifier. Each is as wide as the widest thing in it and no wider. A track is
+one width for the whole table, so the names still line up down the card.
 
 The amount and unit fields exist even when empty, otherwise the name slides left
 into their place and the column stops lining up. One exception: an amount that
