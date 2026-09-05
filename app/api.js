@@ -5,10 +5,10 @@ export class ApiError extends Error {
   }
 }
 
-/** What this instance is, and who the browser is on it. Answers on every mode. */
+/** What this instance is, and who the browser is on it. Answers in every mode. */
 export async function me() {
   const response = await fetch('/api/me')
-  if (response.status === 404) return { mode: 'public', empty: false, person: null, session: null }
+  if (response.status === 404) return { mode: 'NONE', empty: false, person: null, session: null }
   if (!response.ok) throw new ApiError(response.status, await response.text())
   return response.json()
 }
@@ -34,44 +34,29 @@ export async function revokeSession(id) {
   return send('DELETE', `/api/sessions/${id}`)
 }
 
+/** The library: every recipe here, or the ones you hold, depending on the instance. */
+export async function cards() {
+  return send('GET', '/api/cards')
+}
+
 export async function createCard(text) {
   return send('POST', '/api/cards', { body: text })
 }
 
-export async function readCard(id) {
-  return send('GET', `/api/cards/${id}`, { text: true })
+/**
+ * A token is only ever the grant on a link somebody sent you. Your own recipes need
+ * none: the server already knows they are yours.
+ */
+export async function readCard(id, token) {
+  return send('GET', `/api/cards/${id}`, { token, text: true })
 }
 
-export async function writeCard(id, key, text) {
-  return send('PUT', `/api/cards/${id}`, { key, body: text })
+export async function writeCard(id, text, token) {
+  return send('PUT', `/api/cards/${id}`, { token, body: text })
 }
 
-export async function deleteCard(id, key) {
-  return send('DELETE', `/api/cards/${id}`, { key })
-}
-
-/** The shelves this person owns, which is how a new browser finds their library. */
-export async function myCollections() {
-  return send('GET', '/api/collections')
-}
-
-export async function createCollection(rows = []) {
-  return send('POST', '/api/collections', { body: JSON.stringify(rows) })
-}
-
-/** Comes back with the version tag a later write has to name. */
-export async function readCollection(id, key) {
-  const response = await call('GET', `/api/collections/${id}`, { key })
-  return { rows: await response.json(), version: response.headers.get('etag') }
-}
-
-export async function writeCollection(id, key, rows, version) {
-  const response = await call('PUT', `/api/collections/${id}`, {
-    key,
-    body: JSON.stringify(rows),
-    version,
-  })
-  return response.headers.get('etag')
+export async function deleteCard(id, token) {
+  return send('DELETE', `/api/cards/${id}`, { token })
 }
 
 async function send(method, path, options) {
@@ -80,13 +65,12 @@ async function send(method, path, options) {
   return options?.text ? response.text() : response.json()
 }
 
-async function call(method, path, { key, body, version } = {}) {
+async function call(method, path, { token, body } = {}) {
   const response = await fetch(path, {
     method,
     body,
     headers: {
-      ...(key ? { authorization: `Bearer ${key}` } : {}),
-      ...(version ? { 'if-match': version } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
       // A cookie is sent whether or not the page meant to ask, so a write says out loud
       // that it came from here. No cross-site form can set a header, and the preflight
       // this forces is one a stranger's page cannot satisfy.

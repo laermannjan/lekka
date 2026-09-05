@@ -1,30 +1,29 @@
 import { address } from './link.js'
 
 /**
- * The collection, as a table.
+ * The library, as a table.
  *
- * A row has one fact and two acts: what the recipe is called, and the two things you can
- * do to it that are not the same thing. `Delete` takes the recipe away from everyone
- * holding its link; `Remove` only takes it out of this collection and leaves it standing.
- * Colour says which is which before the words are read.
+ * A row has one fact and one act: what the recipe is called, and deleting it. There used
+ * to be two acts, because a recipe could be taken out of a collection without being
+ * destroyed - but a recipe now belongs to whoever made it rather than to a list, so
+ * "remove" had nothing left to mean.
  *
- * It once carried the recipe's id, its key and its yield as well. All three were true
- * and none was worth a column: the id and the key are in the address bar of the recipe
- * they belong to, and a yield is read while cooking, not while choosing what to cook.
+ * It once carried the recipe's id, its key and its yield as well. None was worth a
+ * column: the id is in the address bar of the recipe it belongs to, the key is gone, and
+ * a yield is read while cooking, not while choosing what to cook.
  *
  * The last row is where the table grows, the way the last row of the editor's grid is
  * where a recipe grows. Two ways in, because a recipe either exists somewhere already or
  * it does not.
  */
 export function renderOverview(entries, actions = {}) {
-  const { onRemove, onDelete, onImport, onCreate } = actions
-  const acts = Boolean(onRemove || onDelete)
+  const { onDelete, onImport, onCreate } = actions
 
-  const table = element('div', acts ? 'records' : 'records reading')
-  table.append(...head(acts))
+  const table = element('div', onDelete ? 'records' : 'records reading')
+  table.append(...head(Boolean(onDelete)))
 
   if (entries.length === 0 && !onCreate)
-    table.append(element('span', 'none', 'No recipes yet.'), ...blanks(acts))
+    table.append(element('span', 'none', 'No recipes yet.'), ...(onDelete ? [element('span')] : []))
 
   for (const entry of entries) table.append(...row(entry, actions))
 
@@ -43,56 +42,20 @@ export function renderOverview(entries, actions = {}) {
 }
 
 function head(acts) {
-  const names = acts ? ['Recipe', 'Delete', 'Remove'] : ['Recipe']
-  return names.map((name) => element('span', 'label', name))
+  return (acts ? ['Recipe', 'Delete'] : ['Recipe']).map((name) => element('span', 'label', name))
 }
 
-function blanks(acts) {
-  return acts ? [element('span'), element('span')] : []
-}
-
-function row({ id, key, card }, { onRemove, onDelete }) {
+function row({ id, card }, { onDelete }) {
   const link = element('a', 'name', card ? card.title : id)
-  link.href = address('/r/', id, key)
+  link.href = address(id)
   const name = element('span', 'card')
   name.append(link)
 
-  if (!onRemove && !onDelete) return [name]
+  if (!onDelete) return [name]
 
   const erase = element('span')
-  // Destroying a recipe needs its key. Without one the cell is left empty rather than
-  // holding a control that would only refuse.
-  if (onDelete && key) erase.append(button('Delete', 'danger', () => onDelete(id, key, card)))
-  else erase.append(element('span', 'none', 'no key'))
-
-  const drop = element('span')
-  if (onRemove) drop.append(button('Remove', 'warn', () => onRemove(id)))
-
-  return [name, erase, drop]
-}
-
-/**
- * The collections this device holds: the recipe table one column narrower, a name and
- * the one act that is not opening it. `Forget` drops the link here and nothing else.
- */
-export function renderHeld(entries, current, { onUse, onForget }) {
-  const table = element('div', 'records holding')
-  table.append(element('span', 'label', 'Collection'), element('span', 'label', 'Forget'))
-
-  for (const entry of entries) {
-    const name = element('span', 'card')
-    if (entry.id === current) name.append(element('span', 'none', entry.id))
-    else name.append(button(entry.id, '', () => onUse(entry)))
-    const drop = element('span')
-    drop.append(button('Forget', 'warn', () => onForget(entry.id)))
-    table.append(name, drop)
-  }
-
-  const box = element('div', 'sheetbox')
-  const scroll = element('div', 'scroll')
-  scroll.append(table)
-  box.append(scroll)
-  return box
+  erase.append(button('Delete', 'danger', () => onDelete(id, card)))
+  return [name, erase]
 }
 
 function button(text, kind, run) {

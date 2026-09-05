@@ -17,7 +17,6 @@ const SHELL = [
   '/door.js',
   '/read.js',
   '/overview.js',
-  '/library.js',
   '/link.js',
   '/id.js',
   '/qr.js',
@@ -48,7 +47,6 @@ self.addEventListener('fetch', (event) => {
   /* Who you are is never answered from a cache. A stale "signed in" is worse than no
    * answer: the app would draw a library it cannot load, instead of the sign-in screen. */
   const { pathname } = new URL(request.url)
-  if (pathname.startsWith('/api/collections')) return
   if (pathname === '/api/me' || pathname.startsWith('/api/sessions')) return
 
   event.respondWith(

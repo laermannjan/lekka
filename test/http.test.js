@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { mkdir, writeFile } from 'node:fs/promises'
 
 import { openDb } from '../server/db.js'
+import { openGrants } from '../server/grants.js'
 import { openStore } from '../server/store.js'
 import { handler } from '../server/http.js'
 
@@ -16,7 +17,8 @@ const CARD = '# Dinkelquarkbrot (1 Kastenbrot)\n\n- backen\n  - Mehl: 300 g\n'
 
 async function serve(options = {}) {
   const where = await mkdtemp(join(tmpdir(), 'lekka-'))
-  const store = await openStore(where, openDb(join(where, 'lekka.db'))).open()
+  const db = openDb(join(where, 'lekka.db'))
+  const store = await openStore(where, db, openGrants(db)).open()
   const server = createServer(handler(store, options)).listen(0)
   await new Promise((done) => server.once('listening', done))
   const base = `http://localhost:${server.address().port}`
@@ -33,7 +35,7 @@ async function serve(options = {}) {
   return { call, store, close: () => server.close() }
 }
 
-test('a card is created, read by anyone, written only with its key', async (t) => {
+test('a card is created, read and written by anyone, since nothing here is owned', async (t) => {
   const { call, close } = await serve()
   t.after(close)
 
@@ -41,30 +43,31 @@ test('a card is created, read by anyone, written only with its key', async (t) =
   assert.equal(made.status, 201)
   const { id, key } = await made.json()
   assert.match(id, /^dinkelquarkbrot-[a-z0-9]{10}$/)
+  assert.equal(key, undefined, 'a card carries no secret of its own any more')
 
   const read = await call(`/api/cards/${id}`)
   assert.equal(read.status, 200)
   assert.equal(await read.text(), CARD)
 
-  const written = await call(`/api/cards/${id}`, { method: 'PUT', body: '# B\n', key })
+  const written = await call(`/api/cards/${id}`, { method: 'PUT', body: '# B\n' })
   assert.equal(written.status, 204)
   assert.equal(await (await call(`/api/cards/${id}`)).text(), '# B\n')
+
+  const listed = await call('/api/cards')
+  assert.deepEqual((await listed.json()).map((row) => row.id), [id], 'and the library is all of them')
 })
 
-test('a wrong key and a missing card answer alike', async (t) => {
+test('a card that is not there answers the same to every method', async (t) => {
   const { call, close } = await serve()
   t.after(close)
 
   const one = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
-  const other = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
 
   const refusals = [
-    await call(`/api/cards/${one.id}`, { method: 'PUT', body: CARD }),
-    await call(`/api/cards/${one.id}`, { method: 'PUT', body: CARD, key: 'wrong' }),
-    await call(`/api/cards/${one.id}`, { method: 'PUT', body: CARD, key: other.key }),
-    await call(`/api/cards/${one.id}`, { method: 'DELETE', key: other.key }),
-    await call('/api/cards/nothing-at-all', { method: 'DELETE', key: one.key }),
     await call('/api/cards/nothing-at-all'),
+    await call('/api/cards/nothing-at-all', { method: 'PUT', body: CARD }),
+    await call('/api/cards/nothing-at-all', { method: 'DELETE' }),
+    await call('/api/cards/../../etc/passwd'),
   ]
 
   for (const refusal of refusals) assert.equal(refusal.status, 404)
@@ -80,93 +83,10 @@ test('a card is stored only if it parses', async (t) => {
   assert.match(await refused.text(), /^line 1: /)
 })
 
-test('there is no way to list', async (t) => {
-  const { call, close } = await serve()
-  t.after(close)
 
-  await call('/api/cards', { method: 'POST', body: CARD })
-  for (const path of ['/api/cards', '/api/cards/', '/api/collections', '/api/'])
-    assert.ok([404, 405].includes((await call(path)).status), path)
-})
 
-test('a public read of a collection strips every key', async (t) => {
-  const { call, close } = await serve()
-  t.after(close)
 
-  const rows = [{ id: 'brot-aaaaaaaaaa', key: 'secretsecretsecretsec' }, { id: 'salz-bbbbbbbbbb' }]
-  const { id, key } = await (
-    await call('/api/collections', { method: 'POST', body: JSON.stringify(rows) })
-  ).json()
-  assert.match(id, /^[a-z]+-[a-z]+-[a-z]+-[a-z0-9]{4}$/)
 
-  const open = await call(`/api/collections/${id}`)
-  assert.deepEqual(await open.json(), [{ id: 'brot-aaaaaaaaaa' }, { id: 'salz-bbbbbbbbbb' }])
-
-  const held = await call(`/api/collections/${id}`, { key })
-  assert.deepEqual(await held.json(), rows)
-})
-
-test('a write must name the version it grew from', async (t) => {
-  const { call, close } = await serve()
-  t.after(close)
-
-  const { id, key } = await (
-    await call('/api/collections', { method: 'POST', body: '[]' })
-  ).json()
-
-  const read = await call(`/api/collections/${id}`, { key })
-  const version = read.headers.get('etag')
-  assert.match(version, /^"[0-9a-f]{16}"$/)
-  assert.equal((await call(`/api/collections/${id}`)).headers.get('etag'), null)
-
-  const one = [{ id: 'brot-aaaaaaaaaa' }]
-  const blind = await call(`/api/collections/${id}`, { method: 'PUT', body: JSON.stringify(one), key })
-  assert.equal(blind.status, 428)
-
-  const written = await call(`/api/collections/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(one),
-    key,
-    version,
-  })
-  assert.equal(written.status, 204)
-  assert.notEqual(written.headers.get('etag'), version)
-
-  const stale = await call(`/api/collections/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify([{ id: 'salz-bbbbbbbbbb' }]),
-    key,
-    version,
-  })
-  assert.equal(stale.status, 412)
-  assert.deepEqual(await (await call(`/api/collections/${id}`, { key })).json(), one)
-})
-
-test('two devices writing from the same version do not both win', async (t) => {
-  const { call, close } = await serve()
-  t.after(close)
-
-  const { id, key } = await (
-    await call('/api/collections', { method: 'POST', body: '[]' })
-  ).json()
-  const version = (await call(`/api/collections/${id}`, { key })).headers.get('etag')
-
-  const write = (row) =>
-    call(`/api/collections/${id}`, { method: 'PUT', body: JSON.stringify([row]), key, version })
-  const answers = await Promise.all([write({ id: 'brot-aaaaaaaaaa' }), write({ id: 'salz-bbbbbbbbbb' })])
-
-  assert.deepEqual(answers.map((answer) => answer.status).sort(), [204, 412])
-  assert.equal((await (await call(`/api/collections/${id}`, { key })).json()).length, 1)
-})
-
-test('a collection holds links and nothing else', async (t) => {
-  const { call, close } = await serve()
-  t.after(close)
-
-  const bad = ['{}', '[{"id":"../etc/passwd"}]', '[{"id":"ok-aaaaaaaaaa","key":7}]', '[{}]', 'no']
-  for (const body of bad)
-    assert.equal((await call('/api/collections', { method: 'POST', body })).status, 400, body)
-})
 
 test('a create token, when set, is required to create but not to read', async (t) => {
   const { call, close } = await serve({ createToken: 'let-me-in' })
@@ -312,24 +232,3 @@ test('guessing links is rate limited, and a link that works never is', async (t)
   assert.equal((await fresh(`/api/cards/${other.id}`)).status, 200)
 })
 
-test('a collection longer than the cap is refused', async (t) => {
-  const { call, close } = await serve({ maxRows: 2 })
-  t.after(close)
-
-  const rows = (count) =>
-    JSON.stringify(Array.from({ length: count }, (unused, n) => ({ id: `card-${n}` })))
-
-  assert.equal((await call('/api/collections', { method: 'POST', body: rows(2) })).status, 201)
-  assert.equal((await call('/api/collections', { method: 'POST', body: rows(3) })).status, 413)
-
-  const { id, key } = await (
-    await call('/api/collections', { method: 'POST', body: rows(1) })
-  ).json()
-  const grown = await call(`/api/collections/${id}`, {
-    method: 'PUT',
-    body: rows(3),
-    key,
-    version: '*',
-  })
-  assert.equal(grown.status, 413)
-})

@@ -24,60 +24,64 @@ Two parts, no build step:
 - **A browser app.** Plain ES modules, loaded directly. No bundler, no
   transpiler, no framework.
 
-## Rights hang on the link
+## Rights are rows
 
-Two kinds of thing are stored, and both are addressed the same way:
+One setting decides how much access control this instance does, and it names the
+mechanism rather than how secret it feels. `server/access.js` holds the whole
+rule, so no route can disagree with another.
 
-| Link | May |
-|---|---|
-| `/r/<id>` | read a card |
-| `/r/<id>#<key>` | read and write it |
-| `/c/<name>` | read a collection, with every key in it stripped out |
-| `/c/<name>#<key>` | read and write it; opening this adopts it on the device |
+| `ACCESS_CONTROL` | | |
+|---|---|---|
+| `NONE` | no door | everyone who reaches the port reads, writes and deletes every recipe |
+| `AUTH` | one door | everyone signed in does the same |
+| `GRANT` | one door, and owners | a recipe answers to a grant |
 
-A **collection is a list of card links and nothing else.** Cards do not belong to
-it, so there is one permission rule for the whole system: do you hold the key for
-the thing you are touching. A row that carries a key is editable and says so;
-one without it is read-only.
+Under `NONE` and `AUTH` nothing is anybody's, so the library is the whole server
+and there is nothing to check per recipe. Under `GRANT` every question - who owns
+this, who else may open it - is one lookup in `grants`:
 
-A card's `id` is its title as a slug, then 10 random characters. A collection's
-`name` is three words, then four. The slug and the words are for a human reading
-a directory listing or picking a bookmark out of a list; the random part is what
-makes the link unguessable. Both are lower case, because a case-blind filesystem
-would otherwise merge two ids into one file.
+```
+grant { id, card, subject, scope, issued_by, created, expires? }
+       subject: person:<id> | link:<sha256 of the token>
+       scope:   owner | edit | read
+```
 
-The `key` is 22 characters. Everything random is drawn by rejection sampling from
-an alphabet without look-alikes, so no character is more likely than another. The
-server stores **only a SHA-256 of the key** and compares in constant time.
+**Ownership is a grant, not a column.** A card has one `owner` grant or none,
+which a partial unique index enforces, and `owner` carries `edit` carries `read`.
+One mechanism answers everything, rather than a column for the owner and a table
+for everybody else.
 
-A collection is written from more than one device, so a read returns an `ETag`
-and a write must name it with `If-Match`. A write built on a version somebody
-else has replaced is refused rather than silently overwriting them. Checking the
-version and writing is one move: writes to the same collection are held in a
-chain, or both devices would read the same tag and both pass the check.
+A **link** grant is what a per-card key used to be, and better in the three ways
+that matter: there can be several on one recipe, each is revocable on its own,
+and each can expire. The token is returned once and stored only as a SHA-256.
 
-This is what `ACCESS=public` is, and it stays the default. The other two modes put a door
-in front of it: `private` asks everyone who reaches the port to sign in and shares
-everything behind it, and `secret` adds an owner per record, keeping the key as the way a
-single card is handed to somebody who has no account here. One rule decides all three, in
-`server/access.js`, so no route can disagree with another.
+A card's `id` is its title as a slug, then 10 random characters. The slug is for
+a human reading a directory listing; the random part is what makes an id
+unguessable. It is lower case, because a case-blind filesystem would otherwise
+merge two ids into one file. Tokens are 22 characters, drawn by rejection
+sampling from an alphabet without look-alikes so no character is more likely than
+another.
 
-Under `public` there is no login, no session, no cookie. Consequences to keep:
+**A token rides in the fragment** of `/r/<id>#<token>`, which is the one part of
+an address a browser sends nowhere: not in the request line, not in a header, not
+in a `Referer`. A token in the path is a token in the access log of every machine
+between the phone and the disk, and `Referrer-Policy: no-referrer` only stops it
+leaking outward on a click, never inward on the request itself. It is still in
+browser history, and still one paste away from the wrong group chat - this is
+hygiene against infrastructure, not against people.
 
-- The server **cannot list cards.** Whoever has no link finds nothing. Any
-  "all cards" endpoint would make the secret pointless.
-- The link is the state. It stays in the address bar, so you always see what you
-  hold, a bookmark keeps its rights, and reloading changes nothing.
-- **The key is in the fragment**, which is the one part of an address a browser sends
-  nowhere: not in the request line, not in a header, not in a `Referer`. A key in the
-  path is a key in the access log of every machine between the phone and the disk, and
-  `Referrer-Policy: no-referrer` only stops it leaking outward on a click, never inward
-  on the request itself. It is still in browser history, and it is still one paste away
-  from the wrong group chat - this is hygiene against infrastructure, not against people.
+The id stays in the path, because the server needs it: it names the file, and it
+is what a shared link is about. `app/link.js` is the one place that knows the
+shape. Older links, with the token as a path segment, are read and rewritten on
+arrival.
 
-  The id stays in the path, because the server does need that: it names the file, and it
-  is what a shared link is about. `app/link.js` is the one place that knows the shape.
-  The older links, with the key as a path segment, are read and rewritten on arrival.
+Under `AUTH` and `GRANT` a browser is a session: an opaque token in an `HttpOnly`
+cookie, and a row naming the person it belongs to. `Secure` is set only over a
+connection that is one, because the deployment this is written for is a LAN over
+plain HTTP. A cookie is ambient authority, so every write also needs a matching
+`Origin` and an `X-Lekka: 1` header that no cross-site form can set. Every route
+still accepts `Authorization: Bearer`, which is what a link grant presents and
+the only credential that could ever cross to another instance.
 
 ## Storage
 
@@ -91,28 +95,26 @@ data/lekka.db
 The split is deliberate and it is the only one. **A recipe is a file** because
 being able to grep, diff, `rsync` and hand-restore one is the property this whole
 project is built on, and a blob column throws that away for nothing. **Everything
-around a recipe is a row** - the key hash, who owns it, when it was created,
-changed and last read, what a collection holds, who is signed in - because those
-are small, numerous, and read by more than one column. Asking a directory "what
-does this person own" means opening every envelope in it; asking an index means
-one query.
+around a recipe is a row** - when it was created, changed and last read, who owns
+it, who else may open it, who is signed in - because those are small, numerous,
+and read by more than one column. Asking a directory "what does this person own"
+means opening every file in it; asking an index means one query.
 
 `node:sqlite` ships with Node, so this is still a server with no dependencies and
 one container. It is why the project is pinned to Node 24: the module is stable
 there, and prints an experimental warning on every boot under 22.
 
-`records` holds cards and collections together, since they differ only in where
-the body lives: a card's is the file, a collection's is the `body` column. A card
-is written to a temporary and renamed into place, which is atomic - a power cut
-leaves the old card or the new one, never half of either. A collection is written
-inside a transaction that re-reads its version first, so two browsers saving at
-once cannot overwrite each other even if you run a second copy of the server.
+A card is an id and three dates; `grants` holds everything about who may touch
+it. Making one writes both inside a transaction, so a card that nobody can reach
+cannot exist. The body is written to a temporary and renamed into place, which is
+atomic - a power cut leaves the old recipe or the new one, never half of either.
 
-Reading a record refreshes its `touched` stamp, at most once a day, so that an
+Reading a card refreshes its `touched` stamp, at most once a day, so that an
 optional `TTL_DAYS` sweep can delete what nobody has opened without ever deleting
 what is in use. Unset, nothing is ever swept. The sweep also reaps what an
 interrupted write left behind - a `.lekka` file no row points at, a temporary
-whose rename never happened - since nothing can reach either.
+whose rename never happened - since nothing can reach either. Deleting a card
+takes its grants with it, which the foreign key does on its own.
 
 The directory is the only copy. It must be a volume, and it must be backed up -
 the database included.
@@ -132,52 +134,31 @@ editor changes a cell on screen and has to write it into the right node.
 
 ## Screens
 
-**Overview at `/`.** The collection this browser holds, which it remembers in
-`localStorage` as a link, not as a list. The rows come from the server, because a
-collection is a thing on the server; what is local is only which collection you
-are using and a copy of what was in it, so the list still opens with no network.
+**Overview at `/`.** The library, from `GET /api/cards`. What that answers
+depends on the instance: every recipe on the server under `NONE` and `AUTH`, and
+the ones a grant names you on under `GRANT`. Nothing about it is remembered
+locally - the service worker already caches the response and serves it when the
+network is gone, and a second copy in `localStorage` was the same bytes in a
+place nothing else could clear.
 
-It is not a list of cards on the server, because there cannot be one. It is a
-table of three columns: the name, which links to reading, and the two acts that
-are not the same act - `Remove` drops the link, `Delete` drops the card for
-everyone who holds one, so only the second needs a key. The last row is where
-the table grows: `Import` for a recipe that exists somewhere already, `Create`
-for one that does not.
+It is a table of two columns: the name, which links to reading, and `Delete`,
+which drops the recipe for everyone who can open it. There used to be a third,
+`Remove`, which took a recipe out of a collection without destroying it - a
+recipe belongs to whoever made it now rather than to a list, so it had nothing
+left to mean. The last row is where the table grows: `Import` for a recipe that
+exists somewhere already, `Create` for one that does not.
 
-The collection's own name is stamped into the masthead, beside the app's. A
-person works in one collection at a time, so it belongs to the app rather than to
-a screen and is said once. It is also the way to the code that carries the collection onto
-another device, so it is drawn as a control and says so before it is pressed.
+Your own name is stamped into the masthead where a collection used to be, and
+opens the list of browsers signed in as you. It is absent under `NONE`, where
+there is nobody to be.
 
-Under the recipes, when the device holds more than one collection, is the list of the
-others: the same table one column narrower, a name and the one act that is not opening
-it. `library.js` has kept that list since the beginning and nothing ever drew it, so a
-device that had opened two collections could only ever see the second. It is said only
-when there is more than one, because the masthead already stamps the one in use and a
-table offering a single choice is a table asking a question with one answer. `Forget`
-drops the link from this device and nothing else; there is no `Delete`, because dropping
-the last link to a collection is already as final as an act gets.
-
-What was in a collection is kept per collection rather than once, so switching between
-them works with no network.
-
-That stamp opens a dialog: the full link written out, a copy
-button, and the same link as a QR code to scan with a phone. It was once an
-anchor to `/c/<name>/<key>`, which on the device that already holds the
-collection meant adopting what it had, replacing the address with `/`, and
-landing back on the overview - a flash, and nothing said. Nothing navigates now,
-so the address bar stays at `/`, which is where the key belongs to stay: out of
-the address bar, out of history, out of a screen share.
-
-The code is drawn by `app/qr.js`, some four hundred lines, no dependency. The
+`app/qr.js` draws a QR code in some four hundred lines with no dependency - the
 app has no build step and a policy that loads nothing from elsewhere, so the
 alternative was a minified blob in `app/` that no one reads. Byte mode, error
 correction M, versions 1 to 10, which is 213 bytes of UTF-8 - longer than that
-is not a link one shares.
-
-Holding no collection, the overview offers to make one. Opening `/c/<name>`
-without its key shows somebody else's list and does **not** adopt it, since a
-device that cannot write to a collection has no business calling it its own.
+is not a link one shares. Nothing draws one at the moment: it went out with the
+collection it used to carry, and comes back when a share panel needs to put a
+link grant on a phone.
 
 **Writing at `/new`.** The editor on an empty draft, with the name field waiting.
 Nothing is sent until the first save: a recipe nobody finished writing never
@@ -187,9 +168,11 @@ reaches the server at all.
 
 Controls are sorted by what each one touches, which is the rule that says where
 anything goes. The scale (½× 1× 1½× 2×) and `Fit to screen` change how the recipe
-is drawn, so they sit above the table, beside what they change. `Edit` and `Save
-to collection` change the recipe itself, so they sit below it, out of the way of
-reading.
+is drawn, so they sit above the table, beside what they change. `Edit` changes
+the recipe itself, so it sits below, out of the way of reading. It is offered on
+every recipe you can see: whether the write lands is the server's to say, and it
+says so by refusing, which the editor reports in place. Hiding it on a guess
+would be worse, since under `GRANT` the answer is a row this browser cannot read.
 
 `Fit to screen` is the second answer to a table wider than the screen. Reading it
 a step at a time keeps the type and gives up seeing it all; fitting shrinks the
@@ -467,9 +450,11 @@ Offline you can read every card you have opened, because each one is kept in
 server stays the single source, so two devices on the same edit link cannot
 diverge.
 
-Collection responses are never cached by the worker: the same URL answers
-differently depending on whether a key was sent, and a cached public copy with
-the keys stripped must never be handed back to a device that holds them.
+Who you are is never answered from a cache. `/api/me` and `/api/sessions` are
+skipped by the worker, because a stale "signed in" is worse than no answer: the
+app would draw a library it cannot load instead of the sign-in screen. Everything
+else read through the door is cached, and dropped on any 401 and on signing out -
+which stops future reads and cannot reach a copy already on the machine.
 
 ## Deployment
 
@@ -580,7 +565,7 @@ work.
 **The server is meant for a network you already trust**: a LAN, or a VPN such as
 Tailscale or Wireguard. It is not meant to be reachable from the internet, and
 nothing in it is built for that. There is no admin interface and no rate limiting,
-and those absences are deliberate. `ACCESS=private` or `secret` adds a login, which
+and those absences are deliberate. `ACCESS_CONTROL=AUTH` or `GRANT` adds a login, which
 narrows who may read what - it does not make the server safe on a public address, and
 none of the work listed at the end of this section has been done.
 
@@ -634,9 +619,10 @@ of these is our own bug to find.
 | Backup bundles of all cards including keys | Export one card as its file. The overview is a list of links; if it is lost, the links are lost, and that is what a backup of the data directory is for. |
 | A change counter with per-field diffing | A dirty flag is enough to decide whether "save" does anything. |
 | Recipes shipped inside the app | Cards are data, not code. The sample cards live in the tests, where they are fixtures. |
-| Accounts as the only way in | A collection link does what an account would, and under `ACCESS=public` it still is the whole story. A door is opt-in, not the price of entry. |
+| Accounts as the only way in | `ACCESS_CONTROL=NONE` is still the default and still has no login at all. A door is opt-in, not the price of entry. |
 | An admin interface over the cards | The operator has the data directory; `ls`, `cat` and `rm` need no code and cannot be reached from the network. Reading other people's recipes is not a feature. |
-| A card belonging to a collection | Ownership would mean the server must know who holds what. A collection holds links, so the only question is ever whether you hold a key. |
+| Collections | They were the library, the sync unit and the sharing unit at once, which is why every awkward moment traced back to them. Ownership does the first two and a grant does the third. If grouping is ever wanted, a tag on a card is one column rather than a second thing to own. |
+| A second permission mechanism | Ownership is a grant with scope `owner`, not a column beside the grants table. One lookup answers every question about who may touch a recipe. |
 | Recipes in a database | A card stays a `.lekka` file, so it can be grepped, diffed, rsynced and restored by hand. Only what surrounds a card became rows, once "what does this person own" turned into a question a directory could not answer without opening every file in it. |
 
 ## What is worth adding, in this order

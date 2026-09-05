@@ -1,54 +1,33 @@
-import { createHash, timingSafeEqual } from 'node:crypto'
 import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { newId } from '../app/id.js'
 import { inside } from './db.js'
-import { cardId, collectionId } from './names.js'
+import { cardId } from './names.js'
 
-const KEY_LENGTH = 22
 const DAY = 24 * 60 * 60 * 1000
 const ID = /^[a-z0-9-]{1,64}$/
 
 /**
- * Two shelves of the same kind. A card's body is a file; a collection's is a column.
- * Everything else about both - the key hash, the owner, the three dates - is a row.
+ * Recipes. The body is a file named by its id; the id and its three dates are a row.
+ * Who may touch it is not here at all - that is `grants.js`, which is the one place
+ * that answers it.
  */
-export function openStore(directory, db) {
-  return {
-    cards: shelf(db, 'card', { directory: join(directory, 'cards'), extension: '.lekka', nextId: cardId }),
-    collections: shelf(db, 'collection', { nextId: collectionId }),
-    async open() {
-      await this.cards.open()
-      await this.collections.open()
-      return this
-    },
-  }
-}
+export function openStore(directory, db, grants) {
+  const cards = join(directory, 'cards')
+  const path = (id) => join(cards, `${id}.lekka`)
 
-/** The version a write has to name, so two browsers cannot overwrite each other blind. */
-export function tag(text) {
-  return `"${createHash('sha256').update(text ?? '').digest('hex').slice(0, 16)}"`
-}
+  const one = (sql) => db.prepare(sql)
+  const find = one('select * from cards where id = ?')
+  const add = one('insert into cards (id, created, updated, touched) values (?, ?, ?, ?)')
+  const put = one('update cards set updated = ?, touched = ? where id = ?')
+  const drop = one('delete from cards where id = ?')
+  const stamp = one('update cards set touched = ? where id = ?')
+  const listed = one('select id, updated from cards order by updated desc')
+  const held = one('select id from cards')
+  const older = one('select id from cards where touched < ?')
 
-function shelf(db, kind, { directory = null, extension = '', nextId }) {
-  const path = (id) => join(directory, id + extension)
-
-  const find = db.prepare('select * from records where kind = ? and id = ?')
-  const add = db.prepare(
-    'insert into records (kind, id, hash, owner, body, created, updated, touched) values (?, ?, ?, ?, ?, ?, ?, ?)',
-  )
-  const put = db.prepare(
-    'update records set body = ?, updated = ?, touched = ? where kind = ? and id = ?',
-  )
-  const drop = db.prepare('delete from records where kind = ? and id = ?')
-  const stamp = db.prepare('update records set touched = ? where kind = ? and id = ?')
-  const owned = db.prepare(
-    'select id, updated from records where kind = ? and owner = ? order by updated desc',
-  )
-  const older = db.prepare('select id from records where kind = ? and touched < ?')
-
-  const row = (id) => (ID.test(id ?? '') ? (find.get(kind, id) ?? null) : null)
+  const row = (id) => (ID.test(id ?? '') ? (find.get(id) ?? null) : null)
 
   /** A body goes to a temporary and is renamed into place, which a power cut cannot tear. */
   const write = async (id, text) => {
@@ -59,111 +38,81 @@ function shelf(db, kind, { directory = null, extension = '', nextId }) {
 
   return {
     async open() {
-      if (directory) await mkdir(directory, { recursive: true })
+      await mkdir(cards, { recursive: true })
+      return this
     },
 
+    /**
+     * A card and, where somebody made it, the grant that says it is theirs. Both or
+     * neither: on an instance that has people, a card nobody owns is one nobody can
+     * reach. The owner grant is written even under `LOGIN`, where nothing reads it yet,
+     * so that turning on `GRANT` finds every card already answerable to somebody.
+     */
     async create(text, label, owner = null) {
-      let id = nextId(label)
-      while (row(id)) id = nextId(label)
+      let id = cardId(label)
+      while (row(id)) id = cardId(label)
 
-      const key = newId(KEY_LENGTH)
       const now = new Date().toISOString()
-      // The file first: a body with no row is unreachable and the sweep reaps it, while
-      // a row with no body is a card that opens to nothing.
-      if (directory) await write(id, text)
-      add.run(kind, id, hash(key), owner, directory ? null : text, now, now, now)
-      return { id, key }
+      await write(id, text)
+      inside(db, () => {
+        add.run(id, now, now, now)
+        if (owner) grants.give(id, { person: owner, scope: 'owner', by: owner })
+      })
+      return { id }
     },
 
     async read(id) {
-      const found = row(id)
-      if (!found) return null
-      if (!directory) return found.body
+      if (!row(id)) return null
       return readFile(path(id), 'utf8').catch(() => null)
     },
 
     async write(id, text) {
       if (!row(id)) return false
       const now = new Date().toISOString()
-      if (directory) await write(id, text)
-      put.run(directory ? null : text, now, now, kind, id)
+      await write(id, text)
+      put.run(now, now, id)
       return true
     },
 
-    /**
-     * A body swapped only if it still says what the writer thought it did. One
-     * transaction rather than a queue in this process, so two of them cannot interleave
-     * even if somebody runs a second copy of the server.
-     */
-    swap(id, text, expected) {
-      return inside(db, () => {
-        const found = find.get(kind, id)
-        if (!found) return 'gone'
-        if (expected !== '*' && tag(found.body) !== expected) return 'changed'
-        const now = new Date().toISOString()
-        put.run(text, now, now, kind, id)
-        return 'written'
-      })
-    },
-
     async remove(id) {
-      if (directory && ID.test(id ?? '')) await unlink(path(id)).catch(() => {})
-      drop.run(kind, id)
+      if (ID.test(id ?? '')) await unlink(path(id)).catch(() => {})
+      drop.run(id)
     },
 
-    async verify(id, key) {
-      const found = row(id)
-      return found ? same(found.hash, hash(key ?? '')) : false
+    has(id) {
+      return Boolean(row(id))
     },
 
-    /** Who is answerable for this record. Null only on a public instance, which has nobody. */
-    async owner(id) {
-      return row(id)?.owner ?? null
+    /** Every card there is, for the modes where everyone may see everything. */
+    all() {
+      return listed.all()
     },
 
-    /** What one person owns here. An index, not a walk of the directory. */
-    async mine(person) {
-      return person ? owned.all(kind, person) : []
-    },
-
-    /** Reads keep a record alive, but at most one write a day. */
+    /** Reads keep a card alive, but at most one write a day. */
     async touch(id) {
       const found = row(id)
       if (!found) return
       const now = new Date()
       if (now - new Date(found.touched) < DAY) return
-      stamp.run(now.toISOString(), kind, id)
+      stamp.run(now.toISOString(), id)
     },
 
     /**
      * What nobody has opened goes, and so does what an interrupted write left behind: a
-     * body with no row is unreachable, since everything is found through the row, and a
-     * temporary belongs to a rename that never happened.
+     * file no row points at is unreachable, and a temporary belongs to a rename that
+     * never happened.
      */
     async sweep(days) {
       const limit = Date.now() - days * DAY
-      for (const { id } of older.all(kind, new Date(limit).toISOString())) await this.remove(id)
-      if (!directory) return
+      for (const { id } of older.all(new Date(limit).toISOString())) await this.remove(id)
 
-      const kept = new Set(
-        db.prepare('select id from records where kind = ?').all(kind).map((one) => one.id),
-      )
-      for (const name of await readdir(directory).catch(() => [])) {
-        if (name.endsWith(extension) && kept.has(name.slice(0, -extension.length))) continue
-        const file = join(directory, name)
+      const kept = new Set(held.all().map((card) => card.id))
+      for (const name of await readdir(cards).catch(() => [])) {
+        if (name.endsWith('.lekka') && kept.has(name.slice(0, -'.lekka'.length))) continue
+        const file = join(cards, name)
         const found = await stat(file).catch(() => null)
         if (found?.isFile() && found.mtimeMs < limit) await unlink(file).catch(() => {})
       }
     },
   }
-}
-
-function hash(key) {
-  return createHash('sha256').update(key).digest('hex')
-}
-
-function same(a, b) {
-  const left = Buffer.from(a, 'utf8')
-  const right = Buffer.from(b, 'utf8')
-  return left.length === right.length && timingSafeEqual(left, right)
 }

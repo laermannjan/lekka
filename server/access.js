@@ -1,33 +1,43 @@
 export const COOKIE = 'lekka'
 
-const MODES = ['public', 'private', 'secret']
+const MODES = ['NONE', 'AUTH', 'GRANT']
 const YEAR = 365 * 24 * 60 * 60
 
-/** An unknown mode is a typo, and a typo must not quietly open an instance. */
+/**
+ * How much access control this instance does, named after the mechanism rather than how
+ * secret it feels.
+ *
+ *   NONE   no door. Everyone who reaches the port reads, writes and deletes everything.
+ *   AUTH   one door. Everyone signed in reads, writes and deletes everything.
+ *   GRANT  one door, and every recipe answers to a grant: yours, or one you were given.
+ *
+ * An unknown value is a typo, and a typo must not quietly open an instance.
+ */
 export function mode(value) {
-  const wanted = (value ?? 'public').trim().toLowerCase()
-  if (!MODES.includes(wanted)) throw new Error(`ACCESS must be one of ${MODES.join(', ')}`)
+  const wanted = (value ?? 'NONE').trim().toUpperCase()
+  if (!MODES.includes(wanted)) throw new Error(`ACCESS_CONTROL must be one of ${MODES.join(', ')}`)
   return wanted
 }
 
+/** Whether there is anybody to be on this instance, which is what a door implies. */
+export const guarded = (mode) => mode !== 'NONE'
+
 /**
- * The whole permission rule, in one place so no route can disagree with another.
- *
- * `public` is today's instance unchanged: the link is the only credential, and whoever
- * can reach the port may read. `private` puts the door behind a sign-in and leaves
- * everything inside shared. `secret` adds ownership, and keeps the key as the way a
- * single card is handed to somebody who has no account here.
+ * The whole permission rule, in one place so no route can disagree with another. Under
+ * `GRANT` the answer is a row, and `grants.may` is what reads it.
  */
-export function may(mode, session, owner, held) {
-  if (mode === 'public') return true
-  if (!session) return false
-  if (mode === 'private') return true
-  return owner === session.person || held
+export function may(mode, session, asked) {
+  if (mode === 'NONE') return true
+  if (mode === 'AUTH') return Boolean(session)
+  // Under GRANT the row is the whole answer, and being signed in is not part of the
+  // question: a link grant exists precisely so somebody with no account here can open
+  // the one recipe they were sent.
+  return asked()
 }
 
 /** Making things is a member's right, never a passer-by's, once there is a door. */
 export function mayCreate(mode, session) {
-  return mode === 'public' || Boolean(session)
+  return mode === 'NONE' || Boolean(session)
 }
 
 export function cookie(request, name) {
@@ -62,8 +72,8 @@ export function encrypted(request, trustProxy) {
 /**
  * A cookie is sent by the browser whether or not the page meant to ask, so a write that
  * leans on one must prove it came from our own page: an `Origin` that matches, and a
- * header no cross-site form can set. A client holding a bearer token has no ambient
- * authority to abuse and is left alone.
+ * header no cross-site form can set. A client holding a token has no ambient authority
+ * to abuse and is left alone.
  */
 export function forged(request) {
   if (request.method === 'GET' || request.method === 'HEAD') return false

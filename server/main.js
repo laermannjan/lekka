@@ -3,8 +3,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { newId } from '../app/id.js'
-import { mode as readMode } from './access.js'
+import { guarded, mode as readMode } from './access.js'
 import { openDb } from './db.js'
+import { openGrants } from './grants.js'
 import { openPeople } from './people.js'
 import { openStore } from './store.js'
 import { handler } from './http.js'
@@ -20,12 +21,13 @@ function number(value, fallback) {
 const port = number(process.env.PORT, 8080)
 const directory = process.env.DATA_DIR ?? './data'
 const db = openDb(join(directory, 'lekka.db'))
-const store = await openStore(directory, db).open()
+const grants = openGrants(db)
+const store = await openStore(directory, db, grants).open()
 
-/* People exist only where there is a door. The tables are always there; a public
- * instance simply never has a row in them, and every route below sees `null`. */
-const mode = readMode(process.env.ACCESS)
-const people = mode === 'public' ? null : openPeople(db)
+/* People exist only where there is a door. The tables are always there; an instance with
+ * no access control simply never has a row in them, and every route below sees `null`. */
+const mode = readMode(process.env.ACCESS_CONTROL)
+const people = guarded(mode) ? openPeople(db) : null
 
 /* An instance with a door and nobody behind it needs a first person, and reaching the
  * port first must not be what decides who that is. The operator reads this out of the
@@ -38,7 +40,7 @@ if (people?.empty()) {
 
 const days = number(process.env.TTL_DAYS, 0)
 if (days > 0) {
-  const sweep = () => Promise.all([store.cards.sweep(days), store.collections.sweep(days)])
+  const sweep = () => store.sweep(days)
   await sweep()
   setInterval(sweep, DAY).unref()
 }
@@ -49,11 +51,11 @@ const server = createServer(
   handler(store, {
     app: fileURLToPath(new URL('../app', import.meta.url)),
     people,
+    grants,
     mode,
     bootstrap,
     createToken: process.env.CREATE_TOKEN || null,
     maxBytes: number(process.env.MAX_CARD_BYTES, 65536),
-    maxRows: number(process.env.MAX_COLLECTION_ROWS, 0),
     createsPerHour: number(process.env.MAX_CREATES_PER_HOUR, 0),
     triesPerMinute: number(process.env.MAX_TRIES_PER_MINUTE, 0),
     trustProxy: process.env.TRUST_PROXY === '1',

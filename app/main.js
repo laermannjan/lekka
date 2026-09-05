@@ -1,23 +1,11 @@
 import { parseCard, ParseError } from './card.js'
 import { renderReading } from './read.js'
-import { renderHeld, renderOverview } from './overview.js'
+import { renderOverview } from './overview.js'
 import * as api from './api.js'
 import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
 import { section, specification } from './page.js'
 import { devices as renderDevices, firstPerson as firstPersonForm, signIn as signInForm } from './door.js'
-import {
-  cache,
-  cached,
-  collection,
-  forget,
-  known,
-  remember,
-  rows,
-  setRows,
-  useCollection,
-} from './library.js'
-import { svg } from './qr.js'
 import { address, arrive } from './link.js'
 
 const SCALES = [
@@ -27,7 +15,6 @@ const SCALES = [
   [2, '2×'],
 ]
 
-const stamp = document.getElementById('stamp')
 const acts = document.getElementById('acts')
 const screen = document.getElementById('screen')
 const where = document.getElementById('where')
@@ -46,25 +33,22 @@ async function boot() {
 }
 
 /**
- * What this instance is and who we are on it. Asked once on load; `public` answers that
- * there is no door, and every screen below then behaves exactly as it always has.
+ * What this instance is and who we are on it. Asked once on load; `NONE` answers that
+ * there is no door, and every screen below then behaves as it always has.
  */
-let instance = { mode: 'public', empty: false, person: null, session: null }
+let instance = { mode: 'NONE', empty: false, person: null, session: null }
 
 async function start() {
   const here = arrive()
 
-  if (instance.mode !== 'public' && !instance.person) {
+  if (instance.mode !== 'NONE' && !instance.person) {
     // The address is left alone, so whatever link brought you here opens the moment you
     // are through the door.
     if (instance.empty) return showFirstPerson(joining())
     return showSignIn()
   }
 
-  await syncLibrary()
-
-  if (here.kind === 'card') return showCard(here.id, here.key)
-  if (here.kind === 'collection') return showCollection(here.id, here.key)
+  if (here.kind === 'card') return showCard(here.id, here.token)
 
   // The foot says `/new` while a fresh recipe is being written, so the address has to
   // mean it: without this, opening it lands on the overview under a foot saying `/new`.
@@ -73,26 +57,6 @@ async function start() {
   if (here.path === '/devices') return showDevices()
 
   return showOverview()
-}
-
-/**
- * What the server says this person owns, folded into what this browser remembers.
- *
- * The library used to live only in `localStorage`, so signing in on a second browser
- * got you through the door and then showed you an empty shelf. Ownership is the answer:
- * the server knows which collections are yours, and a browser that has never seen them
- * can now be told. No key comes back - there is none to send, since only its hash is
- * kept - and none is needed, because owning a shelf is itself the right to write it.
- */
-async function syncLibrary() {
-  if (!instance.person) return
-  const mine = await api.myCollections().catch(() => null)
-  if (!mine?.length) return
-
-  for (const row of mine) remember({ id: row.id, key: null })
-  // Which shelf you are looking at is this browser's own business; only an empty one is
-  // decided for you, and then by what changed most recently.
-  if (!collection()) useCollection({ id: mine[0].id, key: null })
 }
 
 /** The operator's one-time link, carried in the fragment so it reaches no log. */
@@ -180,7 +144,6 @@ async function showDevices() {
  * It cannot reach a copy already saved elsewhere on the machine, and the screens say so.
  */
 async function purge() {
-  for (const key of Object.keys(localStorage)) if (key.startsWith('lekka:')) localStorage.removeItem(key)
   if (!globalThis.caches) return
   try {
     for (const name of await caches.keys()) {
@@ -195,36 +158,40 @@ async function purge() {
   }
 }
 
+/**
+ * The session ended somewhere else - another browser's Revoke, or a restart. Say so once,
+ * and keep nothing that was read through the door.
+ */
+async function locked() {
+  instance = { ...instance, person: null, session: null }
+  await purge()
+  showSignIn('You were signed out.')
+}
+
 async function showOverview() {
   page('/', whoAction())
-  const held = collection()
-  if (!held) return show(section('Recipes'), welcome())
 
-  let list = rows(held.id)
-  let note = null
+  let list
   try {
-    list = (await api.readCollection(held.id, held.key)).rows
-    setRows(held.id, list)
-  } catch {
-    note = band('Offline. Showing the recipes this device remembers.')
+    list = await api.cards()
+  } catch (error) {
+    if (error instanceof api.ApiError && error.status === 401) return locked()
+    return show(section('Recipes'), band(`The library did not load. ${reason(error)}`, 'warning'))
   }
 
   show(
-    note,
     section('Recipes'),
     renderOverview(await describe(list), {
-      onRemove: (id) => remove(held, id),
-      onDelete: (id, key, card) => erase(held, id, key, card),
-      onImport: () => showImport(held),
+      onDelete: (id, card) => erase(id, card),
+      onImport: () => showImport(),
       onCreate: () => showWriting(),
     }),
-    ...heldCollections(held),
   )
 }
 
 /**
  * Your own name in the masthead, and the way to the browsers signed in as you. Absent on
- * a public instance, where there is nobody to be.
+ * an instance with no access control, where there is nobody to be.
  */
 function whoAction() {
   if (!instance.person) return null
@@ -248,62 +215,11 @@ function recipesAction() {
   return button
 }
 
-/** Said only when there is more than one: the masthead already stamps the one in use. */
-function heldCollections(held) {
-  const all = known()
-  if (all.length < 2) return []
-  return [
-    section('Collections'),
-    renderHeld(all, held.id, {
-      onUse: (entry) => {
-        useCollection(entry)
-        showOverview()
-      },
-      onForget: (id) => {
-        forget(id)
-        showOverview()
-      },
-    }),
-  ]
-}
-
-async function showCollection(id, key) {
-  page(`/c/${id}`)
-  const found = await api.readCollection(id, key).catch(() => null)
-  if (!found) return fail('No collection under this link.')
-  const list = found.rows
-
-  if (!key)
-    return show(
-      band('Someone else’s collection. You can read these recipes, not change them.'),
-      section('Recipes'),
-      renderOverview(await describe(list)),
-    )
-
-  // Receiving is never destructive. A write link used to become the collection this
-  // browser holds the moment it was opened, which quietly threw away whatever it held
-  // before. The link is shown for what it is, and keeping it is a thing you ask for.
-  const keep = element('button', 'go', 'Keep this collection')
-  keep.onclick = () => {
-    useCollection({ id, key })
-    setRows(id, list)
-    history.replaceState(null, '', '/')
-    showOverview()
-  }
-
-  return show(
-    band('A collection you were sent, with the right to change it. Keep it to work on it here.'),
-    section('Recipes'),
-    renderOverview(await describe(list)),
-    element('div', 'bar after', undefined, [keep]),
-  )
-}
-
-async function showCard(id, key, state = {}) {
+async function showCard(id, token, state = {}) {
   const { scale = 1, at = 0, fit = false } = state
   const here = { scale, at, fit }
 
-  const text = await load(id)
+  const text = await load(id, token)
   if (text === null) return fail('No recipe under this link.')
 
   let card
@@ -314,7 +230,7 @@ async function showCard(id, key, state = {}) {
     return fail(`Line ${error.line}: ${error.message}`)
   }
 
-  const fitting = fitter(id, key, here)
+  const fitting = fitter(id, token, here)
 
   /*
    * No row of controls above the table, and none below it but the acts.
@@ -330,17 +246,17 @@ async function showCard(id, key, state = {}) {
    * nearer still to what it changes - but that cell is held at the left edge while the
    * card rolls, so the switch was dragged out over the middle of the table.
    */
-  page(`/r/${id}`, scales(id, key, here), fitting.button)
+  page(`/r/${id}`, scales(id, token, here), fitting.button)
   show(
     section(card.title, card.yields),
-    body(card, id, key, here, fitting.tell),
+    body(card, id, token, here, fitting.tell),
     // What changes the recipe itself sits past it, out of the way of reading.
-    after(composer(id, key, card), keeper(id, key, here)),
+    after(composer(id, token, card)),
     specification(card),
   )
 }
 
-function body(card, id, key, state, onFits) {
+function body(card, id, token, state, onFits) {
   // Reading is a scroll, not a redraw: the place is only kept so that changing the scale
   // comes back to the step the cook was standing on.
   return renderReading(card, state.scale, state.at, {
@@ -362,9 +278,9 @@ function body(card, id, key, state, onFits) {
  * does, and it is not offered at all on a recipe that already fits - there would be
  * nothing for it to do, and a control that does nothing is worse than no control.
  */
-function fitter(id, key, state) {
+function fitter(id, token, state) {
   const button = element('button', 'quiet', state.fit ? 'Actual size' : 'Fit to screen')
-  button.onclick = () => showCard(id, key, { ...state, fit: !state.fit })
+  button.onclick = () => showCard(id, token, { ...state, fit: !state.fit })
   button.hidden = true
   return {
     button,
@@ -375,10 +291,14 @@ function fitter(id, key, state) {
   }
 }
 
-function composer(id, key, card) {
-  if (!key) return null
+/**
+ * Offered on every recipe you can see. Whether the write lands is the server's to say,
+ * and it says so by refusing - which the editor reports in place. A button hidden on a
+ * guess would be worse: under `GRANT` the answer depends on a row this browser cannot read.
+ */
+function composer(id, token, card) {
   const button = element('button', 'quiet', 'Edit')
-  button.onclick = () => showEditor(id, key, toDraft(card))
+  button.onclick = () => showEditor(id, token, toDraft(card))
   return button
 }
 
@@ -390,9 +310,7 @@ function composer(id, key, card) {
  * and not before: `Create` opens an empty editor with the name waiting, and a recipe
  * nobody finished writing never reaches the server at all.
  */
-function showEditor(id, key, draft) {
-  const held = collection()
-
+function showEditor(id, token, draft) {
   /*
    * The masthead is cleared, because what was on it belongs to the recipe being read.
    * `show` replaces the screen and not the masthead, so the scale and `Fit to screen`
@@ -405,15 +323,14 @@ function showEditor(id, key, draft) {
   show(
     buildEditor({
       draft,
-      onClose: () => (id ? showCard(id, key) : showOverview()),
+      onClose: () => (id ? showCard(id, token) : showOverview()),
       onSave: async (text) => {
         if (id) {
           try {
-            await api.writeCard(id, key, text)
+            await api.writeCard(id, text, token)
           } catch (error) {
             return `Not saved. ${reason(error)}`
           }
-          keep(id, text)
           return null
         }
 
@@ -424,43 +341,21 @@ function showEditor(id, key, draft) {
           return `Not saved. ${reason(error)}`
         }
         id = made.id
-        key = made.key
-        keep(id, text)
-        history.replaceState(null, '', address('/r/', id, key))
+        history.replaceState(null, '', address(id))
         page(`/r/${id}`)
-
-        // The recipe is saved either way. A collection that would not take it is said
-        // out loud rather than reported as a failed save.
-        if (held) {
-          const kept = await attempt(
-            () => change(held, (current) => [...current, made]),
-            'It was saved, but not put in your collection.',
-          )
-          if (kept === FAILED) notice(`Its link is /r/${id}/${key}`)
-        }
         return null
       },
     }),
   )
 }
 
-/** Caching is a convenience; storage that refuses is not worth failing a write over. */
-function keep(id, text) {
-  try {
-    cache(id, text)
-  } catch (error) {
-    console.warn('not cached', error)
-  }
-}
-
-async function load(id) {
-  try {
-    const text = await api.readCard(id)
-    cache(id, text)
-    return text
-  } catch {
-    return cached(id)
-  }
+/**
+ * A recipe, or null. There is no copy kept here: the service worker already caches every
+ * successful GET and serves it when the network is gone, and a second copy in local
+ * storage was the same bytes in a place nothing else could clear.
+ */
+async function load(id, token) {
+  return api.readCard(id, token).catch(() => null)
 }
 
 async function describe(list) {
@@ -474,81 +369,6 @@ async function describe(list) {
       }
     }),
   )
-}
-
-function keeper(id, key, state) {
-  const held = collection()
-  if (!held) {
-    const create = element('button', 'quiet', 'Save to collection')
-    create.onclick = async () => {
-      const made = await attempt(
-        () => api.createCollection([{ id, ...(key ? { key } : {}) }]),
-        'The collection was not made.',
-      )
-      if (made === FAILED) return
-      useCollection(made)
-      location.assign('/')
-    }
-    return create
-  }
-
-  const list = rows(held.id)
-  const found = list.find((row) => row.id === id)
-  /*
-   * Nothing at all when the recipe is already kept. A status has no business in a row of
-   * actions - it read as the heading of the buttons beside it - and the absence of a
-   * save is the answer to the question it was asking: there is nothing left to do.
-   */
-  if (found && (found.key || !key)) return null
-
-  const save = element('button', 'quiet', found ? 'Keep the edit link' : 'Save to collection')
-  save.onclick = async () => {
-    const done = await attempt(
-      () =>
-        change(held, (current) => [
-          ...current.filter((row) => row.id !== id),
-          { id, ...(key ? { key } : {}) },
-        ]),
-      'The collection was not changed.',
-    )
-    if (done === FAILED) return
-    showCard(id, key, state)
-  }
-  return save
-}
-
-async function remove(held, id) {
-  const done = await attempt(
-    () => change(held, (current) => current.filter((row) => row.id !== id)),
-    'The recipe was not removed.',
-  )
-  if (done === FAILED) return
-  showOverview()
-}
-
-/** Removing drops the link. Deleting drops the recipe, for everyone holding one. */
-async function erase(held, id, key, card) {
-  const name = card ? card.title : id
-  if (!confirm(`Delete ${name} for everyone who has its link?`)) return
-  if ((await attempt(() => api.deleteCard(id, key), 'The recipe was not deleted.')) === FAILED)
-    return
-  await remove(held, id)
-}
-
-/** Read, change, write, and start again if another device wrote in between. */
-async function change(held, edit) {
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const { rows: current, version } = await api.readCollection(held.id, held.key)
-    const next = edit(current)
-    try {
-      await api.writeCollection(held.id, held.key, next, version)
-      setRows(held.id, next)
-      return next
-    } catch (error) {
-      if (error.status !== 412) throw error
-    }
-  }
-  throw new Error('the collection kept changing')
 }
 
 /**
@@ -577,7 +397,7 @@ function showWriting() {
  * anything the format accepts comes in whole and anything it does not is reported by
  * line, in the place the line is.
  */
-function showImport(held) {
+function showImport() {
   const box = element('dialog', 'compose')
   const form = element('form', 'body')
   form.method = 'dialog'
@@ -622,14 +442,7 @@ function showImport(held) {
 
     const made = await attempt(() => api.createCard(area.value), 'The recipe was not created.')
     if (made === FAILED) return void (take.disabled = false)
-    keep(made.id, area.value)
-
-    const kept = await attempt(
-      () => change(held, (current) => [...current, made]),
-      'It was imported, but not put in your collection.',
-    )
     box.close()
-    if (kept === FAILED) return notice(`Its link is /r/${made.id}/${made.key}`)
     showOverview()
   }
 
@@ -639,110 +452,6 @@ function showImport(held) {
   document.body.append(box)
   box.showModal()
   area.focus()
-}
-
-function welcome() {
-  const box = element('div', 'list')
-  const line = element('div', 'row')
-  const create = element('button', 'go', 'Create a collection')
-  create.onclick = async () => {
-    const made = await attempt(() => api.createCollection([]), 'The collection was not made.')
-    if (made === FAILED) return
-    useCollection(made)
-    showOverview()
-  }
-  line.append(create, element('span', 'aside', 'or open the link to one you already have'))
-  box.append(line)
-  return box
-}
-
-/**
- * The collection, stamped into the masthead.
- *
- * A person holds one collection, so it belongs to the app rather than to any screen and
- * is said once. It is a value, so it is tinted like a tag; it is also the only way to
- * the code that carries the collection onto another device, so it is drawn like a
- * control and says what it will do the moment it is pointed at.
- */
-function showStamp() {
-  const held = collection()
-  if (!held) return void stamp.replaceChildren()
-
-  const button = element('button', 'stamp')
-  button.type = 'button'
-  button.append(mark(), element('span', 'value', held.id), element('span', 'hint', 'Show QR code →'))
-  button.onclick = () => showShare(held)
-  stamp.replaceChildren(button)
-}
-
-/** A code, drawn small enough to say "code" and no more. */
-function mark() {
-  const box = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  box.setAttribute('class', 'mark')
-  box.setAttribute('viewBox', '0 0 9 9')
-  box.setAttribute('fill', 'currentColor')
-  box.setAttribute('aria-hidden', 'true')
-  box.innerHTML =
-    '<path d="M0 0h3v3H0zM6 0h3v3H6zM0 6h3v3H0z"/>' +
-    '<path d="M4 0h1v1H4zM4 2h1v1H4zM0 4h1v1H0zM2 4h1v1H2zM4 4h1v1H4zM6 4h1v1H6zM8 4h1v1H8z' +
-    'M4 6h1v1H4zM6 6h1v1H6zM8 6h1v1H8zM4 8h1v1H4zM6 8h1v1H6zM8 8h1v1H8z"/>'
-  return box
-}
-
-function showShare(held) {
-  const link = new URL(address('/c/', held.id, held.key), location.origin).href
-  const box = element('dialog', 'sheet')
-
-  const code = element('div', 'code')
-  try {
-    code.innerHTML = svg(link)
-  } catch {
-    code.replaceChildren(element('p', 'note', 'The link is too long for a code.'))
-  }
-
-  // Written out in full and wrapped, because a link one cannot read is a link one cannot type.
-  const field = element('p', 'address', link)
-  const select = () => {
-    const range = document.createRange()
-    range.selectNodeContents(field)
-    const selection = getSelection()
-    selection.removeAllRanges()
-    selection.addRange(range)
-  }
-  // A click selects the whole address, unless one has just dragged out a part of it.
-  field.onclick = () => {
-    if (getSelection().isCollapsed) select()
-  }
-
-  const copy = element('button', 'quiet', 'Copy link')
-  copy.onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(link)
-      copy.textContent = 'Copied'
-    } catch {
-      select()
-      copy.textContent = 'Copy it by hand'
-    }
-  }
-
-  const close = element('button', 'quiet', 'Close')
-  close.onclick = () => box.close()
-
-  const title = element('p', 'verb', 'Open this collection on another device')
-  title.id = 'share-title'
-  box.setAttribute('aria-labelledby', title.id)
-
-  box.append(
-    title,
-    code,
-    element('p', 'note', 'Scan the code, or open the link. Whoever has it can change these recipes.'),
-    field,
-    element('div', 'bar', undefined, [copy, close]),
-  )
-  box.onclose = () => box.remove()
-  document.body.append(box)
-  box.showModal()
-  copy.focus()
 }
 
 const FAILED = Symbol('failed')
@@ -756,9 +465,7 @@ async function attempt(work, message) {
     // somewhere else - on another browser's Revoke, or on a restart. Say so once, and
     // keep nothing that was read through the door.
     if (error instanceof api.ApiError && error.status === 401) {
-      instance = { ...instance, person: null, session: null }
-      await purge()
-      showSignIn('You were signed out.')
+      await locked()
       return FAILED
     }
     notice(`${message} ${reason(error)}`)
@@ -780,7 +487,6 @@ function notice(message) {
 
 /** What the masthead and the foot say, which is the same on every screen but one thing. */
 function page(path, ...actions) {
-  showStamp()
   acts.replaceChildren(...actions.filter(Boolean))
   where.textContent = path
 }
@@ -803,12 +509,12 @@ function after(...parts) {
   return kept.length ? element('div', 'bar after', undefined, kept) : null
 }
 
-function scales(id, key, state) {
+function scales(id, token, state) {
   const group = element('span', 'switch')
   for (const [factor, text] of SCALES) {
     const button = element('button', '', text)
     button.setAttribute('aria-pressed', factor === state.scale)
-    button.onclick = () => showCard(id, key, { ...state, scale: factor })
+    button.onclick = () => showCard(id, token, { ...state, scale: factor })
     group.append(button)
   }
   return group

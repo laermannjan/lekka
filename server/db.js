@@ -4,30 +4,39 @@ import { DatabaseSync } from 'node:sqlite'
  * One database for everything that is not a recipe.
  *
  * A card stays a `.lekka` file, because "one recipe is one file you can grep, diff,
- * rsync and restore by hand" is the property this project is built on. Everything
- * around it - who owns what, which key opens it, when it was last read, what a
- * collection holds, who is signed in - is small, numerous, and read by more than one
- * column. That is the shape a directory is bad at and a table is good at, and keeping it
- * in files meant scanning a directory to answer "what is mine".
+ * rsync and restore by hand" is the property this project is built on. What surrounds a
+ * card is small, numerous, and read by more than one column, which is the shape a
+ * directory is bad at.
  *
- * `records` holds both kinds, because cards and collections differ only in where the
- * body lives: a card's is the file on disk, a collection's is the `body` column.
+ * A card is an id and three dates. Every question about who may touch it - ownership
+ * included - is one lookup in `grants`, so there is one mechanism rather than a column
+ * for the owner and a table for everybody else.
  */
 const SCHEMA = `
-create table if not exists records (
-  kind    text not null,
-  id      text not null,
-  hash    text not null,
-  owner   text,
-  body    text,
+create table if not exists cards (
+  id      text primary key,
   created text not null,
   updated text not null,
-  touched text not null,
-  primary key (kind, id)
+  touched text not null
 );
 
-create index if not exists records_owner on records (kind, owner);
-create index if not exists records_touched on records (kind, touched);
+create table if not exists grants (
+  id        text primary key,
+  card      text not null references cards(id) on delete cascade,
+  kind      text not null,
+  subject   text not null,
+  scope     text not null,
+  issued_by text,
+  created   text not null,
+  expires   text,
+  used      text
+);
+
+/* A card has one owner or none, never two. A subject is named once per card, so
+ * granting again changes what they hold rather than stacking a second row. */
+create unique index if not exists grants_owner on grants (card) where scope = 'owner';
+create unique index if not exists grants_once on grants (card, kind, subject);
+create index if not exists grants_subject on grants (kind, subject);
 
 create table if not exists people (
   id      text primary key,

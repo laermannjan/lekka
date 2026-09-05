@@ -3,12 +3,10 @@ import { readFile, readdir } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
 import { parseCard, ParseError } from '../app/card.js'
-import { clear, cookie, COOKIE, encrypted, forged, keep, may, mayCreate } from './access.js'
-import { tag } from './store.js'
+import { clear, cookie, COOKIE, encrypted, forged, guarded, keep, may, mayCreate } from './access.js'
 import { limiter, source } from './limit.js'
 
 const CARD = /^\/api\/cards\/([^/]+)$/
-const COLLECTION = /^\/api\/collections\/([^/]+)$/
 const SESSION = /^\/api\/sessions\/([a-z0-9]{1,64})$/
 const ID = /^[a-z0-9-]{1,64}$/
 
@@ -41,11 +39,11 @@ export function handler(
   {
     app,
     people = null,
-    mode = 'public',
+    grants = null,
+    mode = 'NONE',
     bootstrap = null,
     createToken = null,
     maxBytes = 65536,
-    maxRows = 0,
     createsPerHour = 0,
     triesPerMinute = 0,
     trustProxy = false,
@@ -56,7 +54,7 @@ export function handler(
     tries: limiter({ every: MINUTE, most: triesPerMinute }),
     trustProxy,
   }
-  const options = { app, people, mode, bootstrap, createToken, maxBytes, maxRows, limits }
+  const options = { app, people, grants, mode, bootstrap, createToken, maxBytes, limits }
 
   return async (request, response) => {
     try {
@@ -101,36 +99,32 @@ async function route(store, options, request, response) {
   if (path.startsWith('/api/session') || path === '/api/me' || path === '/api/people')
     return peopleRoute(options, request, response, path, session)
 
-  /* What this person owns, so a browser they have never signed in on before finds their
-   * shelves instead of an empty screen. Only ever their own, and only where there is
-   * somebody to be: a public instance has no owners and answers with nothing. */
-  if (path === '/api/collections' && request.method === 'GET' && options.people) {
-    if (!session) throw new Refusal(401, 'sign in first')
-    return json(response, 200, await store.collections.mine(session.person))
-  }
+  if (path === '/api/cards') {
+    /* The library. Where nothing is owned everybody sees everything, which is what
+     * `NONE` and `AUTH` mean; under `GRANT` you see what a grant names you on. A library
+     * is always somebody's, so unlike a single recipe it is never opened by a token. */
+    if (request.method === 'GET') {
+      if (options.mode === 'NONE') return json(response, 200, store.all())
+      if (!session) throw new Refusal(401, 'sign in first')
+      return json(
+        response,
+        200,
+        options.mode === 'GRANT' ? options.grants.cards(session.person) : store.all(),
+      )
+    }
 
-  if (path === '/api/cards' || path === '/api/collections') {
     if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
     if (!mayCreate(options.mode, session)) throw new Refusal(401, 'sign in first')
     allowed(options, request)
     if (!options.limits.creates.charge(who(options, request)))
       throw new Refusal(429, 'too many requests')
-    const owner = session?.person ?? null
-    return path === '/api/cards'
-      ? create(store.cards, response, card(await body(request, options)), owner)
-      : create(store.collections, response, rows(await body(request, options), options), owner)
+    return create(store, response, card(await body(request, options)), session?.person ?? null)
   }
 
   const asCard = CARD.exec(path)
   if (asCard)
     return guessing(options, request, () =>
       cardRoute(store, options, request, response, asCard[1], key, session),
-    )
-
-  const asCollection = COLLECTION.exec(path)
-  if (asCollection)
-    return guessing(options, request, () =>
-      collectionRoute(store, options, request, response, asCollection[1], key, session),
     )
 
   if (path.startsWith('/api/')) throw missing()
@@ -262,70 +256,34 @@ async function guessing(options, request, work) {
   }
 }
 
-async function cardRoute(store, options, request, response, id, key, session) {
-  const { cards } = store
-  const { mode } = options
-  const owner = await cards.owner(id)
-  const held = await cards.verify(id, key)
-  /* Your own card opens without its key: the key is how a card is handed to somebody
-   * else, not how you reach what you already own. */
-  const mine = mode !== 'public' && Boolean(session) && owner !== null && owner === session.person
+async function cardRoute(store, options, request, response, id, token, session) {
+  const { mode, grants } = options
+  const person = session?.person ?? null
+
+  if (!store.has(id)) throw missing()
+  const allowed = (need) => may(mode, session, () => grants.may(id, { person, token }, need))
 
   if (request.method === 'GET') {
-    const text = await cards.read(id)
+    if (!allowed('read')) throw missing()
+    const text = await store.read(id)
     if (text === null) throw missing()
-    if (!may(mode, session, owner, held)) throw missing()
-    await cards.touch(id)
+    await store.touch(id)
     return send(response, 200, 'text/plain; charset=utf-8', text)
   }
 
-  if (!held && !mine) throw missing()
+  if (!allowed('edit')) throw missing()
   if (request.method === 'DELETE') {
-    await cards.remove(id)
+    await store.remove(id)
     return send(response, 204)
   }
   if (request.method !== 'PUT') throw new Refusal(405, 'method not allowed')
 
-  await cards.write(id, card(await body(request, options)).text)
+  await store.write(id, card(await body(request, options)).text)
   return send(response, 204)
 }
 
-async function collectionRoute(store, options, request, response, id, key, session) {
-  const { collections } = store
-  const { mode } = options
-  const owner = await collections.owner(id)
-  const held = await collections.verify(id, key)
-  const mine = mode !== 'public' && Boolean(session) && owner !== null && owner === session.person
-
-  if (request.method === 'GET') {
-    const text = await collections.read(id)
-    if (text === null) throw missing()
-    if (!may(mode, session, owner, held)) throw missing()
-    await collections.touch(id)
-    const list = JSON.parse(text)
-    const full = held || mine
-    return json(response, 200, full ? list : strip(list), full ? { etag: tag(text) } : {})
-  }
-
-  if (!held && !mine) throw missing()
-  if (request.method === 'DELETE') {
-    await collections.remove(id)
-    return send(response, 204)
-  }
-  if (request.method !== 'PUT') throw new Refusal(405, 'method not allowed')
-
-  const { text } = rows(await body(request, options), options)
-  const sent = request.headers['if-match']
-  if (!sent) throw new Refusal(428, 'if-match required')
-
-  const answer = collections.swap(id, text, sent)
-  if (answer === 'gone') throw missing()
-  if (answer === 'changed') throw new Refusal(412, 'the collection has changed')
-  return send(response, 204, null, '', { etag: tag(text) })
-}
-
-async function create(shelf, response, { text, label }, owner = null) {
-  return json(response, 201, await shelf.create(text, label, owner))
+async function create(store, response, { text, label }, owner = null) {
+  return json(response, 201, await store.create(text, label, owner))
 }
 
 /** A card is stored only if it parses; validation is parsing. */
@@ -338,29 +296,7 @@ function card(text) {
   }
 }
 
-/** A collection is a list of links and nothing else. */
-function rows(text, { maxRows = 0 } = {}) {
-  let value
-  try {
-    value = JSON.parse(text || '[]')
-  } catch {
-    throw new Refusal(400, 'not json')
-  }
-  if (!Array.isArray(value)) throw new Refusal(400, 'not a list')
-  if (maxRows > 0 && value.length > maxRows) throw new Refusal(413, 'too many rows')
 
-  const clean = value.map((row) => {
-    if (!ID.test(row?.id ?? '')) throw new Refusal(400, 'a row needs an id')
-    if (row.key !== undefined && typeof row.key !== 'string')
-      throw new Refusal(400, 'a key is a string')
-    return row.key === undefined ? { id: row.id } : { id: row.id, key: row.key }
-  })
-  return { text: JSON.stringify(clean), label: null }
-}
-
-function strip(list) {
-  return list.map(({ id }) => ({ id }))
-}
 
 function allowed({ createToken }, request) {
   if (createToken && !same(bearer(request) ?? '', createToken))
@@ -462,7 +398,7 @@ function escaped(text) {
 
 /** A card that is not there still answers as the app, which is what says so in words. */
 async function titleOf(store, id) {
-  const text = await store.cards.read(id).catch(() => null)
+  const text = await store.read(id).catch(() => null)
   if (text === null) return null
   try {
     return parseCard(text).title
@@ -484,7 +420,7 @@ async function statics(store, options, path, response, session) {
   // is the one place a closed instance could still say what a card is called.
   const shared = READ.exec(path)
   if (shared) {
-    const open = mode === 'public' || (mode === 'private' && session)
+    const open = mode === 'NONE' || (mode === 'AUTH' && session)
     return page(app, response, {
       title: open ? await titleOf(store, shared[1]) : null,
       unlisted: true,

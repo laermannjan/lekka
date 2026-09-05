@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { openDb } from '../server/db.js'
+import { openGrants } from '../server/grants.js'
 import { openStore } from '../server/store.js'
 import { openPeople } from '../server/people.js'
 import { handler } from '../server/http.js'
@@ -21,23 +22,23 @@ const BOOTSTRAP = 'bootstraptokenxyz2345'
 async function serve(mode, options = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'lekka-'))
   const db = openDb(join(directory, 'lekka.db'))
-  const store = await openStore(directory, db).open()
-  const people = mode === 'public' ? null : openPeople(db)
+  const grants = openGrants(db)
+  const store = await openStore(directory, db, grants).open()
+  const people = mode === 'NONE' ? null : openPeople(db)
   const server = createServer(
-    handler(store, { people, mode, bootstrap: BOOTSTRAP, ...options }),
+    handler(store, { people, grants, mode, bootstrap: BOOTSTRAP, ...options }),
   ).listen(0)
   await new Promise((done) => server.once('listening', done))
   const base = `http://localhost:${server.address().port}`
 
   const jar = new Map()
-  const call = async (path, { key, version, as, ...rest } = {}) => {
+  const call = async (path, { token, as, ...rest } = {}) => {
     const held = as === undefined ? jar.get('one') : as
     const answer = await fetch(base + path, {
       ...rest,
       redirect: 'manual',
       headers: {
-        ...(key ? { authorization: `Bearer ${key}` } : {}),
-        ...(version ? { 'if-match': version } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(held ? { cookie: held } : {}),
         ...(rest.method && rest.method !== 'GET' ? { 'x-lekka': '1' } : {}),
         ...rest.headers,
@@ -48,11 +49,11 @@ async function serve(mode, options = {}) {
     return answer
   }
 
-  const cookie = () => jar.get('one')
   return {
     call,
-    cookie,
+    grants,
     people,
+    cookie: () => jar.get('one'),
     close: () => {
       server.close()
       db.close()
@@ -69,28 +70,35 @@ const signUp = (call, name = 'Jan') =>
 const signIn = (call, name = 'Jan', password = 'a long enough passphrase') =>
   call('/api/sessions', { method: 'POST', body: JSON.stringify({ name, password }) })
 
-test('public is the instance as it is today: no door, no people', async (t) => {
-  const { call, close } = await serve('public')
+const cookieOf = (answer) => answer.headers.getSetCookie()[0].split(';')[0]
+
+test('NONE is no access control at all: every recipe, to everyone', async (t) => {
+  const { call, close } = await serve('NONE')
   t.after(close)
 
-  const { id, key } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
   assert.equal((await call(`/api/cards/${id}`)).status, 200, 'a stranger reads it')
   assert.equal(
-    (await call(`/api/cards/${id}`, { method: 'PUT', body: OTHER, key })).status,
+    (await call(`/api/cards/${id}`, { method: 'PUT', body: OTHER })).status,
     204,
-    'the key still writes it',
+    'and writes it, with nothing to present',
+  )
+  assert.deepEqual(
+    (await (await call('/api/cards')).json()).map((row) => row.id),
+    [id],
+    'and the library is the whole server',
   )
   assert.equal((await call('/api/me')).status, 404, 'there is nobody to ask about')
 })
 
 test('the first person needs the operator’s link, and only ever once', async (t) => {
-  const { call, close } = await serve('private')
+  const { call, close } = await serve('AUTH')
   t.after(close)
 
   const before = await (await call('/api/me')).json()
   assert.equal(before.empty, true)
   assert.equal(before.person, null)
-  assert.equal(before.mode, 'private')
+  assert.equal(before.mode, 'AUTH')
 
   const wrong = await call('/api/people', {
     method: 'POST',
@@ -106,132 +114,119 @@ test('the first person needs the operator’s link, and only ever once', async (
 
   assert.equal((await signUp(call)).status, 201)
   assert.equal((await (await call('/api/me')).json()).person.name, 'Jan')
-
-  const again = await signUp(call, 'Rita')
-  assert.equal(again.status, 409, 'the link does not open a second time')
+  assert.equal((await signUp(call, 'Rita')).status, 409, 'the link does not open a second time')
 })
 
-test('private puts every card behind the door and shares everything inside it', async (t) => {
-  const { call, close } = await serve('private')
+test('AUTH is one door with everything shared behind it', async (t) => {
+  const { call, people, close } = await serve('AUTH')
   t.after(close)
 
-  const anon = await call('/api/cards', { method: 'POST', body: CARD, as: null })
-  assert.equal(anon.status, 401, 'a stranger cannot make one either')
-
-  await signUp(call)
-  const { id, key } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
-
-  assert.equal((await call(`/api/cards/${id}`)).status, 200)
   assert.equal(
-    (await call(`/api/cards/${id}`, { as: null })).status,
-    404,
-    'signed out, the link alone is worth nothing',
-  )
-  assert.equal(
-    (await call(`/api/cards/${id}`, { as: null, key })).status,
-    404,
-    'and neither is the key',
+    (await call('/api/cards', { method: 'POST', body: CARD, as: null })).status,
+    401,
+    'a stranger cannot make one',
   )
 
+  await signUp(call, 'Jan')
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+
+  people.add('Rita', 'a different passphrase')
+  const hers = cookieOf(await signIn(call, 'Rita', 'a different passphrase'))
+  assert.equal((await call(`/api/cards/${id}`, { as: hers })).status, 200, 'Rita reads Jan’s')
+  assert.equal(
+    (await call(`/api/cards/${id}`, { as: hers, method: 'PUT', body: OTHER })).status,
+    204,
+    'and writes it, because behind one door nothing is anybody’s',
+  )
+  assert.deepEqual(
+    (await (await call('/api/cards', { as: hers })).json()).map((row) => row.id),
+    [id],
+    'and the library is the whole server',
+  )
+
+  assert.equal((await call(`/api/cards/${id}`, { as: null })).status, 404, 'signed out, nothing')
   const page = await call(`/r/${id}`, { as: null })
   assert.doesNotMatch(await page.text(), /Dinkelquarkbrot/, 'nor does the title leak in markup')
 })
 
-test('secret keeps cards to their owner, and the key is how one is handed on', async (t) => {
-  const { call, cookie, people, close } = await serve('secret')
+test('GRANT gives each recipe an owner, and each person a library of what they hold', async (t) => {
+  const { call, grants, people, close } = await serve('GRANT')
   t.after(close)
 
   await signUp(call, 'Jan')
-  const his = cookie()
-  const jan = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+  const his = cookieOf(await signIn(call))
+  const jan = await (await call('/api/cards', { method: 'POST', body: CARD, as: his })).json()
 
-  assert.equal((await call(`/api/cards/${jan.id}`)).status, 200, 'the owner needs no key')
+  assert.equal((await call(`/api/cards/${jan.id}`, { as: his })).status, 200, 'the owner reads')
   assert.equal(
-    (await call(`/api/cards/${jan.id}`, { method: 'PUT', body: OTHER })).status,
+    (await call(`/api/cards/${jan.id}`, { as: his, method: 'PUT', body: OTHER })).status,
     204,
-    'and writes without one',
+    'and writes, with nothing to present',
   )
 
-  // Rita is admitted the way the next step will admit her, and signs in for herself.
   people.add('Rita', 'a different passphrase')
-  const signedIn = await signIn(call, 'Rita', 'a different passphrase')
-  assert.equal(signedIn.status, 201)
-  const hers = signedIn.headers.getSetCookie()[0].split(';')[0]
-
+  const hers = cookieOf(await signIn(call, 'Rita', 'a different passphrase'))
   assert.equal(
     (await call(`/api/cards/${jan.id}`, { as: hers })).status,
     404,
     'signed in is not the same as invited in',
   )
-  assert.equal(
-    (await call(`/api/cards/${jan.id}`, { as: hers, key: jan.key })).status,
-    200,
-    'the key is how Jan hands her this one card',
-  )
-  assert.equal(
-    (await call(`/api/cards/${jan.id}`, { as: hers, key: jan.key, method: 'PUT', body: CARD }))
-      .status,
-    204,
-    'and it carries the right to change it, as it always has',
-  )
+  assert.deepEqual(await (await call('/api/cards', { as: hers })).json(), [], 'her library is empty')
 
-  const mine = await (await call('/api/cards', { method: 'POST', body: CARD, as: hers })).json()
+  // Jan hands her this one recipe, to read and no more.
+  const rita = (await (await call('/api/me', { as: hers })).json()).person.id
+  grants.give(jan.id, { person: rita, scope: 'read', by: 'jan' })
+
+  assert.equal((await call(`/api/cards/${jan.id}`, { as: hers })).status, 200)
   assert.equal(
-    (await call(`/api/cards/${mine.id}`, { as: his })).status,
+    (await call(`/api/cards/${jan.id}`, { as: hers, method: 'PUT', body: CARD })).status,
     404,
-    'what Rita makes is hers, and Jan is a stranger to it',
+    'reading is not writing',
   )
-  assert.equal((await call(`/api/cards/${mine.id}`, { as: hers })).status, 200)
+  assert.deepEqual(
+    (await (await call('/api/cards', { as: hers })).json()).map((row) => row.id),
+    [jan.id],
+    'and it appears in her library',
+  )
 })
 
-test('a second browser signed in as the same person finds the library', async (t) => {
-  const { call, people, close } = await serve('private')
+test('a link grant opens one recipe for whoever holds the token', async (t) => {
+  const { call, grants, close } = await serve('GRANT')
   t.after(close)
 
   await signUp(call, 'Jan')
-  const made = await (await call('/api/collections', { method: 'POST', body: '[]' })).json()
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+  const link = grants.give(id, { scope: 'read' })
 
-  // A browser that has never been here: a session, and nothing in local storage.
-  const fresh = (await signIn(call)).headers.getSetCookie()[0].split(';')[0]
-  const mine = await (await call('/api/collections', { as: fresh })).json()
-  assert.deepEqual(
-    mine.map((row) => row.id),
-    [made.id],
-    'the shelf is found without the key that made it',
-  )
-
+  assert.equal((await call(`/api/cards/${id}`, { as: null })).status, 404, 'without it, nothing')
   assert.equal(
-    (await call(`/api/collections/${made.id}`, { as: fresh })).status,
+    (await call(`/api/cards/${id}`, { as: null, token: link.token })).status,
     200,
-    'and reads in full',
+    'with it, the recipe - and no sign-in needed',
   )
-  const read = await call(`/api/collections/${made.id}`, { as: fresh })
-  const written = await call(`/api/collections/${made.id}`, {
-    as: fresh,
-    method: 'PUT',
-    body: JSON.stringify([{ id: 'dinkelquarkbrot-7kmq2rxvbn' }]),
-    version: read.headers.get('etag'),
-  })
-  assert.equal(written.status, 204, 'owning a shelf is the right to write it, key or no key')
+  assert.equal(
+    (await call(`/api/cards/${id}`, { as: null, token: link.token, method: 'PUT', body: OTHER }))
+      .status,
+    404,
+    'a read link does not write',
+  )
 
-  // Somebody else's session sees none of it.
-  people.add('Rita', 'a different passphrase')
-  const hers = (await signIn(call, 'Rita', 'a different passphrase')).headers
-    .getSetCookie()[0]
-    .split(';')[0]
-  assert.deepEqual(await (await call('/api/collections', { as: hers })).json(), [])
-  assert.equal((await call('/api/collections', { as: null })).status, 401)
+  grants.revoke(link.id)
+  assert.equal(
+    (await call(`/api/cards/${id}`, { as: null, token: link.token })).status,
+    404,
+    'and it can be taken back, which a key never could',
+  )
 })
 
 test('a person sees their own browsers, revokes one, and cannot touch another’s', async (t) => {
-  const { call, cookie, close } = await serve('private')
+  const { call, cookie, close } = await serve('AUTH')
   t.after(close)
 
   await signUp(call)
   const first = cookie()
   await signIn(call)
-  const second = cookie()
-  assert.notEqual(first, second)
+  assert.notEqual(first, cookie())
 
   const open = await (await call('/api/sessions')).json()
   assert.equal(open.length, 2)
@@ -240,11 +235,7 @@ test('a person sees their own browsers, revokes one, and cannot touch another’
   const gone = open.find((row) => row.id !== here.id)
   assert.equal((await call(`/api/sessions/${gone.id}`, { method: 'DELETE' })).status, 204)
   assert.equal((await (await call('/api/sessions')).json()).length, 1)
-  assert.equal(
-    (await call(`/api/sessions/${gone.id}`, { method: 'DELETE' })).status,
-    404,
-    'revoking it twice changes nothing',
-  )
+  assert.equal((await call(`/api/sessions/${gone.id}`, { method: 'DELETE' })).status, 404)
   assert.equal((await call('/api/me')).status, 200, 'the browser doing the revoking stays in')
 
   assert.equal((await call('/api/sessions', { method: 'DELETE' })).status, 204, 'signing out')
@@ -252,7 +243,7 @@ test('a person sees their own browsers, revokes one, and cannot touch another’
 })
 
 test('a cookie alone cannot be spent by another site', async (t) => {
-  const { call, cookie, close } = await serve('private')
+  const { call, cookie, close } = await serve('AUTH')
   t.after(close)
 
   await signUp(call)
@@ -265,15 +256,16 @@ test('a cookie alone cannot be spent by another site', async (t) => {
   })
   assert.equal(forged.status, 403, 'a foreign origin is refused')
 
-  const bare = await fetch(
-    (await call('/api/me')).url.replace('/api/me', '/api/cards'),
-    { method: 'POST', body: CARD, headers: { cookie: held } },
-  )
+  const bare = await fetch((await call('/api/me')).url.replace('/api/me', '/api/cards'), {
+    method: 'POST',
+    body: CARD,
+    headers: { cookie: held },
+  })
   assert.equal(bare.status, 403, 'and so is a request our own page would never make')
 })
 
 test('a wrong password answers like a name nobody has, and is rate limited', async (t) => {
-  const { call, close } = await serve('private', { triesPerMinute: 3 })
+  const { call, close } = await serve('AUTH', { triesPerMinute: 3 })
   t.after(close)
 
   await signUp(call)
@@ -282,7 +274,9 @@ test('a wrong password answers like a name nobody has, and is rate limited', asy
     { name: 'Jan', password: 'wrong wrong wrong' },
     { name: 'Nobody', password: 'a long enough passphrase' },
   ])
-    refusals.push(await call('/api/sessions', { method: 'POST', body: JSON.stringify(body), as: null }))
+    refusals.push(
+      await call('/api/sessions', { method: 'POST', body: JSON.stringify(body), as: null }),
+    )
 
   assert.deepEqual(
     refusals.map((answer) => answer.status),
@@ -298,4 +292,11 @@ test('a wrong password answers like a name nobody has, and is rate limited', asy
     as: null,
   })
   assert.equal(spent.status, 429, 'guessing runs out')
+})
+
+test('a mode nobody meant to type refuses to start', async () => {
+  const { mode } = await import('../server/access.js')
+  assert.equal(mode(undefined), 'NONE')
+  assert.equal(mode('grant'), 'GRANT', 'the case a person types is the case that works')
+  assert.throws(() => mode('public'), /ACCESS_CONTROL/)
 })

@@ -91,10 +91,9 @@ not hardened for the open internet.
 |---|---|---|
 | `PORT` | 8080 | |
 | `DATA_DIR` | `./data` | the only thing to back up |
-| `ACCESS` | `public` | `public` is no door at all; `private` puts everything behind one sign-in; `secret` also gives each card an owner. The last two print a one-time link on first boot, which is how the first person is made |
+| `ACCESS_CONTROL` | `NONE` | how much of it this instance does - see below. `AUTH` and `GRANT` print a one-time link on first boot, which is how the first person is made |
 | `CREATE_TOKEN` | unset | when set, creating a card needs `Authorization: Bearer <token>` |
 | `MAX_CARD_BYTES` | 65536 | largest card accepted |
-| `MAX_COLLECTION_ROWS` | unset | most recipes one collection may hold; unset means no cap |
 | `MAX_CREATES_PER_HOUR` | unset | creations one address may make in an hour; unset means no limit |
 | `MAX_TRIES_PER_MINUTE` | unset | links one address may follow to nothing in a minute; unset means no limit |
 | `TRUST_PROXY` | unset | set to `1` behind a reverse proxy, so the two limits above count the forwarded address rather than the proxy |
@@ -125,36 +124,32 @@ uid 1000, put your own ids in `deploy/.env`:
 printf 'PUID=%s\nPGID=%s\n' "$(id -u)" "$(id -g)" > deploy/.env
 ```
 
-## Links are the rights
+## Who may open what
 
-There are no accounts. A link is what grants access, so treat one like a key.
+One setting decides, and it names the mechanism rather than how secret it feels.
 
-| | |
-|---|---|
-| `/r/<id>` | read a card |
-| `/r/<id>#<key>` | read and edit it |
-| `/c/<name>` | read a collection, with every edit key stripped out |
-| `/c/<name>#<key>` | read and change it; opening this adopts the collection on the device |
+| `ACCESS_CONTROL` | | |
+|---|---|---|
+| `NONE` | no door | everyone who reaches the port reads, writes and deletes every recipe. The library is the whole server |
+| `AUTH` | one door | everyone signed in does the same. Nothing behind the door is anybody's in particular |
+| `GRANT` | one door, and owners | a recipe answers to a grant. Yours are yours; the rest you were given |
 
-The key is after the `#`, which is the one part of an address a browser sends
-nowhere: not in the request line, not in a `Referer`, so not into an access log,
-a proxy or a CDN. The older shape, with the key as a path segment, is still read
-and is rewritten on arrival, so links already handed out keep working.
-
-A collection is a list of card links, and that is all it is. Cards do not belong
-to it.
+Under `GRANT` a grant is one row saying *this subject may do this, until taken
+back*. The subject is a person, who signs in as themselves, or a link, which is
+whoever holds the token. A link token rides in the fragment of `/r/<id>#<token>`,
+which is the one part of an address a browser sends nowhere: not in the request
+line, not in a `Referer`, so not into an access log, a proxy or a CDN. The older
+shape, with the token as a path segment, is still read and rewritten on arrival.
 
 ## The data directory
 
 ```
-data/cards/dinkelquarkbrot-7kmq2rxvbn.lekka        the card
-data/cards/dinkelquarkbrot-7kmq2rxvbn.meta.json    key hash and timestamps
-data/collections/purely-mellow-rhubarb-cypk.json
+data/cards/dinkelquarkbrot-7kmq2rxvbn.lekka    the recipe, and the only file
+data/lekka.db                                  everything else
 ```
 
-The file name is the link, so the directory can be read by eye. A card is the
-`.lekka` file and the `.meta.json` beside it; a server started against an
-existing directory needs nothing else, because there is no state anywhere but
-here.
+A recipe is a file you can `cat`, `grep`, `diff` and restore by hand. Its id, its
+dates, who owns it, who else may open it, and who is signed in are rows in
+`lekka.db`, which is the SQLite built into Node - still no dependencies.
 
-Back this directory up. It is the only copy.
+Back this directory up. It is the only copy, the database included.
