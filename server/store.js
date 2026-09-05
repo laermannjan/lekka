@@ -21,8 +21,6 @@ export function openStore(directory, db) {
     async open() {
       await this.cards.open()
       await this.collections.open()
-      // What an older data directory brought with it, so the operator can be told.
-      this.adopted = await adopt(db, directory)
       return this
     },
   }
@@ -118,11 +116,7 @@ function shelf(db, kind, { directory = null, extension = '', nextId }) {
       return found ? same(found.hash, hash(key ?? '')) : false
     },
 
-    /**
-     * Who is answerable for this record, or null on anything made before there were
-     * people - which reads as nobody's, so a private instance does not lock its operator
-     * out of what they already had.
-     */
+    /** Who is answerable for this record. Null only on a public instance, which has nobody. */
     async owner(id) {
       return row(id)?.owner ?? null
     },
@@ -162,61 +156,6 @@ function shelf(db, kind, { directory = null, extension = '', nextId }) {
       }
     },
   }
-}
-
-/**
- * The envelopes and collection files a data directory made before this, read once into
- * the database. The `.lekka` files are left exactly where they are, because they are
- * still the body of every card; the `.meta.json` files beside them, and the collection
- * directory entire, stop being read and can be deleted once you are happy.
- */
-export async function adopt(db, directory) {
-  const done = db.prepare("select value from settings where name = 'adopted'").get()
-  if (done) return { cards: 0, collections: 0 }
-
-  const counted = { cards: 0, collections: 0 }
-  const add = db.prepare(
-    'insert or ignore into records (kind, id, hash, owner, body, created, updated, touched) values (?, ?, ?, ?, ?, ?, ?, ?)',
-  )
-
-  for (const [kind, folder, extension] of [
-    ['card', join(directory, 'cards'), '.lekka'],
-    ['collection', join(directory, 'collections'), '.json'],
-  ]) {
-    for (const name of await readdir(folder).catch(() => [])) {
-      if (!name.endsWith('.meta.json')) continue
-      const id = name.slice(0, -'.meta.json'.length)
-      if (!ID.test(id)) continue
-
-      const envelope = await readFile(join(folder, name), 'utf8')
-        .then(JSON.parse)
-        .catch(() => null)
-      if (!envelope?.key) continue
-
-      const body =
-        kind === 'collection'
-          ? await readFile(join(folder, id + extension), 'utf8').catch(() => null)
-          : null
-      if (kind === 'collection' && body === null) continue
-
-      add.run(
-        kind,
-        id,
-        envelope.key,
-        envelope.owner ?? null,
-        body,
-        envelope.created ?? new Date().toISOString(),
-        envelope.updated ?? envelope.created ?? new Date().toISOString(),
-        envelope.touched ?? envelope.created ?? new Date().toISOString(),
-      )
-      counted[kind === 'card' ? 'cards' : 'collections']++
-    }
-  }
-
-  db.prepare("insert into settings (name, value) values ('adopted', ?)").run(
-    new Date().toISOString(),
-  )
-  return counted
 }
 
 function hash(key) {

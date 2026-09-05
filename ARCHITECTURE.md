@@ -114,11 +114,6 @@ what is in use. Unset, nothing is ever swept. The sweep also reaps what an
 interrupted write left behind - a `.lekka` file no row points at, a temporary
 whose rename never happened - since nothing can reach either.
 
-A data directory written before this carries `.meta.json` envelopes and a
-`collections/` folder. They are read into the database once, on first boot, and
-then never again; the `.lekka` files are left exactly where they are. The server
-says what it adopted and what is now safe to delete.
-
 The directory is the only copy. It must be a volume, and it must be backed up -
 the database included.
 

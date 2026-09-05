@@ -22,7 +22,7 @@ export function may(mode, session, owner, held) {
   if (mode === 'public') return true
   if (!session) return false
   if (mode === 'private') return true
-  return owner === null || owner === session.person || held
+  return owner === session.person || held
 }
 
 /** Making things is a member's right, never a passer-by's, once there is a door. */

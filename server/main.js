@@ -22,12 +22,6 @@ const directory = process.env.DATA_DIR ?? './data'
 const db = openDb(join(directory, 'lekka.db'))
 const store = await openStore(directory, db).open()
 
-if (store.adopted.cards || store.adopted.collections)
-  console.log(
-    `Adopted ${store.adopted.cards} cards and ${store.adopted.collections} collections into lekka.db. ` +
-      `The .meta.json files and ${join(directory, 'collections')} are no longer read and can be deleted.`,
-  )
-
 /* People exist only where there is a door. The tables are always there; a public
  * instance simply never has a row in them, and every route below sees `null`. */
 const mode = readMode(process.env.ACCESS)

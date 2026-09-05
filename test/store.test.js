@@ -205,39 +205,6 @@ test('a body is swapped only if it still says what the writer thought', async ()
   assert.equal(collections.swap('nothingxyz', '[]', '*'), 'gone')
 })
 
-test('an older data directory is adopted once, and its recipes are left alone', async () => {
-  const where = await directory()
-
-  // A directory as the previous version wrote it: bodies, and envelopes beside them.
-  const { mkdir } = await import('node:fs/promises')
-  await mkdir(join(where, 'cards'), { recursive: true })
-  await mkdir(join(where, 'collections'), { recursive: true })
-  const when = '2026-01-01T00:00:00.000Z'
-  await writeFile(join(where, 'cards', 'erdkruste-aaaaaaaaaa.lekka'), CARD)
-  await writeFile(
-    join(where, 'cards', 'erdkruste-aaaaaaaaaa.meta.json'),
-    JSON.stringify({ key: 'a'.repeat(64), created: when, updated: when, touched: when }),
-  )
-  await writeFile(join(where, 'collections', 'purely-mellow-rhubarb-cypk.json'), '[{"id":"x"}]')
-  await writeFile(
-    join(where, 'collections', 'purely-mellow-rhubarb-cypk.meta.json'),
-    JSON.stringify({ key: 'b'.repeat(64), created: when, updated: when, touched: when }),
-  )
-
-  const { db, store } = await open(where)
-  assert.deepEqual(store.adopted, { cards: 1, collections: 1 })
-  assert.equal(await store.cards.read('erdkruste-aaaaaaaaaa'), CARD)
-  assert.equal(await store.collections.read('purely-mellow-rhubarb-cypk'), '[{"id":"x"}]')
-
-  // The recipe file is still there and untouched; the envelope beside it is simply unread.
-  assert.equal(await readFile(join(where, 'cards', 'erdkruste-aaaaaaaaaa.lekka'), 'utf8'), CARD)
-  db.close()
-
-  const again = await open(where)
-  assert.deepEqual(again.store.adopted, { cards: 0, collections: 0 }, 'and only ever once')
-  assert.equal(again.db.prepare('select count(*) as n from records').get().n, 2)
-})
-
 function age(db, id, days) {
   const when = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
   db.prepare('update records set touched = ? where id = ?').run(when, id)

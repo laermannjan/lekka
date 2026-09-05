@@ -53,11 +53,6 @@ create table if not exists sessions (
 );
 
 create index if not exists sessions_person on sessions (person);
-
-create table if not exists settings (
-  name  text primary key,
-  value text not null
-);
 `
 
 export function openDb(file) {
