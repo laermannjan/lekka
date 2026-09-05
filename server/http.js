@@ -100,6 +100,14 @@ async function route(store, options, request, response) {
   if (path.startsWith('/api/session') || path === '/api/me' || path === '/api/people')
     return peopleRoute(options, request, response, path, session)
 
+  /* What this person owns, so a browser they have never signed in on before finds their
+   * shelves instead of an empty screen. Only ever their own, and only where there is
+   * somebody to be: a public instance has no owners and answers with nothing. */
+  if (path === '/api/collections' && request.method === 'GET' && options.people) {
+    if (!session) throw new Refusal(401, 'sign in first')
+    return json(response, 200, await store.collections.mine(session.person))
+  }
+
   if (path === '/api/cards' || path === '/api/collections') {
     if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
     if (!mayCreate(options.mode, session)) throw new Refusal(401, 'sign in first')

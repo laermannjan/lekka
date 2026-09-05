@@ -69,6 +69,24 @@ function shelf(directory, extension, nextId) {
       return found ? (found.owner ?? null) : null
     },
 
+    /**
+     * What one person owns here, by reading the envelopes. A directory is still the
+     * index: a household keeps shelves in the tens, and the alternative is a second
+     * place that says who owns what, which is a second place to be wrong.
+     */
+    async mine(person) {
+      if (!person) return []
+      const names = await readdir(directory).catch(() => [])
+      const found = []
+      for (const name of names) {
+        if (!name.endsWith('.meta.json')) continue
+        const id = name.slice(0, -'.meta.json'.length)
+        const envelope = await meta(id)
+        if (envelope?.owner === person) found.push({ id, updated: envelope.updated })
+      }
+      return found.sort((a, b) => String(b.updated).localeCompare(String(a.updated)))
+    },
+
     async read(id) {
       if (!(await meta(id))) return null
       return readFile(body(id), 'utf8').catch(() => null)

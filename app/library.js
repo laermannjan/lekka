@@ -27,6 +27,16 @@ export function known() {
   return [held, ...rest.filter((other) => other.id !== held.id)]
 }
 
+/**
+ * A collection this browser knows about without making it the one in use. What the
+ * server says you own is folded in this way, so signing in somewhere new does not also
+ * decide which shelf you are looking at.
+ */
+export function remember(entry) {
+  if (known().some((other) => other.id === entry.id)) return
+  save(KNOWN, [...load(KNOWN, '[]'), entry])
+}
+
 export function forget(id) {
   save(KNOWN, load(KNOWN, '[]').filter((other) => other.id !== id))
   localStorage.removeItem(ROWS + id)

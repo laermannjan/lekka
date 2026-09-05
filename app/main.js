@@ -6,7 +6,17 @@ import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
 import { section, specification } from './page.js'
 import { devices as renderDevices, firstPerson as firstPersonForm, signIn as signInForm } from './door.js'
-import { cache, cached, collection, forget, known, rows, setRows, useCollection } from './library.js'
+import {
+  cache,
+  cached,
+  collection,
+  forget,
+  known,
+  remember,
+  rows,
+  setRows,
+  useCollection,
+} from './library.js'
 import { svg } from './qr.js'
 import { address, arrive } from './link.js'
 
@@ -51,6 +61,8 @@ async function start() {
     return showSignIn()
   }
 
+  await syncLibrary()
+
   if (here.kind === 'card') return showCard(here.id, here.key)
   if (here.kind === 'collection') return showCollection(here.id, here.key)
 
@@ -61,6 +73,26 @@ async function start() {
   if (here.path === '/devices') return showDevices()
 
   return showOverview()
+}
+
+/**
+ * What the server says this person owns, folded into what this browser remembers.
+ *
+ * The library used to live only in `localStorage`, so signing in on a second browser
+ * got you through the door and then showed you an empty shelf. Ownership is the answer:
+ * the server knows which collections are yours, and a browser that has never seen them
+ * can now be told. No key comes back - there is none to send, since only its hash is
+ * kept - and none is needed, because owning a shelf is itself the right to write it.
+ */
+async function syncLibrary() {
+  if (!instance.person) return
+  const mine = await api.myCollections().catch(() => null)
+  if (!mine?.length) return
+
+  for (const row of mine) remember({ id: row.id, key: null })
+  // Which shelf you are looking at is this browser's own business; only an empty one is
+  // decided for you, and then by what changed most recently.
+  if (!collection()) useCollection({ id: mine[0].id, key: null })
 }
 
 /** The operator's one-time link, carried in the fragment so it reaches no log. */

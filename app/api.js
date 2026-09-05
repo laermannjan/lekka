@@ -50,6 +50,11 @@ export async function deleteCard(id, key) {
   return send('DELETE', `/api/cards/${id}`, { key })
 }
 
+/** The shelves this person owns, which is how a new browser finds their library. */
+export async function myCollections() {
+  return send('GET', '/api/collections')
+}
+
 export async function createCollection(rows = []) {
   return send('POST', '/api/collections', { body: JSON.stringify(rows) })
 }

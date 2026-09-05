@@ -182,6 +182,45 @@ test('secret keeps cards to their owner, and the key is how one is handed on', a
   assert.equal((await call(`/api/cards/${mine.id}`, { as: hers })).status, 200)
 })
 
+test('a second browser signed in as the same person finds the library', async (t) => {
+  const { call, people, close } = await serve('private')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const made = await (await call('/api/collections', { method: 'POST', body: '[]' })).json()
+
+  // A browser that has never been here: a session, and nothing in local storage.
+  const fresh = (await signIn(call)).headers.getSetCookie()[0].split(';')[0]
+  const mine = await (await call('/api/collections', { as: fresh })).json()
+  assert.deepEqual(
+    mine.map((row) => row.id),
+    [made.id],
+    'the shelf is found without the key that made it',
+  )
+
+  assert.equal(
+    (await call(`/api/collections/${made.id}`, { as: fresh })).status,
+    200,
+    'and reads in full',
+  )
+  const read = await call(`/api/collections/${made.id}`, { as: fresh })
+  const written = await call(`/api/collections/${made.id}`, {
+    as: fresh,
+    method: 'PUT',
+    body: JSON.stringify([{ id: 'dinkelquarkbrot-7kmq2rxvbn' }]),
+    version: read.headers.get('etag'),
+  })
+  assert.equal(written.status, 204, 'owning a shelf is the right to write it, key or no key')
+
+  // Somebody else's session sees none of it.
+  people.add('Rita', 'a different passphrase')
+  const hers = (await signIn(call, 'Rita', 'a different passphrase')).headers
+    .getSetCookie()[0]
+    .split(';')[0]
+  assert.deepEqual(await (await call('/api/collections', { as: hers })).json(), [])
+  assert.equal((await call('/api/collections', { as: null })).status, 401)
+})
+
 test('a person sees their own browsers, revokes one, and cannot touch another’s', async (t) => {
   const { call, cookie, close } = await serve('private')
   t.after(close)
