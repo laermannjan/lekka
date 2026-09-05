@@ -102,7 +102,7 @@ test('every browser gets the same control, and only the word changes', () => {
   )
 })
 
-test('inviting somebody hands you a link, once', async () => {
+test('inviting somebody hands you a link that makes one account', async () => {
   let asked = 0
   const box = devices([], null, {
     onRevoke: () => {},
@@ -124,7 +124,7 @@ test('inviting somebody hands you a link, once', async () => {
   tap(one(box, (node) => node.tag === 'button' && node.textContent === 'Invite someone', 'invite'))
   await new Promise((done) => setTimeout(done, 0))
   assert.equal(asked, 1)
-  assert.match(text(box), /Send this to them/)
+  assert.match(text(box), /Send this to one person/)
   const shown = fields(box).find((node) => node.readOnly)
   assert.equal(shown.value, 'https://kitchen.example/join#atokenof22characters22')
 })

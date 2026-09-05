@@ -138,7 +138,7 @@ async function hand(box, asked) {
   if (!made) return
   const url = new URL(`/join#${made.token}`, location.origin).href
   box.replaceChildren(
-    linkOut(url, 'Send this to them. It works once, and until it expires in an hour.'),
+    linkOut(url, 'Send this to one person. It makes one account, then stops working, and expires in an hour.'),
   )
   box.hidden = false
 }

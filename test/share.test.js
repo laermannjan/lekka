@@ -122,7 +122,7 @@ test('a link is a separate act, and needs nobody chosen', async () => {
   tap(link)
   await settle()
   assert.deepEqual(asked.linked, [{ scope: 'read', days: null }])
-  assert.match(text(box), /once. It is not stored/)
+  assert.match(text(box), /only a fingerprint is kept/)
 })
 
 test('the scope the form offers is read or change, never owning', async () => {
@@ -139,7 +139,7 @@ test('a minted token is shown once, with the link it belongs to', async () => {
   await settle()
 
   const said = text(box)
-  assert.match(said, /once. It is not stored/)
+  assert.match(said, /only a fingerprint is kept/)
   const link = inputs(box).find((node) => node.readOnly)
   assert.equal(
     link.value,
@@ -188,4 +188,15 @@ test('the two lists are the ones a modal has, not the ones a screen has', async 
       all(row).some((child) => child.className === 'what'),
       'and every row names somebody in the cell that carries a name',
     )
+})
+
+test('a share link is not spent by being used, and says so', async () => {
+  const { box } = await open([], { kind: 'link', token: 'atokenof22characters22' })
+  tap(one(box, (node) => node.tag === 'button' && node.textContent === 'Make a link instead', 'link'))
+  await settle()
+
+  const said = text(box)
+  assert.match(said, /keeps working for anyone holding it/, 'it opens as often as it is opened')
+  assert.match(said, /until it expires or you revoke it/, 'and revoking is the way it ends')
+  assert.doesNotMatch(said, /works once/, 'that is the invite, which is a different link')
 })

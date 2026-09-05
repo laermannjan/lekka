@@ -16,6 +16,11 @@ const RANK = { read: 1, edit: 2, owner: 3 }
  *
  * A subject is a person, who signs in as themselves, or a link, which is whoever holds
  * the token. The first survives the URL being forwarded; the second is the URL.
+ *
+ * A link is not spent by being used. It is a standing permission that happens to be
+ * addressed to a string rather than to somebody, so it opens for as many people, as many
+ * times, as hold it - until it expires or is revoked. An *invite* is the single-use one,
+ * and lives in `invites.js`; the two are different enough to be different tables.
  */
 export function openGrants(db) {
   const one = (sql) => db.prepare(sql)
@@ -44,7 +49,7 @@ export function openGrants(db) {
       order by c.updated desc`,
   )
   const drop = one('delete from grants where id = ?')
-  const spend = one('update grants set used = ? where id = ?')
+  const stamp = one('update grants set used = ? where id = ?')
 
   const live = (row, now) => Boolean(row) && (!row.expires || row.expires > now)
 
@@ -78,7 +83,7 @@ export function openGrants(db) {
           // Last-used is worth a write an hour, not a write a request: it is there so a
           // share panel can say whether a link is still in use, not to count reads.
           if (!found.used || Date.now() - new Date(found.used).getTime() > HOUR)
-            spend.run(now, found.id)
+            stamp.run(now, found.id)
           return true
         }
       }

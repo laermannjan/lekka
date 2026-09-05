@@ -10,8 +10,11 @@ import { address } from './link.js'
  * the link being forwarded and is taken back in one act; naming nobody mints a link,
  * which is whoever holds it until it expires or is revoked.
  *
- * A token is shown once, at the moment it is made, and never again - the server keeps
- * only its hash, so there is nothing to show later even if the panel wanted to.
+ * A token is *shown* once, at the moment it is made - the server keeps only its hash, so
+ * there is nothing to show later even if the panel wanted to. It is not *spent* once: a
+ * link is a standing permission addressed to a string, and opens for as many people as
+ * hold it until it expires or is revoked. Revoking is the only way to end one, which is
+ * why every link is its own row.
  */
 export function shareSheet({ id, title, me, held: known, onList, onPeople, onGive, onLink, onRevoke }) {
   const box = element('dialog', 'compose')
@@ -156,7 +159,11 @@ function says(grant) {
 function showToken(box, id, token) {
   const url = new URL(address(id, token), location.origin).href
   box.replaceChildren(
-    linkOut(url, 'This link, once. It is not stored, so it cannot be shown again.'),
+    linkOut(
+      url,
+      'Copy it now: only a fingerprint is kept, so it cannot be shown again. It keeps ' +
+        'working for anyone holding it until it expires or you revoke it.',
+    ),
   )
   box.hidden = false
 }

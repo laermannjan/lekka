@@ -183,8 +183,10 @@ whoever holds the token. `Share` on a recipe you own lists everyone who holds it
 and offers everybody else on the instance with what they already hold beside their
 name - so choosing is done with the answer in front of you. Choosing somebody who
 already holds something changes what they hold rather than adding a second row.
-`Make a link instead` mints one for somebody with no account here, shown once with
-a QR code, expiring when you say and revocable on its own. If the person who opens
+`Make a link instead` mints one for somebody with no account here. The token is
+*shown* once, with a QR code, because only its fingerprint is stored - it is not
+*spent* once: it opens for as many people as hold it, until it expires or you revoke
+it. That is the opposite of an invite link, which makes one account and stops. If the person who opens
 it turns out to have an account, they get their own grant at the same scope - so it
 lands in their library, the panel shows who actually took it up, and you can take it
 back from one of them without killing the link for everybody. A link token rides in the fragment of `/r/<id>#<token>`,

@@ -57,6 +57,11 @@ and each can expire. The token is returned once and stored only as a SHA-256, so
 the share panel can never show it again - which is why it is shown at the moment
 it is minted, with a QR code, and not filed away for later.
 
+Shown once is not spent once. A link is a standing permission that happens to be
+addressed to a string rather than to a person, so it opens for as many people, as
+many times, as hold it. The single-use link is the **invite**, which makes one
+account and then stops - a different table, because it is a different thing.
+
 Holding a link is not the same as holding a recipe: the token lives in an address bar,
 so a library cannot be built from it and the panel cannot say who has it. A link opened
 by somebody signed in therefore writes them their own grant at the scope the link
