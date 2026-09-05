@@ -493,7 +493,7 @@ work.
   element present and every column the wrong width. Two of these side by side
   is what caught it.
 
-- **Thirty-nine checks in a real browser, from `node tools/check.mjs`.** Same
+- **Forty-three checks in a real browser, from `node tools/check.mjs`.** Same
   machinery as the picture - own server, headless Chrome - but it drives the
   editor and reports `PASS`/`FAIL` per line, and exits non-zero.
 
@@ -505,9 +505,18 @@ work.
   the width a band is centred in, and for whether a rectangle drawn only to carry
   a rule is swallowing the taps aimed at the row beneath it.
 
+  It runs twice. The first pass renders a module into a bare page, which is most
+  of it. The second loads the app's own page with `main.js` running, because the
+  router and the masthead are not modules and hold state across a change of
+  screen: `show` replaces the screen and not the masthead, so a control put there
+  by one view outlives it. A scale button left over from reading answers with
+  `showCard`, which re-reads the recipe from the server - pressing it while
+  writing threw the draft away without asking, and nothing in `node --test` could
+  have seen it, because nothing in `node --test` runs `main.js` at all.
+
   So the rule is not "no browser tests". It is: assert in `node --test` whatever
-  can be asserted about what the app *builds*, and keep the browser for the three
-  things only a browser has - the caret, the cascade, and layout.
+  can be asserted about what the app *builds*, and keep the browser for what only
+  a browser has - the caret, the cascade, layout, and the app assembled.
 
   What neither buys: rights are enforced by the server and tested there. A missing
   button is not a permission. The browser would only tell us whether the app

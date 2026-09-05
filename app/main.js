@@ -180,6 +180,15 @@ function composer(id, key, card) {
 function showEditor(id, key, draft) {
   const held = collection()
 
+  /*
+   * The masthead is cleared, because what was on it belongs to the recipe being read.
+   * `show` replaces the screen and not the masthead, so the scale and `Fit to screen`
+   * outlived the view they were put there by - and both answer with `showCard`, which
+   * re-reads the recipe from the server. Pressing one while writing threw the draft away
+   * without so much as asking, which is the one thing `Cancel` exists to prevent.
+   */
+  page(id ? `/r/${id}/${key}` : '/new')
+
   show(
     buildEditor({
       draft,
@@ -335,6 +344,11 @@ async function change(held, edit) {
  * the editor can collect it in.
  */
 function showWriting() {
+  // The foot says `/new`, so the address bar has to as well - and a reload has to land
+  // back here, which is what the route in `start` is for. Replaced rather than pushed:
+  // nothing else in this app pushes, and a Back that walked into a draft with no
+  // history to answer it would be worse than one that leaves the page.
+  history.replaceState(null, '', '/new')
   page('/new')
   showEditor(null, null, {
     title: '',

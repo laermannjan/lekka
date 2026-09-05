@@ -351,9 +351,61 @@ function report() {
 }
 `
 
+/**
+ * The second pass: the app itself, with its own `main.js` running.
+ *
+ * Everything above renders a module into a bare page. That leaves the router and the
+ * masthead untested, and both hold state across a change of screen - `show` replaces
+ * the screen and not the masthead, so a control put there by one view outlives it. A
+ * scale button left over from reading answers with `showCard`, which re-reads the recipe
+ * from the server: pressing it while writing threw the draft away without asking.
+ */
+const DRIVES = `
+const said = []
+const check = (name, ok, detail = '') =>
+  said.push(\`\${ok ? 'PASS' : 'FAIL'} \${name}\${detail ? \` :: \${detail}\` : ''}\`)
+
+const acts = () => [...document.getElementById('acts').children]
+const editing = () => Boolean(document.querySelector('.editor'))
+const named = (text) => [...document.querySelectorAll('button')].find((one) => one.textContent === text)
+
+let asked = false
+window.confirm = () => {
+  asked = true
+  return true
+}
+
+const after = (wait) => new Promise((go) => setTimeout(go, wait))
+
+addEventListener('load', async () => {
+  await after(700)
+  check('reading, the masthead holds the scale and the fit', acts().length > 0,
+    acts().map((one) => one.textContent).join(' | '))
+
+  named('Edit').click()
+  await after(500)
+  check('writing, the editor is on the screen', editing())
+  check('and the masthead is empty', acts().length === 0,
+    acts().map((one) => one.textContent).join(' | ') || '(empty)')
+
+  // Whatever is left up there must not be able to leave the editor behind the back of
+  // the guard that asks before a draft is thrown away.
+  for (const one of acts()) one.querySelector('button')?.click()
+  await after(500)
+  check('and nothing up there can leave without asking', editing() || asked,
+    'editing ' + editing() + ', asked ' + asked)
+
+  const out = document.createElement('pre')
+  out.id = 'checks'
+  out.textContent = said.join(String.fromCharCode(10))
+  document.body.append(out)
+})
+`
+
 const app = fileURLToPath(new URL('../app', import.meta.url))
 const page = join(app, '_check.html')
 const code = join(app, '_check.js')
+const driver = join(app, '_drive.js')
 const index = await readFile(join(app, 'index.html'), 'utf8')
 
 const data = await mkdtemp(join(tmpdir(), 'lekka-check-'))
@@ -369,6 +421,38 @@ try {
 
   const chrome = CHROMES.find(existsSync)
   if (!chrome) throw new Error(`no Chrome found. Set CHROME.\ntried:\n  ${CHROMES.join('\n  ')}`)
+
+  const lines = await said(chrome, port, '/_check.html', '1100,2400')
+
+  // The second pass drives the app itself, so it needs the app's own page - which is
+  // the one file this cannot make a copy of, because the router answers for its address.
+  await writeFile(driver, DRIVES)
+  await writeFile(join(app, 'index.html'), index.replace('</body>', '  <script src="/_drive.js"></script>\n  </body>'))
+  const made = await fetch(`http://127.0.0.1:${port}/api/cards`, {
+    method: 'POST',
+    headers: { 'content-type': 'text/plain' },
+    body: CARD,
+  }).then((one) => one.json())
+  lines.push(...await said(chrome, port, `/r/${made.id}/${made.key}`, '1280,900'))
+
+  for (const line of lines) console.log(line)
+  failed = lines.filter((line) => line.startsWith('FAIL')).length
+  console.log(`\n${lines.length - failed} passed, ${failed} failed`)
+} finally {
+  server.close()
+  // The app's own page is put back from the text it was read with, whatever happened.
+  await writeFile(join(app, 'index.html'), index)
+  await Promise.all([
+    rm(page, { force: true }),
+    rm(code, { force: true }),
+    rm(driver, { force: true }),
+    rm(data, { recursive: true, force: true }),
+  ])
+}
+process.exit(failed > 0 ? 1 : 0)
+
+/** One page driven, and the lines it reported. */
+async function said(chrome, port, path, size) {
   const dom = await run(chrome, [
     '--headless=new',
     '--disable-gpu',
@@ -376,24 +460,17 @@ try {
     '--enable-logging=stderr',
     '--v=0',
     '--virtual-time-budget=30000',
-    '--window-size=1100,2400',
+    `--window-size=${size}`,
     '--dump-dom',
-    `http://127.0.0.1:${port}/_check.html`,
+    `http://127.0.0.1:${port}${path}`,
   ])
 
   // No block at all means the page threw before it could say anything, which is a
   // failure of every check rather than of none.
   const found = /<pre id="checks">([\s\S]*?)<\/pre>/.exec(dom)
-  if (!found) throw new Error('the page reported nothing: it threw before it could')
-  const lines = found[1].split('\n').map(unescape)
-  for (const line of lines) console.log(line)
-  failed = lines.filter((line) => line.startsWith('FAIL')).length
-  console.log(`\n${lines.length - failed} passed, ${failed} failed`)
-} finally {
-  server.close()
-  await Promise.all([rm(page, { force: true }), rm(code, { force: true }), rm(data, { recursive: true, force: true })])
+  if (!found) throw new Error(`${path} reported nothing: it threw before it could`)
+  return found[1].split('\n').map(unescape)
 }
-process.exit(failed > 0 ? 1 : 0)
 
 function unescape(text) {
   return text

@@ -39,6 +39,9 @@ export function buildForm({ node, place, offers = [], onChoose, onApply, onDrop,
 
   const fields = element('div', step ? 'rows forStep' : 'rows')
   const made = {}
+  /* The fields that grow to what they hold. Only a textarea does: an input is one line
+     and has a height, and measuring it to its own contents moved it off that height. */
+  const grows = []
 
   const write = (key, name, value, wide = false) => {
     const one = element('label')
@@ -50,6 +53,7 @@ export function buildForm({ node, place, offers = [], onChoose, onApply, onDrop,
     if (wide) {
       field.rows = 1
       field.oninput = () => fit(field)
+      grows.push(field)
     }
     one.append(said, field)
     fields.append(one)
@@ -151,7 +155,7 @@ export function buildForm({ node, place, offers = [], onChoose, onApply, onDrop,
 
   /** The caret starts in the first field, which is the thing you came here to change. */
   box.settle = () => {
-    for (const one of Object.values(made).flat()) fit(one)
+    for (const one of grows) fit(one)
     const first = step ? made.verb : made.amount
     first?.focus?.()
     first?.select?.()
