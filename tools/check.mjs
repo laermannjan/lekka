@@ -381,11 +381,13 @@ const after = (wait) => new Promise((go) => setTimeout(go, wait))
 addEventListener('load', async () => {
   await after(700)
 
-  // Opened at a link with a grant token in the path, the way every older link is written.
-  check('a token in the path is read, and rewritten into the fragment',
-    location.pathname.startsWith('/r/') && !location.pathname.slice(3).includes('/') && location.hash.length > 1,
-    location.pathname + ' + ' + location.hash)
-  check('and the foot does not read it out', !document.getElementById('where').textContent.includes(location.hash.slice(1)),
+  // Opened at an older link, which carried a secret after the id. Nothing is addressed
+  // to a string any more, so the address is read for its id and rewritten to just that.
+  check('an older link is read for its id and rewritten to it',
+    location.pathname.startsWith('/r/') && !location.pathname.slice(3).includes('/') && location.hash === '',
+    location.pathname + ' + ' + (location.hash || '(no fragment)'))
+  check('and the foot says the same thing the address does',
+    document.getElementById('where').textContent === location.pathname,
     document.getElementById('where').textContent)
   check('and the recipe is open for writing', Boolean(named('Edit')))
 
@@ -443,7 +445,7 @@ try {
     headers: { 'content-type': 'text/plain' },
     body: CARD,
   }).then((one) => one.json())
-  lines.push(...await said(chrome, port, `/r/${made.id}/atokenfromalink`, '1280,900'))
+  lines.push(...await said(chrome, port, `/r/${made.id}/somethingolder`, '1280,900'))
 
   for (const line of lines) console.log(line)
   failed = lines.filter((line) => line.startsWith('FAIL')).length

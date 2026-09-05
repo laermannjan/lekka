@@ -56,7 +56,7 @@ async function start() {
     return showSignIn(instance.empty ? 'first' : null)
   }
 
-  if (here.kind === 'card') return showCard(here.id, here.token)
+  if (here.kind === 'card') return showCard(here.id)
 
   // The foot says `/new` while a fresh recipe is being written, so the address has to
   // mean it: without this, opening it lands on the overview under a foot saying `/new`.
@@ -262,11 +262,11 @@ function recipesAction() {
   return button
 }
 
-async function showCard(id, token, state = {}) {
+async function showCard(id, state = {}) {
   const { scale = 1, at = 0, fit = false } = state
   const here = { scale, at, fit }
 
-  const text = await load(id, token)
+  const text = await load(id)
   if (text === null) return fail('No recipe under this link.')
 
   let card
@@ -277,7 +277,7 @@ async function showCard(id, token, state = {}) {
     return fail(`Line ${error.line}: ${error.message}`)
   }
 
-  const fitting = fitter(id, token, here)
+  const fitting = fitter(id, here)
 
   /*
    * No row of controls above the table, and none below it but the acts.
@@ -293,17 +293,17 @@ async function showCard(id, token, state = {}) {
    * nearer still to what it changes - but that cell is held at the left edge while the
    * card rolls, so the switch was dragged out over the middle of the table.
    */
-  page(`/r/${id}`, scales(id, token, here), fitting.button)
+  page(`/r/${id}`, scales(id, here), fitting.button)
   show(
     section(card.title, card.yields),
-    body(card, id, token, here, fitting.tell),
+    body(card, id, here, fitting.tell),
     // What changes the recipe itself sits past it, out of the way of reading.
-    after(composer(id, token, card), sharer(id, card)),
+    after(composer(id, card), sharer(id, card)),
     specification(card),
   )
 }
 
-function body(card, id, token, state, onFits) {
+function body(card, id, state, onFits) {
   // Reading is a scroll, not a redraw: the place is only kept so that changing the scale
   // comes back to the step the cook was standing on.
   return renderReading(card, state.scale, state.at, {
@@ -325,9 +325,9 @@ function body(card, id, token, state, onFits) {
  * does, and it is not offered at all on a recipe that already fits - there would be
  * nothing for it to do, and a control that does nothing is worse than no control.
  */
-function fitter(id, token, state) {
+function fitter(id, state) {
   const button = element('button', 'quiet', state.fit ? 'Actual size' : 'Fit to screen')
-  button.onclick = () => showCard(id, token, { ...state, fit: !state.fit })
+  button.onclick = () => showCard(id, { ...state, fit: !state.fit })
   button.hidden = true
   return {
     button,
@@ -343,9 +343,9 @@ function fitter(id, token, state) {
  * and it says so by refusing - which the editor reports in place. A button hidden on a
  * guess would be worse: under `GRANT` the answer depends on a row this browser cannot read.
  */
-function composer(id, token, card) {
+function composer(id, card) {
   const button = element('button', 'quiet', 'Edit')
-  button.onclick = () => showEditor(id, token, toDraft(card))
+  button.onclick = () => showEditor(id, toDraft(card))
   return button
 }
 
@@ -378,13 +378,6 @@ function sharer(id, card) {
       me: instance.person?.id ?? null,
       held,
       onPeople: () => api.people().catch(() => null),
-      onLink: async (asked) => {
-        try {
-          return await api.share(id, { ...asked, name: null })
-        } catch (error) {
-          return { error: `No link was made. ${reason(error)}` }
-        }
-      },
       onList: async () => {
         try {
           return await api.grantsOn(id)
@@ -414,7 +407,7 @@ function sharer(id, card) {
  * and not before: `Create` opens an empty editor with the name waiting, and a recipe
  * nobody finished writing never reaches the server at all.
  */
-function showEditor(id, token, draft) {
+function showEditor(id, draft) {
   /*
    * The masthead is cleared, because what was on it belongs to the recipe being read.
    * `show` replaces the screen and not the masthead, so the scale and `Fit to screen`
@@ -427,11 +420,11 @@ function showEditor(id, token, draft) {
   show(
     buildEditor({
       draft,
-      onClose: () => (id ? showCard(id, token) : showOverview()),
+      onClose: () => (id ? showCard(id) : showOverview()),
       onSave: async (text) => {
         if (id) {
           try {
-            await api.writeCard(id, text, token)
+            await api.writeCard(id, text)
           } catch (error) {
             return `Not saved. ${reason(error)}`
           }
@@ -458,8 +451,8 @@ function showEditor(id, token, draft) {
  * successful GET and serves it when the network is gone, and a second copy in local
  * storage was the same bytes in a place nothing else could clear.
  */
-async function load(id, token) {
-  return api.readCard(id, token).catch(() => null)
+async function load(id) {
+  return api.readCard(id).catch(() => null)
 }
 
 async function describe(list) {
@@ -621,12 +614,12 @@ function after(...parts) {
   return kept.length ? element('div', 'bar after', undefined, kept) : null
 }
 
-function scales(id, token, state) {
+function scales(id, state) {
   const group = element('span', 'switch')
   for (const [factor, text] of SCALES) {
     const button = element('button', '', text)
     button.setAttribute('aria-pressed', factor === state.scale)
-    button.onclick = () => showCard(id, token, { ...state, scale: factor })
+    button.onclick = () => showCard(id, { ...state, scale: factor })
     group.append(button)
   }
   return group

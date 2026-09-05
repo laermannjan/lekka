@@ -198,35 +198,6 @@ test('GRANT gives each recipe an owner, and each person a library of what they h
   )
 })
 
-test('a link grant opens one recipe for whoever holds the token', async (t) => {
-  const { call, grants, close } = await serve('GRANT')
-  t.after(close)
-
-  await signUp(call, 'Jan')
-  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
-  const link = grants.give(id, { scope: 'read' })
-
-  assert.equal((await call(`/api/cards/${id}`, { as: null })).status, 404, 'without it, nothing')
-  assert.equal(
-    (await call(`/api/cards/${id}`, { as: null, token: link.token })).status,
-    200,
-    'with it, the recipe - and no sign-in needed',
-  )
-  assert.equal(
-    (await call(`/api/cards/${id}`, { as: null, token: link.token, method: 'PUT', body: OTHER }))
-      .status,
-    404,
-    'a read link does not write',
-  )
-
-  grants.revoke(link.id)
-  assert.equal(
-    (await call(`/api/cards/${id}`, { as: null, token: link.token })).status,
-    404,
-    'and it can be taken back, which a key never could',
-  )
-})
-
 test('a person sees their own browsers, revokes one, and cannot touch another’s', async (t) => {
   const { call, cookie, close } = await serve('LOGIN')
   t.after(close)
@@ -331,8 +302,8 @@ test('only the owner may see who holds a recipe, or hand it to anybody', async (
 
   const mine = await (await call(`/api/cards/${id}/grants`, { as: his })).json()
   assert.deepEqual(
-    mine.map((row) => [row.kind, row.scope, row.who]),
-    [['person', 'owner', 'Jan']],
+    mine.map((row) => [row.scope, row.who]),
+    [['owner', 'Jan']],
     'the owner grant is a row like any other, and says whose it is',
   )
 })
@@ -361,8 +332,7 @@ test('a recipe is handed to a person by name, and taken back by one row', async 
   })
   assert.equal(given.status, 201)
   const grant = await given.json()
-  assert.equal(grant.kind, 'person')
-  assert.equal(grant.token, undefined, 'a person needs no token; she signs in as herself')
+  assert.equal(grant.token, undefined, 'nothing is addressed to a string any more')
 
   assert.equal(
     (await call(`/api/cards/${id}`, { as: hers, method: 'PUT', body: OTHER })).status,
@@ -379,41 +349,19 @@ test('a recipe is handed to a person by name, and taken back by one row', async 
   assert.equal((await call(`/api/cards/${id}`, { as: hers })).status, 404, 'and she is out again')
 })
 
-test('a link grant comes back once as a token, and the owner grant stays', async (t) => {
+test('a grant needs somebody, and reads or edits', async (t) => {
   const { call, close } = await serve('GRANT')
   t.after(close)
 
   await signUp(call, 'Jan')
   const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
 
-  const made = await call(`/api/cards/${id}/grants`, {
-    method: 'POST',
-    body: JSON.stringify({ scope: 'read', days: 7 }),
-  })
-  assert.equal(made.status, 201)
-  const link = await made.json()
-  assert.equal(link.kind, 'link')
-  assert.equal(link.token.length, 22)
-  assert.ok(link.expires > new Date().toISOString())
-
-  assert.equal((await call(`/api/cards/${id}`, { as: null, token: link.token })).status, 200)
-
-  const listed = await (await call(`/api/cards/${id}/grants`)).json()
-  assert.equal(listed.length, 2)
-  for (const row of listed) assert.equal(row.token, undefined, 'never shown a second time')
-
-  const owner = listed.find((row) => row.scope === 'owner')
-  assert.equal((await call(`/api/grants/${owner.id}`, { method: 'DELETE' })).status, 409)
-})
-
-test('a grant reads or edits; owning is not something you hand over', async (t) => {
-  const { call, close } = await serve('GRANT')
-  t.after(close)
-
-  await signUp(call, 'Jan')
-  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
-
-  for (const body of [{ scope: 'owner' }, { scope: 'anything' }, { scope: 'read', days: 0 }])
+  for (const body of [
+    { name: 'Jan', scope: 'owner' },
+    { name: 'Jan', scope: 'anything' },
+    { name: 'Jan', scope: 'read', days: 0 },
+    { scope: 'read' },
+  ])
     assert.equal(
       (await call(`/api/cards/${id}/grants`, { method: 'POST', body: JSON.stringify(body) }))
         .status,
@@ -704,94 +652,3 @@ test('adopting never takes a recipe that somebody else owns', async (t) => {
   assert.equal(grants.may(hersOwn.id, { person: rita.id }, 'owner'), true, 'still hers')
 })
 
-test('a link opened by somebody signed in becomes theirs, and shows in their library', async (t) => {
-  const { call, grants, people, close } = await serve('GRANT')
-  t.after(close)
-
-  await signUp(call, 'Jan')
-  const his = cookieOf(await signIn(call))
-  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD, as: his })).json()
-  const link = await (
-    await call(`/api/cards/${id}/grants`, {
-      as: his,
-      method: 'POST',
-      body: JSON.stringify({ scope: 'read' }),
-    })
-  ).json()
-
-  people.add('Test', 'a different passphrase')
-  const theirs = cookieOf(await signIn(call, 'Test', 'a different passphrase'))
-  const test = people.named('Test')
-
-  assert.deepEqual(await (await call('/api/cards', { as: theirs })).json(), [], 'nothing yet')
-
-  // Opening the link while signed in.
-  assert.equal((await call(`/api/cards/${id}`, { as: theirs, token: link.token })).status, 200)
-
-  assert.deepEqual(
-    (await (await call('/api/cards', { as: theirs })).json()).map((row) => [row.id, row.scope]),
-    [[id, 'read']],
-    'and now it is in their library, in their own name',
-  )
-  assert.equal(
-    (await call(`/api/cards/${id}`, { as: theirs })).status,
-    200,
-    'reachable without the link from then on',
-  )
-  assert.deepEqual(
-    (await (await call(`/api/cards/${id}/grants`, { as: his })).json())
-      .filter((row) => row.who === 'Test')
-      .map((row) => row.scope),
-    ['read'],
-    'and the owner can see who took it up, and take it back from them alone',
-  )
-  void test
-  void grants
-})
-
-test('taking up a link never costs somebody what they already hold', async (t) => {
-  const { call, grants, people, close } = await serve('GRANT')
-  t.after(close)
-
-  await signUp(call, 'Jan')
-  const his = cookieOf(await signIn(call))
-  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD, as: his })).json()
-  const jan = people.named('Jan')
-  const link = await (
-    await call(`/api/cards/${id}/grants`, {
-      as: his,
-      method: 'POST',
-      body: JSON.stringify({ scope: 'read' }),
-    })
-  ).json()
-
-  // The owner opening his own read link must not demote himself to a reader.
-  assert.equal((await call(`/api/cards/${id}`, { as: his, token: link.token })).status, 200)
-  assert.equal(grants.may(id, { person: jan.id }, 'owner'), true, 'still his')
-
-  // Nor should a reader taking up a second, lesser link lose the edit they were given.
-  people.add('Rita', 'a different passphrase')
-  const rita = people.named('Rita')
-  grants.give(id, { person: rita.id, scope: 'edit', by: jan.id })
-  const hers = cookieOf(await signIn(call, 'Rita', 'a different passphrase'))
-  assert.equal((await call(`/api/cards/${id}`, { as: hers, token: link.token })).status, 200)
-  assert.equal(grants.may(id, { person: rita.id }, 'edit'), true, 'still hers to change')
-})
-
-test('a link taken up by nobody in particular stays a link', async (t) => {
-  const { call, close } = await serve('GRANT')
-  t.after(close)
-
-  await signUp(call, 'Jan')
-  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
-  const link = await (
-    await call(`/api/cards/${id}/grants`, {
-      method: 'POST',
-      body: JSON.stringify({ scope: 'read' }),
-    })
-  ).json()
-
-  assert.equal((await call(`/api/cards/${id}`, { as: null, token: link.token })).status, 200)
-  const listed = await (await call(`/api/cards/${id}/grants`)).json()
-  assert.equal(listed.length, 2, 'the owner and the link, and nobody invented in between')
-})

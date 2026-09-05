@@ -177,22 +177,17 @@ recipe nobody owns is one nobody can reach. Whoever keeps the instance takes the
 every start rather than only the first, so turning the door off for an afternoon and
 back on again does not strand what was written in between. The log says how many.
 
-Under `GRANT` a grant is one row saying *this subject may do this, until taken
-back*. The subject is a person, who signs in as themselves, or a link, which is
-whoever holds the token. `Share` on a recipe you own lists everyone who holds it,
-and offers everybody else on the instance with what they already hold beside their
-name - so choosing is done with the answer in front of you. Choosing somebody who
-already holds something changes what they hold rather than adding a second row.
-`Make a link instead` mints one for somebody with no account here. The token is
-*shown* once, with a QR code, because only its fingerprint is stored - it is not
-*spent* once: it opens for as many people as hold it, until it expires or you revoke
-it. That is the opposite of an invite link, which makes one account and stops. If the person who opens
-it turns out to have an account, they get their own grant at the same scope - so it
-lands in their library, the panel shows who actually took it up, and you can take it
-back from one of them without killing the link for everybody. A link token rides in the fragment of `/r/<id>#<token>`,
-which is the one part of an address a browser sends nowhere: not in the request
-line, not in a `Referer`, so not into an access log, a proxy or a CDN. The older
-shape, with the token as a path segment, is still read and rewritten on arrival.
+Under `GRANT` a grant is one row saying *this person may do this, until taken back*.
+`Share` on a recipe you own lists everyone who holds it, and offers everybody else on
+the instance with what they already hold beside their name - so choosing is done with
+the answer in front of you. Choosing somebody who already holds something changes what
+they hold rather than adding a second row, and taking it back from one of them takes it
+back from one of them.
+
+**Sharing is by name, and only inside the instance.** There is no way to hand a recipe
+to somebody with no account here. A recipe's address is `/r/<id>` and the id is a name
+rather than a secret: it opens for whoever a grant names, and answers 404 to everybody
+else, signed in or not.
 
 ## The data directory
 

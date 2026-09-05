@@ -63,16 +63,12 @@ export async function createCard(text) {
   return send('POST', '/api/cards', { body: text })
 }
 
-/**
- * A token is only ever the grant on a link somebody sent you. Your own recipes need
- * none: the server already knows they are yours.
- */
-export async function readCard(id, token) {
-  return send('GET', `/api/cards/${id}`, { token, text: true })
+export async function readCard(id) {
+  return send('GET', `/api/cards/${id}`, { text: true })
 }
 
-export async function writeCard(id, text, token) {
-  return send('PUT', `/api/cards/${id}`, { token, body: text })
+export async function writeCard(id, text) {
+  return send('PUT', `/api/cards/${id}`, { body: text })
 }
 
 /** Who holds this recipe. Only its owner may ask, and a 404 is how the server says so. */
@@ -80,11 +76,8 @@ export async function grantsOn(id) {
   return send('GET', `/api/cards/${id}/grants`)
 }
 
-/**
- * Hand it to somebody. A name makes a grant that person holds; no name mints a link,
- * and the token comes back exactly once.
- */
-export async function share(id, { name = null, scope = 'read', days = null } = {}) {
+/** Hand it to somebody here. A grant always has a name on it. */
+export async function share(id, { name, scope = 'read', days = null } = {}) {
   return send('POST', `/api/cards/${id}/grants`, { body: JSON.stringify({ name, scope, days }) })
 }
 
@@ -92,8 +85,8 @@ export async function revokeGrant(id) {
   return send('DELETE', `/api/grants/${id}`)
 }
 
-export async function deleteCard(id, token) {
-  return send('DELETE', `/api/cards/${id}`, { token })
+export async function deleteCard(id) {
+  return send('DELETE', `/api/cards/${id}`)
 }
 
 async function send(method, path, options) {
@@ -102,12 +95,11 @@ async function send(method, path, options) {
   return options?.text ? response.text() : response.json()
 }
 
-async function call(method, path, { token, body } = {}) {
+async function call(method, path, { body } = {}) {
   const response = await fetch(path, {
     method,
     body,
     headers: {
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
       // A cookie is sent whether or not the page meant to ask, so a write says out loud
       // that it came from here. No cross-site form can set a header, and the preflight
       // this forces is one a stranger's page cannot satisfy.

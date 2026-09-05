@@ -51,23 +51,17 @@ which a partial unique index enforces, and `owner` carries `edit` carries `read`
 One mechanism answers everything, rather than a column for the owner and a table
 for everybody else.
 
-A **link** grant is what a per-card key used to be, and better in the three ways
-that matter: there can be several on one recipe, each is revocable on its own,
-and each can expire. The token is returned once and stored only as a SHA-256, so
-the share panel can never show it again - which is why it is shown at the moment
-it is minted, with a QR code, and not filed away for later.
+A subject is always a person. There was a link subject once - a token standing in for
+whoever held it - and it never worked: the app asks who you are before it asks what you
+came for, so a browser that had not signed in was sent to the sign-in screen rather than
+to the recipe the link was for. Handing a recipe to somebody with no account here is a
+capability this does not have, and `kind` survives on the row only because dropping a
+column needs a migration this project has decided not to have. Every row says `person`.
 
-Shown once is not spent once. A link is a standing permission that happens to be
-addressed to a string rather than to a person, so it opens for as many people, as
-many times, as hold it. The single-use link is the **invite**, which makes one
-account and then stops - a different table, because it is a different thing.
-
-Holding a link is not the same as holding a recipe: the token lives in an address bar,
-so a library cannot be built from it and the panel cannot say who has it. A link opened
-by somebody signed in therefore writes them their own grant at the scope the link
-carried - never a downgrade, so an owner opening their own read link stays the owner.
-It appears in their library, it shows in the panel under their name, and it can be
-taken back from them alone.
+An address is therefore a name and not a secret. `/r/<id>` opens for whoever a grant
+names and answers 404 for everybody else, signed in or not, so there is nothing in it to
+keep out of a log, a `Referer` or a chat. An older link with something after the id is
+read for the id and rewritten to it.
 
 Only an owner may look at who holds a recipe or hand it to anybody. Somebody
 granted `edit` may change the recipe and never who else can see it, and every
@@ -79,22 +73,14 @@ no owner is one nobody could reach again, so the panel offers `Delete` instead.
 A card's `id` is its title as a slug, then 10 random characters. The slug is for
 a human reading a directory listing; the random part is what makes an id
 unguessable. It is lower case, because a case-blind filesystem would otherwise
-merge two ids into one file. Tokens are 22 characters, drawn by rejection
-sampling from an alphabet without look-alikes so no character is more likely than
-another.
+merge two ids into one file. A session token and an invite token are 22 characters,
+drawn by rejection sampling from an alphabet without look-alikes so that no
+character is more likely than another and none of them can be misread aloud.
 
-**A token rides in the fragment** of `/r/<id>#<token>`, which is the one part of
-an address a browser sends nowhere: not in the request line, not in a header, not
-in a `Referer`. A token in the path is a token in the access log of every machine
-between the phone and the disk, and `Referrer-Policy: no-referrer` only stops it
-leaking outward on a click, never inward on the request itself. It is still in
-browser history, and still one paste away from the wrong group chat - this is
-hygiene against infrastructure, not against people.
-
-The id stays in the path, because the server needs it: it names the file, and it
-is what a shared link is about. `app/link.js` is the one place that knows the
-shape. Older links, with the token as a path segment, are read and rewritten on
-arrival.
+`Referrer-Policy: no-referrer` is still sent and still worth sending, but nothing
+in an address is a secret any more: the id names a file and opens for whoever a
+grant names. `app/link.js` is the one place that knows the shape of a link, which
+is now `/r/<id>` and nothing else.
 
 Somebody new arrives through an invite: a link, made by anybody already inside, which
 whoever opens it turns into an account of their own. There is nothing for a second
@@ -125,9 +111,9 @@ Under `LOGIN` and `GRANT` a browser is a session: an opaque token in an `HttpOnl
 cookie, and a row naming the person it belongs to. `Secure` is set only over a
 connection that is one, because the deployment this is written for is a LAN over
 plain HTTP. A cookie is ambient authority, so every write also needs a matching
-`Origin` and an `X-Lekka: 1` header that no cross-site form can set. Every route
-still accepts `Authorization: Bearer`, which is what a link grant presents and
-the only credential that could ever cross to another instance.
+`Origin` and an `X-Lekka: 1` header that no cross-site form can set. `Bearer` is
+still read, because `CREATE_TOKEN` uses it, and because it is the only credential
+shape that could ever cross to another instance - a cookie cannot.
 
 ## Storage
 
@@ -212,9 +198,8 @@ nobody to be.
 app has no build step and a policy that loads nothing from elsewhere, so the
 alternative was a minified blob in `app/` that no one reads. Byte mode, error
 correction M, versions 1 to 10, which is 213 bytes of UTF-8 - longer than that
-is not a link one shares. Nothing draws one at the moment: it went out with the
-collection it used to carry, and comes back when a share panel needs to put a
-link grant on a phone.
+is not a link one shares. It draws the invite link, which is the one address worth
+putting in front of a phone camera.
 
 **Writing at `/new`.** The editor on an empty draft, with the name field waiting.
 Nothing is sent until the first save: a recipe nobody finished writing never

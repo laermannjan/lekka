@@ -1,6 +1,3 @@
-import { linkOut } from './handoff.js'
-import { address } from './link.js'
-
 /**
  * Who holds this recipe, and handing it to somebody else.
  *
@@ -10,13 +7,12 @@ import { address } from './link.js'
  * the link being forwarded and is taken back in one act; naming nobody mints a link,
  * which is whoever holds it until it expires or is revoked.
  *
- * A token is *shown* once, at the moment it is made - the server keeps only its hash, so
- * there is nothing to show later even if the panel wanted to. It is not *spent* once: a
- * link is a standing permission addressed to a string, and opens for as many people as
- * hold it until it expires or is revoked. Revoking is the only way to end one, which is
- * why every link is its own row.
+ * There is no way to hand a recipe to somebody with no account here. That was a link
+ * addressed to a token rather than to a person, and it never worked from a browser that
+ * had not signed in - the app asked who you were before it asked what you had come for,
+ * and sent you to sign in instead. Sharing is by name.
  */
-export function shareSheet({ id, title, me, held: known, onList, onPeople, onGive, onLink, onRevoke }) {
+export function shareSheet({ title, me, held: known, onList, onPeople, onGive, onRevoke }) {
   const box = element('dialog', 'compose')
   const form = element('form', 'body')
   form.method = 'dialog'
@@ -26,8 +22,6 @@ export function shareSheet({ id, title, me, held: known, onList, onPeople, onGiv
   box.setAttribute('aria-labelledby', heading.id)
 
   const held = element('div', 'inputs')
-  const minted = element('div', 'sheetnote')
-  minted.hidden = true
 
   const who = people()
   const scope = choose('They may', [
@@ -67,7 +61,7 @@ export function shareSheet({ id, title, me, held: known, onList, onPeople, onGiv
     const asked = { scope: scope.value(), days: many === '' ? null : Number(many) }
 
     if (chosen.length === 0) {
-      wrong.textContent = 'Choose somebody, or make a link instead.'
+      wrong.textContent = 'Choose somebody to share it with.'
       wrong.hidden = false
       give.disabled = false
       return
@@ -89,30 +83,15 @@ export function shareSheet({ id, title, me, held: known, onList, onPeople, onGiv
     await refresh()
   }
 
-  const link = element('button', 'quiet', 'Make a link instead')
-  link.type = 'button'
-  link.onclick = async () => {
-    const many = days.input.value.trim()
-    const made = await onLink({ scope: scope.value(), days: many === '' ? null : Number(many) })
-    if (made?.error) {
-      wrong.textContent = made.error
-      wrong.hidden = false
-      return
-    }
-    if (made?.token) showToken(minted, id, made.token)
-    await refresh()
-  }
-
   form.append(
     heading,
     element('div', 'hint', 'Everyone who holds this recipe, and what they may do with it.'),
     held,
-    minted,
     who.node,
     scope.node,
     element('div', 'row wide', undefined, [...days.parts]),
     wrong,
-    element('div', 'actions', undefined, [give, link, done]),
+    element('div', 'actions', undefined, [give, done]),
   )
   box.append(form)
   box.onclose = () => box.remove()
@@ -129,7 +108,7 @@ function rows(list, onRevoke, refresh) {
   return list.map((grant) => {
     const line = element('div', 'choice')
     line.append(
-      element('span', 'what', grant.who ?? 'Anyone with the link'),
+      element('span', 'what', grant.who),
       element('span', 'aside', says(grant)),
     )
     // The owner is on the list because it is a grant like any other, but it is the one
@@ -155,25 +134,12 @@ function says(grant) {
   return `${what} · until ${grant.expires.slice(0, 10)}`
 }
 
-/** The one moment the token exists in a form anybody can copy. */
-function showToken(box, id, token) {
-  const url = new URL(address(id, token), location.origin).href
-  box.replaceChildren(
-    linkOut(
-      url,
-      'Copy it now: only a fingerprint is kept, so it cannot be shown again. It keeps ' +
-        'working for anyone holding it until it expires or you revoke it.',
-    ),
-  )
-  box.hidden = false
-}
-
 /**
  * Everybody else here, each with a box and what they already hold beside their name.
  *
- * It was a field you typed a name into, which asked you to remember both who is here
- * and what you had already given them. Neither is a thing to remember when the server
- * knows both.
+ * It was a field you typed a name into, which asked you to remember both who is here and
+ * what you had already given them. Neither is a thing to remember when the server knows
+ * both, and there is nobody to share with who is not on this list.
  */
 function people() {
   const list = element('div', 'inputs')

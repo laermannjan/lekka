@@ -146,7 +146,7 @@ async function route(store, options, request, response) {
   const asCard = CARD.exec(path)
   if (asCard)
     return guessing(options, request, () =>
-      cardRoute(store, options, request, response, asCard[1], key, session),
+      cardRoute(store, options, request, response, asCard[1], session),
     )
 
   if (path.startsWith('/api/')) throw missing()
@@ -357,20 +357,19 @@ async function shareRoute(store, options, request, response, id, session) {
     throw new Refusal(400, 'a grant reads or edits; owning is not given away')
   const expires = days === null ? null : expiry(days)
 
-  /* Named, and it is a person: the grant survives the link being forwarded, and taking
-   * it back is one row. Unnamed, it is a link: whoever holds the token, until revoked. */
-  if (name !== null) {
-    const person = people?.named(String(name))
-    if (!person) throw new Refusal(404, 'nobody here signs in under that name')
-    if (person.id === session.person) throw new Refusal(409, 'you already own this one')
-    return json(
-      response,
-      201,
-      grants.give(id, { person: person.id, scope, by: session.person, expires }),
-    )
-  }
+  /* Always somebody, never a string. A recipe cannot be handed to a person with no
+   * account here, so a grant always has a name on it and can always be taken back from
+   * one of them. */
+  if (name === null) throw new Refusal(400, 'a grant needs somebody to belong to')
+  const person = people?.named(String(name))
+  if (!person) throw new Refusal(404, 'nobody here signs in under that name')
+  if (person.id === session.person) throw new Refusal(409, 'you already own this one')
 
-  return json(response, 201, grants.give(id, { scope, by: session.person, expires }))
+  return json(
+    response,
+    201,
+    grants.give(id, { person: person.id, scope, by: session.person, expires }),
+  )
 }
 
 /** Taking one back. Only the owner of the recipe it sits on, and never the owner grant. */
@@ -396,19 +395,17 @@ function expiry(days) {
   return new Date(Date.now() + many * 24 * 60 * 60 * 1000).toISOString()
 }
 
-async function cardRoute(store, options, request, response, id, token, session) {
+async function cardRoute(store, options, request, response, id, session) {
   const { mode, grants } = options
   const person = session?.person ?? null
 
   if (!store.has(id)) throw missing()
-  const allowed = (need) => may(mode, session, () => grants.may(id, { person, token }, need))
+  const allowed = (need) => may(mode, session, () => grants.may(id, { person }, need))
 
   if (request.method === 'GET') {
     if (!allowed('read')) throw missing()
     const text = await store.read(id)
     if (text === null) throw missing()
-    // Somebody signed in who opened a link now holds the recipe in their own name.
-    if (mode === 'GRANT') grants.take(id, token, person)
     await store.touch(id)
     return send(response, 200, 'text/plain; charset=utf-8', text)
   }

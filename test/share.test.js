@@ -19,9 +19,8 @@ const settle = () => new Promise((done) => setTimeout(done, 0))
 /** The panel, and whatever it last asked the server to do. */
 async function open(list = [], answer = {}, everyone = [{ id: 'rita', name: 'Rita' }]) {
   body.replaceChildren()
-  const asked = { gave: [], linked: [], revoked: [] }
+  const asked = { gave: [], revoked: [] }
   const box = shareSheet({
-    id: 'dinkelquarkbrot-7kmq2rxvbn',
     title: 'Dinkelquarkbrot',
     me: 'jan',
     held: list,
@@ -29,10 +28,6 @@ async function open(list = [], answer = {}, everyone = [{ id: 'rita', name: 'Rit
     onPeople: async () => everyone,
     onGive: async (what) => {
       asked.gave.push(what)
-      return answer
-    },
-    onLink: async (what) => {
-      asked.linked.push(what)
       return answer
     },
     onRevoke: async (id) => asked.revoked.push(id),
@@ -47,13 +42,13 @@ test('the panel says who holds the recipe and what each may do', async () => {
   const { box } = await open([
     { id: 'g1', kind: 'person', scope: 'owner', who: 'Jan' },
     { id: 'g2', kind: 'person', scope: 'edit', who: 'Rita' },
-    { id: 'g3', kind: 'link', scope: 'read', who: null, expires: '2026-12-24T00:00:00.000Z' },
+    { id: 'g3', kind: 'person', scope: 'read', who: 'Anna', expires: '2026-12-24T00:00:00.000Z' },
   ])
 
   const said = text(box)
   assert.match(said, /Jan owns it/)
   assert.match(said, /Rita may read and change it/)
-  assert.match(said, /Anyone with the link may read it · until 2026-12-24/)
+  assert.match(said, /Anna may read it · until 2026-12-24/)
 })
 
 test('the owner is the one row that cannot be taken back', async () => {
@@ -99,7 +94,7 @@ test('choosing people grants each of them, and choosing nobody says so', async (
 
   await form.onsubmit({ preventDefault: () => {} })
   assert.deepEqual(asked.gave, [], 'nothing is granted to nobody')
-  assert.match(text(box), /Choose somebody, or make a link instead/)
+  assert.match(text(box), /Choose somebody to share it with/)
 
   for (const node of boxes(box)) node.checked = true
   days.value = '7'
@@ -110,42 +105,12 @@ test('choosing people grants each of them, and choosing nobody says so', async (
   ])
 })
 
-test('a link is a separate act, and needs nobody chosen', async () => {
-  const { box, asked } = await open([], { kind: 'link', token: 'atokenof22characters22' })
-  const link = one(
-    box,
-    (node) => node.tag === 'button' && node.textContent === 'Make a link instead',
-    'the link button',
-  )
-  assert.equal(link.type, 'button', 'and it does not submit the form by accident')
-
-  tap(link)
-  await settle()
-  assert.deepEqual(asked.linked, [{ scope: 'read', days: null }])
-  assert.match(text(box), /only a fingerprint is kept/)
-})
-
 test('the scope the form offers is read or change, never owning', async () => {
   const { box } = await open()
   const scopes = inputs(box)
     .filter((node) => node.type === 'radio')
     .map((node) => node.value)
   assert.deepEqual(scopes, ['read', 'edit'])
-})
-
-test('a minted token is shown once, with the link it belongs to', async () => {
-  const { box } = await open([], { kind: 'link', token: 'atokenof22characters22' })
-  tap(one(box, (node) => node.tag === 'button' && node.textContent === 'Make a link instead', 'link'))
-  await settle()
-
-  const said = text(box)
-  assert.match(said, /only a fingerprint is kept/)
-  const link = inputs(box).find((node) => node.readOnly)
-  assert.equal(
-    link.value,
-    'https://kitchen.example/r/dinkelquarkbrot-7kmq2rxvbn#atokenof22characters22',
-    'the token rides in the fragment, where no browser sends it',
-  )
 })
 
 test('a refused share is said in the panel, not swallowed', async () => {
@@ -183,6 +148,12 @@ test('the two lists are the ones a modal has, not the ones a screen has', async 
 
   const lists = all(box).filter(byClass('inputs'))
   assert.equal(lists.length, 3, 'who holds it, who could, and what they may do')
+
+  assert.equal(
+    all(box).filter((node) => node.tag === 'button' && /link/i.test(node.textContent ?? '')).length,
+    0,
+    'and nothing offers a link, because there is nobody a link could be addressed to',
+  )
   for (const row of all(box).filter(byClass('choice')))
     assert.ok(
       all(row).some((child) => child.className === 'what'),
@@ -190,13 +161,3 @@ test('the two lists are the ones a modal has, not the ones a screen has', async 
     )
 })
 
-test('a share link is not spent by being used, and says so', async () => {
-  const { box } = await open([], { kind: 'link', token: 'atokenof22characters22' })
-  tap(one(box, (node) => node.tag === 'button' && node.textContent === 'Make a link instead', 'link'))
-  await settle()
-
-  const said = text(box)
-  assert.match(said, /keeps working for anyone holding it/, 'it opens as often as it is opened')
-  assert.match(said, /until it expires or you revoke it/, 'and revoking is the way it ends')
-  assert.doesNotMatch(said, /works once/, 'that is the invite, which is a different link')
-})

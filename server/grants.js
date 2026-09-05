@@ -1,26 +1,21 @@
-import { createHash } from 'node:crypto'
-
 import { newId } from '../app/id.js'
 import { inside } from './db.js'
 
-const TOKEN_LENGTH = 22
 const HOUR = 60 * 60 * 1000
 
 /** What each scope carries. Owning a card is editing it, plus being answerable for it. */
 const CARRIES = { owner: ['owner', 'edit', 'read'], edit: ['edit', 'read'], read: ['read'] }
-const RANK = { read: 1, edit: 2, owner: 3 }
 
 /**
  * Who may do what to which card. One row per permission, so every one of them can be
  * named, dated and taken back on its own - which a single secret per card never could.
  *
- * A subject is a person, who signs in as themselves, or a link, which is whoever holds
- * the token. The first survives the URL being forwarded; the second is the URL.
- *
- * A link is not spent by being used. It is a standing permission that happens to be
- * addressed to a string rather than to somebody, so it opens for as many people, as many
- * times, as hold it - until it expires or is revoked. An *invite* is the single-use one,
- * and lives in `invites.js`; the two are different enough to be different tables.
+ * A subject is always a person, who signs in as themselves - so a grant survives the URL
+ * being forwarded, and taking it back from one of them takes it back from one of them.
+ * There is no way to hand a recipe to somebody with no account here, which is deliberate:
+ * `kind` is kept on the row because one existed once and may again, and because dropping
+ * a column needs a migration this project has decided not to have yet. Every row says
+ * `person`.
  */
 export function openGrants(db) {
   const one = (sql) => db.prepare(sql)
@@ -34,14 +29,13 @@ export function openGrants(db) {
   const forSubject = one(
     'select * from grants where card = ? and kind = ? and subject = ?',
   )
-  /* A panel says who holds what, so a person grant carries their name. A link grant
-   * carries none - the token is the subject, and it is never shown again after minting. */
+  /* A panel says who holds what, and everybody who holds anything has a name. */
   const onCard = one(
-    `select g.id, g.kind, g.scope, g.created, g.expires, g.used, p.name as who
-       from grants g left join people p on g.kind = 'person' and p.id = g.subject
+    `select g.id, g.scope, g.created, g.expires, g.used, p.name as who
+       from grants g join people p on p.id = g.subject
       where g.card = ? order by g.created`,
   )
-  const byId = one('select id, card, kind, scope from grants where id = ?')
+  const byId = one('select id, card, scope from grants where id = ?')
   const forPerson = one(
     `select g.card as id, g.scope, c.updated from grants g join cards c on c.id = g.card
       where g.kind = 'person' and g.subject = ?
@@ -54,69 +48,24 @@ export function openGrants(db) {
   const live = (row, now) => Boolean(row) && (!row.expires || row.expires > now)
 
   return {
-    /** The token is returned once for a link grant and never stored, only its hash. */
-    give(card, { person = null, scope = 'read', by = null, expires = null } = {}) {
+    give(card, { person, scope = 'read', by = null, expires = null }) {
       const now = new Date().toISOString()
       const id = newId()
-      if (person) {
-        add.run(id, card, 'person', person, scope, by, now, expires)
-        return { id, kind: 'person', scope, expires }
-      }
-      const token = newId(TOKEN_LENGTH)
-      add.run(id, card, 'link', hash(token), scope, by, now, expires)
-      return { id, kind: 'link', token, scope, expires }
+      add.run(id, card, 'person', person, scope, by, now, expires)
+      return { id, scope, expires }
     },
 
-    /**
-     * Whether this asker may do this to this card. A person's own grant is tried first,
-     * then whatever token they presented, so a signed-in owner never needs a link.
-     */
-    may(card, { person = null, token = null } = {}, need = 'read') {
+    /** Whether this person may do this to this card. */
+    may(card, { person = null } = {}, need = 'read') {
+      if (!person) return false
       const now = new Date().toISOString()
-      for (const [kind, subject] of [
-        ['person', person],
-        ['link', token ? hash(token) : null],
-      ]) {
-        if (!subject) continue
-        const found = forSubject.get(card, kind, subject)
-        if (live(found, now) && CARRIES[found.scope]?.includes(need)) {
-          // Last-used is worth a write an hour, not a write a request: it is there so a
-          // share panel can say whether a link is still in use, not to count reads.
-          if (!found.used || Date.now() - new Date(found.used).getTime() > HOUR)
-            stamp.run(now, found.id)
-          return true
-        }
-      }
-      return false
-    },
-
-    /**
-     * A link, taken up by somebody who turns out to have an account here.
-     *
-     * Holding a link is not the same as holding a recipe: the token lives in an address
-     * bar, so the library cannot be built from it and the panel cannot say who took it.
-     * Opening one while signed in therefore writes the person their own grant, at the
-     * scope the link carried. It appears in their library, it shows in the panel under
-     * their name, and it can be taken back from them alone.
-     *
-     * Never a downgrade: somebody who already holds more keeps what they have, so the
-     * owner opening their own link does not demote themselves to a reader.
-     */
-    take(card, token, person) {
-      if (!token || !person) return null
-      const now = new Date().toISOString()
-      const link = forSubject.get(card, 'link', hash(token))
-      if (!live(link, now)) return null
-
-      const held = forSubject.get(card, 'person', person)
-      if (live(held, now) && RANK[held.scope] >= RANK[link.scope]) return null
-
-      return this.give(card, {
-        person,
-        scope: link.scope,
-        by: link.issued_by,
-        expires: link.expires,
-      })
+      const found = forSubject.get(card, 'person', person)
+      if (!live(found, now) || !CARRIES[found.scope]?.includes(need)) return false
+      // Last-used is worth a write an hour, not a write a request: it is there so a
+      // panel can say whether a grant is still in use, not to count reads.
+      if (!found.used || Date.now() - new Date(found.used).getTime() > HOUR)
+        stamp.run(now, found.id)
+      return true
     },
 
     /** Every grant on a card, for the panel that says who holds what. */
@@ -155,8 +104,4 @@ export function openGrants(db) {
       return drop.run(id).changes > 0
     },
   }
-}
-
-function hash(token) {
-  return createHash('sha256').update(token).digest('hex')
 }
