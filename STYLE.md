@@ -230,16 +230,21 @@ itself never moves, so the page keeps its edges however long the recipe is.
   first" without a second size or a heavier weight. It sits under the masthead
   and above the heading, because it is about the page, not about the recipe.
 
-**What the card says about itself** is under the table: read, its notes and
-nothing else, one to a line. A note is a sentence and gets the width of the sheet
-rather than half of it - two to a line on a wide screen was a thousand-pixel line
-of text beside another one just like it. Written, the rows run two to a line:
-there are eight or ten of them and they are short. It carried a block of sums too - how long the recipe takes, what it
-weighs, how many rows and steps it has - and they were true and nobody wanted
-them. A cook reads the table; a count of the rows in it describes the drawing
-rather than the food. Written, every one of them is back, because that is the
-only place the yield, the notes and the recipe's own preparations can be typed,
-and the sums are where the arithmetic is checked while it is being written.
+**What the card says about itself** is under the table: the things a person wrote
+that are not in the table, one to a line. A row here is a sentence, and a
+sentence gets the width of the sheet rather than half of it.
+
+It carried a block of sums too - how long the recipe takes, what it weighs, how
+many rows and steps it has. They were true and nobody wanted them: a cook reads
+the table, and a count of the rows in it describes the drawing rather than the
+food. They are gone from both views, because a recipe should not say different
+things about itself depending on whether you are holding a pen.
+
+What is left differs only in what it can do. Read, the rows are text. Written,
+they are fields, and two more kinds appear - the yield and the recipe's own
+preparations - because that is the only place either can be typed. Read, the
+yield is beside the name and a preparation is drawn over its own column, so
+neither is repeated below.
 
 **What the recipe makes is beside its name**, which is where the format writes it
 (`# Roggenquarkbrot (1 Kastenbrot)`), and inside the name's own box so the
@@ -251,9 +256,9 @@ heading is one line high whether it is read or written.
 row is where the table grows - `Import` in gold, `Create` in green - on the shade
 colour, the way `+ Ingredient` sits at the foot of the editor's table.
 
-**Specification.** A label and value grid, two pairs to a line. Rows a person
-wrote are fields while the recipe is being written; rows worked out from it stay
-text, because there is nothing to type into a sum.
+**Notes.** A label and value grid, one pair to a line, holding what a person
+wrote that is not in the table. Read, the rows are text; written, they are
+fields. There are no sums in it.
 
 **Sharing dialog.** A small box in the middle of a dimmed page, framed like
 everything else: 1 px ink, at most 320 px, no radius. Its heading sits on the

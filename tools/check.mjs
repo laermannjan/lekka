@@ -103,6 +103,8 @@ const specRow = (name) => {
   const at = kids.findIndex((node) => node.classList.contains('label') && node.textContent === name)
   return at === -1 ? null : kids[at + 1].textContent
 }
+// What the first row of the table says, which is what a write has to reach.
+const firstAmount = () => rows()[0].querySelector('.amount')?.textContent
 
 /*
  * The measurement this whole arrangement exists for: what the table looks like before a
@@ -129,11 +131,11 @@ check('the caret is in the first field', document.activeElement === amount,
 // Typing moves nothing. \`Apply\` is the only thing that writes.
 amount.value = '300'
 amount.dispatchEvent(new Event('change'))
-check('typing writes nothing on its own', specRow('Weight') === '280 g', String(specRow('Weight')))
+check('typing writes nothing on its own', firstAmount() === '250', String(firstAmount()))
 check('and moves no column', tracks() === before.columns)
 
 button('Apply').click()
-check('Apply writes it', specRow('Weight') === '330 g', String(specRow('Weight')))
+check('Apply writes it', firstAmount() === '300', String(firstAmount()))
 check('and closes the form', form() === null)
 check('and the table still has the columns it had', tracks() === before.columns)
 

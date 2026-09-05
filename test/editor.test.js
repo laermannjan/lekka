@@ -326,7 +326,6 @@ test('a row is one line of the card, and the form writes all four of its fields'
   const after = openRow(screen, 'Mehl')
   assert.equal(after.amount.value, '300')
   assert.equal(after.aside.value, 'Type 550')
-  assert.equal(said(screen, 'Weight'), '300 g')
 })
 
 test('nothing in the table is a field, so nothing in it can change shape', () => {
@@ -502,13 +501,18 @@ test("a step's preparation is drawn over its column, not inside its cell", () =>
   assert.deepEqual(openStep(screen, 'backen').before.map((one) => one.value), ['Ofen vorheizen (240 °C)', ''])
 })
 
-test('a recipe with nothing in it yet is not a recipe with 0 ingredients', () => {
-  const { screen } = open('# Neu\n')
-  assert.equal(said(screen, 'Ingredients'), null)
-  assert.equal(said(screen, 'Steps'), null)
+test('the card says only what a person wrote about it, never a sum', () => {
+  const { screen } = open(PANCAKES)
 
-  enter(screen, { name: 'Teig' })
-  assert.equal(said(screen, 'Ingredients'), '1')
+  // How long it takes, what it weighs, how many rows it has - all true, none of it
+  // wanted. A cook reads the table; a count of its rows is a fact about the drawing.
+  for (const sum of ['Time', 'Weight', 'Liquid', 'Ingredients', 'Steps'])
+    assert.equal(said(screen, sum), null, sum)
+
+  // What is left is the yield, the notes and the recipe's own preparations, which is
+  // everything that can only be typed here.
+  assert.notEqual(said(screen, 'Yield'), null)
+  assert.notEqual(said(screen, 'Note'), null)
 })
 
 test('a name is trimmed as it is written, so Save is not refused over a space', () => {

@@ -1,8 +1,6 @@
-import { duration, facts, mass, volume } from './facts.js'
-
 /**
  * The furniture every screen is built out of: a heading with a dashed rule under it, and
- * the block of facts that closes a recipe.
+ * the block of notes that closes a recipe.
  *
  * It lives here rather than in `main.js` because the editor draws its own screen. The
  * editor owns its repaint - everything else in the app rebuilds from the link, which
@@ -48,38 +46,28 @@ export function nameSection(title, onRename) {
 }
 
 /**
- * What the card says about itself.
+ * What the card says about itself: the things a person wrote that are not in the table.
  *
- * Read, that is its notes and nothing else. It held a block of sums as well - how long
- * the recipe takes, what it weighs, how many rows and steps it has - and they were
- * true, and nobody needed them. A cook reads the table; a count of the rows in it is a
- * fact about the drawing rather than about the food.
+ * It held a block of sums as well - how long the recipe takes, what it weighs, how many
+ * rows and steps it has - and they were true, and nobody needed them. A cook reads the
+ * table; a count of the rows in it is a fact about the drawing rather than about the
+ * food. They are gone from both views, because a recipe should not say different things
+ * about itself depending on whether you are holding a pen.
  *
- * Written, every one of them is a field, because this is the only place the yield, the
- * notes and the recipe's own preparations can be typed. The sums come back with them:
- * while a recipe is being written they are the one place the arithmetic is checked.
+ * What is left differs only in what it can do. Read, the rows are text. Written, they
+ * are fields, and two more kinds appear - the yield and the recipe's own preparations -
+ * because this is the only place either can be typed. Read, the yield is beside the
+ * name and a preparation is drawn over its column, so neither is repeated here.
  */
 export function specification(card, edit = null) {
-  const found = facts(card)
   // Being written, each list offers one more line than it has, so a note or a
   // preparation can be added by typing into the empty one.
   const notes = edit ? [...card.notes, ''] : card.notes
   const preparations = (card.preparations ?? []).map(written)
   const preps = edit ? [...preparations, ''] : preparations
 
-  const sums = edit
-    ? [
-        ...pair('Yield', card.yields ?? '', (text) => edit.onYields(text)),
-        ...pair('Time', duration(found.minutes)),
-        ...pair('Weight', mass(found.grams)),
-        ...pair('Liquid', volume(found.millilitres)),
-        ...pair('Ingredients', count(found.ingredients)),
-        ...pair('Steps', count(found.steps)),
-      ]
-    : []
-
   const rows = [
-    ...sums,
+    ...(edit ? pair('Yield', card.yields ?? '', (text) => edit.onYields(text)) : []),
     ...notes.flatMap((note, index) =>
       pair(
         notes.length > 1 ? `Note ${index + 1}` : 'Note',
@@ -100,22 +88,11 @@ export function specification(card, edit = null) {
 
   if (rows.length === 0) return null
 
-  /*
-   * Written, the grid runs two pairs to a line: there are eight or ten of them and they
-   * are short. Read, there are only notes, and a note is a sentence - so they go one to
-   * a line, where a sentence belongs, and none of them has to share a line with another.
-   */
-  if (edit && rows.length % 2)
-    rows.push({ label: element('span', 'label'), value: element('span', 'value') })
-
+  // One to a line. Every row here is a sentence a person wrote, and a sentence gets the
+  // width of the sheet rather than half of it.
   return element('div', '', undefined, [
-    section(edit ? 'Specification' : 'Notes'),
-    element(
-      'div',
-      edit ? 'spec' : 'spec listed',
-      undefined,
-      rows.flatMap(({ label, value }) => [label, value]),
-    ),
+    section('Notes'),
+    element('div', 'spec', undefined, rows.flatMap(({ label, value }) => [label, value])),
   ])
 }
 
@@ -137,11 +114,6 @@ function pair(name, text, onChange = null) {
     value.textContent = text
   }
   return [{ label, value }]
-}
-
-/** A count, or nothing at all: a recipe with no steps yet is not a recipe with 0 steps. */
-function count(number) {
-  return number ? String(number) : ''
 }
 
 /** A preparation as one line, the way the format writes it. */

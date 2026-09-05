@@ -1551,7 +1551,7 @@ textarea:focus {
   border-left: 3px solid var(--faint);
   box-shadow: var(--cast);
   display: grid;
-  grid-template-columns: max-content minmax(60px, 1fr) max-content minmax(60px, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
 }
 
 .spec > * {
@@ -1578,28 +1578,11 @@ textarea:focus {
   padding: 3px 6px 1px;
 }
 
-.spec > *:nth-child(4n) {
+.spec > *:nth-child(2n) {
   border-right: 0;
 }
 
-.spec > *:not(:nth-child(4n)) {
-  border-right: 1px solid var(--rule);
-}
-
-/*
- * One to a line. A note is a sentence, and a sentence gets the width of the sheet rather
- * than half of it - which on a wide screen was a line of text a thousand pixels long
- * beside another one just like it.
- */
-.spec.listed {
-  grid-template-columns: max-content minmax(0, 1fr);
-}
-
-.spec.listed > *:nth-child(2n) {
-  border-right: 0;
-}
-
-.spec.listed > *:not(:nth-child(2n)) {
+.spec > *:not(:nth-child(2n)) {
   border-right: 1px solid var(--rule);
 }
 
