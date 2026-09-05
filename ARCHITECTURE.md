@@ -102,10 +102,12 @@ the README spells out. Removing somebody takes their sessions, credentials and i
 with the foreign keys; their grants take two paths, since what they were *lent* goes
 with them and what they *owned* is handed to whoever removed them.
 
-That same person takes every recipe nobody owns when they arrive. Under `NONE` there
-is no session, so a recipe is made with no owner grant - and under `GRANT` a recipe
-nobody owns is one nobody can reach. Adopting them once, at the moment the instance
-gains its first person, is the only point where the answer is not a guess.
+That same person takes every recipe nobody owns. Under `NONE` there is no session, so
+a recipe is made with no owner grant - and under `GRANT` a recipe nobody owns is one
+nobody can reach. It happens at every boot rather than only at the first, because the
+door can be turned off for an afternoon and back on again, and what was written in
+between would otherwise be stranded. With no orphans it does nothing, which is most
+boots; when it does something it says so in the log.
 
 Under `LOGIN` and `GRANT` a browser is a session: an opaque token in an `HttpOnly`
 cookie, and a row naming the person it belongs to. `Secure` is set only over a

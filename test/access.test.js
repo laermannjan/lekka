@@ -659,3 +659,47 @@ test('there is one operator, and the database is what says so', async (t) => {
   )
   assert.equal(people.admin(rita.id), false)
 })
+
+test('the operator takes whatever has no owner, however late it appeared', async (t) => {
+  const { call, close, store, grants, people } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const jan = people.operator()
+  assert.equal(jan.name, 'Jan')
+
+  const mine = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+
+  // Written while the door was off, after Jan already existed: the first-person adoption
+  // has long since run, so only a boot-time sweep can reach these.
+  const orphans = []
+  for (const [body, name] of [[CARD, 'One'], [OTHER, 'Two']])
+    orphans.push((await store.create(body, name)).id)
+  for (const id of orphans) assert.deepEqual(grants.on(id), [], 'nobody owns it yet')
+
+  assert.equal(grants.adopt(jan.id), 2, 'and only the two that had nobody')
+  for (const id of orphans) assert.equal(grants.may(id, { person: jan.id }, 'owner'), true)
+
+  assert.equal(grants.adopt(jan.id), 0, 'running again takes nothing, because nothing is left')
+  assert.equal(grants.on(mine.id).length, 1, 'and what was already owned is untouched')
+})
+
+test('adopting never takes a recipe that somebody else owns', async (t) => {
+  const { call, close, grants, people } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const invite = await (await call('/api/invites', { method: 'POST', body: '{}' })).json()
+  const hers = cookieOf(
+    await call(`/api/invites/${invite.token}`, {
+      as: null,
+      method: 'POST',
+      body: JSON.stringify({ name: 'Rita', password: 'a different passphrase' }),
+    }),
+  )
+  const hersOwn = await (await call('/api/cards', { method: 'POST', body: CARD, as: hers })).json()
+  const rita = people.named('Rita')
+
+  assert.equal(grants.adopt(people.operator().id), 0)
+  assert.equal(grants.may(hersOwn.id, { person: rita.id }, 'owner'), true, 'still hers')
+})

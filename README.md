@@ -170,8 +170,10 @@ list of browsers you are signed in on:
 There is nothing for adding a second browser of your own, because signing in is that
 already.
 
-Recipes made while `ACCESS_CONTROL` was `NONE` belong to nobody. The first person to
-arrive takes them, which is the one moment the answer is obvious.
+Recipes made while `ACCESS_CONTROL` was `NONE` belong to nobody, and under `GRANT` a
+recipe nobody owns is one nobody can reach. Whoever keeps the instance takes them, on
+every start rather than only the first, so turning the door off for an afternoon and
+back on again does not strand what was written in between. The log says how many.
 
 Under `GRANT` a grant is one row saying *this subject may do this, until taken
 back*. The subject is a person, who signs in as themselves, or a link, which is

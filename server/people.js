@@ -118,6 +118,11 @@ export function openPeople(db) {
       return find.get(id)?.admin === 1
     },
 
+    /** The one who keeps it, or nobody yet. There is at most one; the index says so. */
+    operator() {
+      return one('select id, name, admin, created from people where admin = 1').get() ?? null
+    },
+
     /** Null for a wrong password and null for a name nobody has, told apart nowhere. */
     verify(name, password) {
       const found = byHandle.get('password', handle(name))

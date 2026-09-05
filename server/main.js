@@ -31,6 +31,17 @@ const mode = readMode(process.env.ACCESS_CONTROL)
 const people = guarded(mode) ? openPeople(db) : null
 const invites = guarded(mode) ? openInvites(db) : null
 
+/* A recipe made while `ACCESS_CONTROL` was `NONE` has no owner, because there was
+ * nobody to own it - and under `GRANT` a recipe nobody owns is one nobody can reach.
+ * Whoever keeps the instance takes them, at every boot rather than only at the first,
+ * so turning the door off for an afternoon and back on again does not strand what was
+ * written in between. With no orphans it does nothing, which is most boots. */
+const operator = people?.operator()
+if (operator) {
+  const taken = grants.adopt(operator.id)
+  if (taken > 0) console.log(`${taken} recipes had no owner and are now ${operator.name}'s.`)
+}
+
 /* An instance with a door and nobody behind it needs a first person, and reaching the
  * port first must not be what decides who that is. The operator reads this out of the
  * logs; it lives only in this process, so a restart issues a new one. */
