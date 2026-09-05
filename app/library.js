@@ -29,6 +29,7 @@ export function known() {
 
 export function forget(id) {
   save(KNOWN, load(KNOWN, '[]').filter((other) => other.id !== id))
+  localStorage.removeItem(ROWS + id)
   if (collection()?.id === id) localStorage.removeItem(CURRENT)
 }
 
