@@ -196,7 +196,7 @@ const store = await openStore(data).open()
 const server = createServer(handler(store, { app, createToken: null, maxBytes: 65536 }))
 
 try {
-  // Served as a file rather than through `page()`, so the head it stamps is put in by hand.
+  // Served as a file, not through `page()`, so its head is put in by hand.
   await writeFile(
     page,
     index.replace('/main.js', '/_shot.js').replace('%HEAD%', '<title>lekka</title>'),

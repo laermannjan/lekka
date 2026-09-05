@@ -17,14 +17,8 @@ export function useCollection(entry) {
 }
 
 /**
- * Every collection this device has opened, the one in use first.
- *
- * The list has been kept since the beginning and was never shown. It is what makes a
- * second collection possible without anything on the server changing: a card belongs to
- * no collection, so being in two lists is not a special case, it is the ordinary one.
- *
- * The one in use is folded in rather than assumed to be there, because a device that
- * adopted a collection before this list existed holds a `CURRENT` and no `KNOWN`.
+ * Every collection this device has opened, the one in use first - folded in rather than
+ * assumed present, since a device from before this list holds a `CURRENT` and no `KNOWN`.
  */
 export function known() {
   const held = collection()
@@ -38,7 +32,7 @@ export function forget(id) {
   if (collection()?.id === id) localStorage.removeItem(CURRENT)
 }
 
-/** A copy of what was in a collection, per collection, so switching works with no network. */
+/** What was in a collection, per collection, so switching works with no network. */
 export function rows(id) {
   return load(ROWS + id, '[]')
 }

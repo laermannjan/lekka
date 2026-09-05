@@ -1,14 +1,6 @@
 /**
- * How often one source may do a thing, counted in fixed windows.
- *
- * A household network needs none of this and gets none: unset, every limit is off and
- * the server behaves exactly as it did. On a public address two acts are the whole
- * surface - making records, and guessing links - so those two are counted and nothing
- * else is, because every other request is the app doing its ordinary work.
- *
- * A Map in one process, which is honest about the deployment: `alone()` in `http.js` is
- * already a Map, so a second instance behind a load balancer breaks the write chain
- * before it breaks this. Say one process, or say neither.
+ * How often one source may do a thing, counted in fixed windows. Every limit is off
+ * unless set, and a Map in one process, the way `alone()` in `http.js` already is.
  */
 
 /** Distinct sources held in one window. Full is refused, never grown. */
@@ -26,7 +18,7 @@ export function limiter({ every, most }) {
   }
 
   return {
-    /** Whether this source has already spent its budget. Charges nothing. */
+    /** Whether this source has spent its budget. Charges nothing. */
     spent(who) {
       if (!(most > 0)) return false
       roll()
@@ -37,8 +29,7 @@ export function limiter({ every, most }) {
     charge(who) {
       if (!(most > 0)) return true
       roll()
-      // A table with no ceiling is the thing a limiter is there to prevent, so a source
-      // that would be the one too many is refused rather than remembered.
+      // A table with no ceiling is what a limiter is for, so the one too many is refused.
       if (counts.size >= SOURCES && !counts.has(who)) return false
       const count = (counts.get(who) ?? 0) + 1
       counts.set(who, count)
@@ -47,13 +38,8 @@ export function limiter({ every, most }) {
   }
 }
 
-/**
- * Who is asking.
- *
- * The socket, unless a proxy is trusted by configuration. A forwarded header believed
- * without being asked for is a limiter anyone walks around by typing a different name
- * into it, so trusting one is a thing the operator says out loud or not at all.
- */
+/** The socket, unless a proxy is trusted: an unasked-for forwarded header is a limit
+ * anyone walks around by typing a different name into it. */
 export function source(request, trustProxy) {
   if (trustProxy) {
     const forwarded = request.headers['x-forwarded-for']

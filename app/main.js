@@ -63,11 +63,7 @@ async function showOverview() {
   )
 }
 
-/**
- * Said only when there is more than one, because the masthead already stamps the one in
- * use. A single collection is not a choice, and a table offering it is a table asking a
- * question with one answer.
- */
+/** Said only when there is more than one: the masthead already stamps the one in use. */
 function heldCollections(held) {
   const all = known()
   if (all.length < 2) return []

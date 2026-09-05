@@ -72,16 +72,8 @@ function row({ id, key, card }, { onRemove, onDelete }) {
 }
 
 /**
- * The other collections this device holds.
- *
- * `library.js` has kept this list since the beginning and nothing ever drew it, so a
- * device that had opened two collections could only ever see the second. It is the same
- * table as the recipes above it, one column narrower: what it is called, and the one act
- * that is not simply opening it.
- *
- * `Forget` drops the link from this device and nothing else - there is no `Delete` here,
- * because a collection is not a thing anyone shares by accident and dropping the last
- * link to one is already as final as an act gets.
+ * The collections this device holds: the recipe table one column narrower, a name and
+ * the one act that is not opening it. `Forget` drops the link here and nothing else.
  */
 export function renderHeld(entries, current, { onUse, onForget }) {
   const table = element('div', 'records holding')

@@ -116,12 +116,8 @@ async function route(store, options, request, response) {
 
 const who = (options, request) => source(request, options.limits.trustProxy)
 
-/**
- * A 404 from these routes is either a link that has gone or a link that was guessed, and
- * the two answer alike on purpose. So both are counted, and only both can be: telling
- * them apart is the thing the answer is arranged not to do. A person following a dead
- * bookmark makes one of these. Only a machine makes a thousand.
- */
+/** A 404 here is a dead link or a guessed one, and nothing may tell them apart, so both
+ * are counted. */
 async function guessing(options, request, work) {
   const asker = who(options, request)
   if (options.limits.tries.spent(asker)) throw new Refusal(429, 'too many requests')
@@ -326,14 +322,9 @@ async function walk(root, inside, digest) {
 }
 
 /**
- * The only thing the server renders, and the only thing it needs to.
- *
- * The table is drawn in the browser and stays there: it is scaled, fitted and edited
- * against a screen this machine cannot see, and a second renderer here would have to
- * agree with `render.js` cell for cell forever. But a link pasted into a chat is opened
- * by something that reads the head and runs no script, and the head is the half of the
- * page that never wants the key - the id names the card, the fragment stays on the phone.
- * So a shared recipe can say what it is without the secret leaving the device.
+ * The only thing the server renders. An unfurler reads the head and runs no script, and
+ * the head is the half of the page that never wants the key. The table stays in the
+ * browser, where it is scaled and fitted against a screen this machine cannot see.
  */
 function head(title) {
   const name = title ?? 'lekka'
@@ -351,11 +342,7 @@ function escaped(text) {
   return text.replace(/[&<>"]/g, (character) => ESCAPES[character])
 }
 
-/**
- * What a shared card says about itself. A card that is not there still answers as the
- * app, because the app is what says `No recipe under this link` - a 404 here would
- * replace that with the server's own bare words.
- */
+/** A card that is not there still answers as the app, which is what says so in words. */
 async function named(store, id) {
   const text = await store.cards.read(id).catch(() => null)
   if (text === null) return null
@@ -372,11 +359,8 @@ async function statics(store, app, path, response) {
   // and by falling through below for every address the app answers for itself.
   if (path === '/' || path === '/index.html') return page(app, response)
 
-  /*
-   * A recipe is unlisted, not public. The link is how you hand it to someone, so an
-   * unfurler reading the tags is reading them because a person deliberately pasted it;
-   * a crawler that finds the same link in a forum thread is told to leave it out.
-   */
+  // A recipe is unlisted, not public: tags for the chat it was pasted into, `noindex`
+  // for the crawler that finds the link in a forum thread.
   const shared = READ.exec(path)
   if (shared)
     return page(app, response, { title: await named(store, shared[1]), unlisted: true })

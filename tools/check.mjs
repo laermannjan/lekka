@@ -380,11 +380,7 @@ const after = (wait) => new Promise((go) => setTimeout(go, wait))
 addEventListener('load', async () => {
   await after(700)
 
-  /*
-   * The link this page was opened at carried the key in the path, the way every link
-   * handed out before the move did. It still opens, and the address it leaves behind is
-   * the one that keeps the key out of every request from here on.
-   */
+  // Opened at a link with the key in the path, the way every older link is written.
   check('a key in the path is read, and rewritten into the fragment',
     location.pathname.startsWith('/r/') && !location.pathname.slice(3).includes('/') && location.hash.length > 1,
     location.pathname + ' + ' + location.hash)
