@@ -1,6 +1,9 @@
 import { createServer } from 'node:http'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { newId } from '../app/id.js'
+import { mode as readMode } from './access.js'
 import { openStore } from './store.js'
 import { handler } from './http.js'
 
@@ -13,7 +16,25 @@ function number(value, fallback) {
 }
 
 const port = number(process.env.PORT, 8080)
-const store = await openStore(process.env.DATA_DIR ?? './data').open()
+const directory = process.env.DATA_DIR ?? './data'
+const store = await openStore(directory).open()
+
+/* Loaded only where it is used: an instance with no door opens no database, and does not
+ * make the reader wonder about the experimental warning `node:sqlite` prints on import. */
+const mode = readMode(process.env.ACCESS)
+const people =
+  mode === 'public'
+    ? null
+    : (await import('./people.js')).openPeople(join(directory, 'people.db'))
+
+/* An instance with a door and nobody behind it needs a first person, and reaching the
+ * port first must not be what decides who that is. The operator reads this out of the
+ * logs; it lives only in this process, so a restart issues a new one. */
+let bootstrap = null
+if (people?.empty()) {
+  bootstrap = newId(22)
+  console.log(`lekka has no people yet. Open /join#${bootstrap} to make the first one.`)
+}
 
 const days = number(process.env.TTL_DAYS, 0)
 if (days > 0) {
@@ -27,6 +48,9 @@ if (days > 0) {
 const server = createServer(
   handler(store, {
     app: fileURLToPath(new URL('../app', import.meta.url)),
+    people,
+    mode,
+    bootstrap,
     createToken: process.env.CREATE_TOKEN || null,
     maxBytes: number(process.env.MAX_CARD_BYTES, 65536),
     maxRows: number(process.env.MAX_COLLECTION_ROWS, 0),

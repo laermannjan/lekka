@@ -3,10 +3,12 @@ import { readFile, readdir } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
 import { parseCard, ParseError } from '../app/card.js'
+import { clear, cookie, COOKIE, encrypted, forged, keep, may, mayCreate } from './access.js'
 import { limiter, source } from './limit.js'
 
 const CARD = /^\/api\/cards\/([^/]+)$/
 const COLLECTION = /^\/api\/collections\/([^/]+)$/
+const SESSION = /^\/api\/sessions\/([a-z0-9]{1,64})$/
 const ID = /^[a-z0-9-]{1,64}$/
 
 /** The address a shared recipe is read at, in either shape the app has ever written. */
@@ -37,6 +39,9 @@ export function handler(
   store,
   {
     app,
+    people = null,
+    mode = 'public',
+    bootstrap = null,
     createToken = null,
     maxBytes = 65536,
     maxRows = 0,
@@ -50,7 +55,7 @@ export function handler(
     tries: limiter({ every: MINUTE, most: triesPerMinute }),
     trustProxy,
   }
-  const options = { app, createToken, maxBytes, maxRows, limits }
+  const options = { app, people, mode, bootstrap, createToken, maxBytes, maxRows, limits }
 
   return async (request, response) => {
     try {
@@ -84,34 +89,153 @@ async function route(store, options, request, response) {
   const path = decode(new URL(request.url, 'http://lekka').pathname)
   const key = bearer(request)
 
+  /* Both answer before anything asks who you are: one is how a supervisor learns the
+   * process is up, the other is app code the browser needs to fetch the login screen. */
   if (path === '/healthz') return send(response, 200, 'text/plain', 'ok')
   if (path === '/sw.js') return worker(options.app, response)
 
+  if (forged(request)) throw new Refusal(403, 'cross-site request refused')
+  const session = options.people?.session(cookie(request, COOKIE)) ?? null
+
+  if (path.startsWith('/api/session') || path === '/api/me' || path === '/api/people')
+    return peopleRoute(options, request, response, path, session)
+
   if (path === '/api/cards' || path === '/api/collections') {
     if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
+    if (!mayCreate(options.mode, session)) throw new Refusal(401, 'sign in first')
     allowed(options, request)
     if (!options.limits.creates.charge(who(options, request)))
       throw new Refusal(429, 'too many requests')
+    const owner = session?.person ?? null
     return path === '/api/cards'
-      ? create(store.cards, response, card(await body(request, options)))
-      : create(store.collections, response, rows(await body(request, options), options))
+      ? create(store.cards, response, card(await body(request, options)), owner)
+      : create(store.collections, response, rows(await body(request, options), options), owner)
   }
 
   const asCard = CARD.exec(path)
   if (asCard)
     return guessing(options, request, () =>
-      cardRoute(store, options, request, response, asCard[1], key),
+      cardRoute(store, options, request, response, asCard[1], key, session),
     )
 
   const asCollection = COLLECTION.exec(path)
   if (asCollection)
     return guessing(options, request, () =>
-      collectionRoute(store, options, request, response, asCollection[1], key),
+      collectionRoute(store, options, request, response, asCollection[1], key, session),
     )
 
   if (path.startsWith('/api/')) throw missing()
   if (request.method !== 'GET') throw new Refusal(405, 'method not allowed')
-  return statics(store, options.app, path, response)
+  return statics(store, options, path, response, session)
+}
+
+/**
+ * Signing in, signing out, and the list of browsers that are still signed in. A wrong
+ * name and a wrong password answer alike, and both are charged against the same counter
+ * that a guessed link is, since both are somebody trying strings.
+ */
+async function peopleRoute(options, request, response, path, session) {
+  const { people, mode, bootstrap } = options
+  if (!people) throw missing()
+  const secure = encrypted(request, options.limits.trustProxy)
+
+  if (path === '/api/me') {
+    if (request.method !== 'GET') throw new Refusal(405, 'method not allowed')
+    return json(response, 200, {
+      mode,
+      empty: people.empty(),
+      person: session ? { id: session.person, name: session.name } : null,
+      // Named so the device list can say which row is the browser reading it.
+      session: session ? { id: session.id, label: session.label } : null,
+    })
+  }
+
+  /* The first person on an empty instance is admitted by a token the operator reads out
+   * of the logs, so that reaching the port first is not the same as owning the box. */
+  if (path === '/api/people') {
+    if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
+    const { name, password, token } = parse(await body(request, options))
+    if (!people.empty()) throw new Refusal(409, 'this instance already has people')
+    if (!bootstrap || !same(String(token ?? ''), bootstrap))
+      throw new Refusal(401, 'a bootstrap link is required')
+    named(name)
+    strong(password)
+    const person = people.add(name.trim(), password)
+    const held = people.mint(person.id, label(request))
+    return json(response, 201, { id: person.id, name: person.name }, { 'set-cookie': keep(held, secure) })
+  }
+
+  if (path === '/api/sessions') {
+    if (request.method === 'GET') {
+      if (!session) throw new Refusal(401, 'sign in first')
+      return json(response, 200, people.sessions(session.person))
+    }
+    if (request.method === 'POST') {
+      if (!options.limits.tries.charge(who(options, request)))
+        throw new Refusal(429, 'too many requests')
+      const { name, password } = parse(await body(request, options))
+      const person = people.verify(String(name ?? ''), String(password ?? ''))
+      if (!person) throw new Refusal(401, 'wrong name or password')
+      const held = people.mint(person.id, label(request))
+      return json(
+        response,
+        201,
+        { id: person.id, name: person.name },
+        { 'set-cookie': keep(held, secure) },
+      )
+    }
+    if (request.method === 'DELETE') {
+      people.drop(cookie(request, COOKIE))
+      return send(response, 204, null, '', { 'set-cookie': clear(secure) })
+    }
+    throw new Refusal(405, 'method not allowed')
+  }
+
+  const asSession = SESSION.exec(path)
+  if (asSession) {
+    if (request.method !== 'DELETE') throw new Refusal(405, 'method not allowed')
+    if (!session) throw new Refusal(401, 'sign in first')
+    if (!people.revoke(session.person, asSession[1])) throw missing()
+    return send(response, 204)
+  }
+
+  throw missing()
+}
+
+function parse(text) {
+  try {
+    const value = JSON.parse(text)
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error()
+    return value
+  } catch {
+    throw new Refusal(400, 'expected an object')
+  }
+}
+
+function named(name) {
+  if (typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 64)
+    throw new Refusal(400, 'a name between 1 and 64 characters')
+}
+
+/** Long rather than clever: a household picks a passphrase, not a symbol from each class. */
+function strong(password) {
+  if (typeof password !== 'string' || password.length < 12)
+    throw new Refusal(400, 'a password of at least 12 characters')
+}
+
+/** The browser names itself, roughly, so a device list has something to show. */
+function label(request) {
+  const agent = String(request.headers['user-agent'] ?? '')
+  for (const [pattern, name] of [
+    [/iPhone/, 'an iPhone'],
+    [/iPad/, 'an iPad'],
+    [/Android/, 'an Android phone'],
+    [/Macintosh/, 'a Mac'],
+    [/Windows/, 'a Windows PC'],
+    [/Linux/, 'a Linux machine'],
+  ])
+    if (pattern.test(agent)) return name
+  return 'a browser'
 }
 
 const who = (options, request) => source(request, options.limits.trustProxy)
@@ -129,16 +253,24 @@ async function guessing(options, request, work) {
   }
 }
 
-async function cardRoute(store, options, request, response, id, key) {
+async function cardRoute(store, options, request, response, id, key, session) {
   const { cards } = store
+  const { mode } = options
+  const owner = await cards.owner(id)
+  const held = await cards.verify(id, key)
+  /* Your own card opens without its key: the key is how a card is handed to somebody
+   * else, not how you reach what you already own. */
+  const mine = mode !== 'public' && Boolean(session) && owner !== null && owner === session.person
+
   if (request.method === 'GET') {
     const text = await cards.read(id)
     if (text === null) throw missing()
+    if (!may(mode, session, owner, held)) throw missing()
     await cards.touch(id)
     return send(response, 200, 'text/plain; charset=utf-8', text)
   }
 
-  if (!(await cards.verify(id, key))) throw missing()
+  if (!held && !mine) throw missing()
   if (request.method === 'DELETE') {
     await cards.remove(id)
     return send(response, 204)
@@ -149,19 +281,24 @@ async function cardRoute(store, options, request, response, id, key) {
   return send(response, 204)
 }
 
-async function collectionRoute(store, options, request, response, id, key) {
+async function collectionRoute(store, options, request, response, id, key, session) {
   const { collections } = store
+  const { mode } = options
+  const owner = await collections.owner(id)
   const held = await collections.verify(id, key)
+  const mine = mode !== 'public' && Boolean(session) && owner !== null && owner === session.person
 
   if (request.method === 'GET') {
     const text = await collections.read(id)
     if (text === null) throw missing()
+    if (!may(mode, session, owner, held)) throw missing()
     await collections.touch(id)
     const list = JSON.parse(text)
-    return json(response, 200, held ? list : strip(list), held ? { etag: tag(text) } : {})
+    const full = held || mine
+    return json(response, 200, full ? list : strip(list), full ? { etag: tag(text) } : {})
   }
 
-  if (!held) throw missing()
+  if (!held && !mine) throw missing()
   if (request.method === 'DELETE') {
     await collections.remove(id)
     return send(response, 204)
@@ -206,8 +343,8 @@ function tag(text) {
   return `"${createHash('sha256').update(text ?? '').digest('hex').slice(0, 16)}"`
 }
 
-async function create(shelf, response, { text, label }) {
-  return json(response, 201, await shelf.create(text, label))
+async function create(shelf, response, { text, label }, owner = null) {
+  return json(response, 201, await shelf.create(text, label, owner))
 }
 
 /** A card is stored only if it parses; validation is parsing. */
@@ -343,7 +480,7 @@ function escaped(text) {
 }
 
 /** A card that is not there still answers as the app, which is what says so in words. */
-async function named(store, id) {
+async function titleOf(store, id) {
   const text = await store.cards.read(id).catch(() => null)
   if (text === null) return null
   try {
@@ -353,17 +490,25 @@ async function named(store, id) {
   }
 }
 
-async function statics(store, app, path, response) {
+async function statics(store, options, path, response, session) {
+  const { app, mode } = options
   if (!app) throw missing()
   // The page is stamped, so it is served by the one place that stamps it - by name here,
   // and by falling through below for every address the app answers for itself.
   if (path === '/' || path === '/index.html') return page(app, response)
 
   // A recipe is unlisted, not public: tags for the chat it was pasted into, `noindex`
-  // for the crawler that finds the link in a forum thread.
+  // for the crawler that finds the link in a forum thread. Once there is a door, the
+  // title is behind it too - the fragment key never reaches the server, so this markup
+  // is the one place a closed instance could still say what a card is called.
   const shared = READ.exec(path)
-  if (shared)
-    return page(app, response, { title: await named(store, shared[1]), unlisted: true })
+  if (shared) {
+    const open = mode === 'public' || (mode === 'private' && session)
+    return page(app, response, {
+      title: open ? await titleOf(store, shared[1]) : null,
+      unlisted: true,
+    })
+  }
 
   const file = join(app, normalize(path))
   if (!file.startsWith(app)) throw new Refusal(403, 'forbidden')

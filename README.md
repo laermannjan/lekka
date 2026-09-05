@@ -89,6 +89,7 @@ not hardened for the open internet.
 |---|---|---|
 | `PORT` | 8080 | |
 | `DATA_DIR` | `./data` | the only thing to back up |
+| `ACCESS` | `public` | `public` is no door at all; `private` puts everything behind one sign-in; `secret` also gives each card an owner. The last two print a one-time link on first boot, which is how the first person is made |
 | `CREATE_TOKEN` | unset | when set, creating a card needs `Authorization: Bearer <token>` |
 | `MAX_CARD_BYTES` | 65536 | largest card accepted |
 | `MAX_COLLECTION_ROWS` | unset | most recipes one collection may hold; unset means no cap |

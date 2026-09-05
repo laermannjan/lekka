@@ -56,7 +56,13 @@ else has replaced is refused rather than silently overwriting them. Checking the
 version and writing is one move: writes to the same collection are held in a
 chain, or both devices would read the same tag and both pass the check.
 
-There is no login, no session, no cookie. Consequences to keep:
+This is what `ACCESS=public` is, and it stays the default. The other two modes put a door
+in front of it: `private` asks everyone who reaches the port to sign in and shares
+everything behind it, and `secret` adds an owner per record, keeping the key as the way a
+single card is handed to somebody who has no account here. One rule decides all three, in
+`server/access.js`, so no route can disagree with another.
+
+Under `public` there is no login, no session, no cookie. Consequences to keep:
 
 - The server **cannot list cards.** Whoever has no link finds nothing. Any
   "all cards" endpoint would make the secret pointless.
@@ -564,8 +570,10 @@ work.
 
 **The server is meant for a network you already trust**: a LAN, or a VPN such as
 Tailscale or Wireguard. It is not meant to be reachable from the internet, and
-nothing in it is built for that. There is no admin interface, no rate limiting,
-no account and no login, and those absences are deliberate.
+nothing in it is built for that. There is no admin interface and no rate limiting,
+and those absences are deliberate. `ACCESS=private` or `secret` adds a login, which
+narrows who may read what - it does not make the server safe on a public address, and
+none of the work listed at the end of this section has been done.
 
 What follows from that:
 
@@ -617,7 +625,7 @@ of these is our own bug to find.
 | Backup bundles of all cards including keys | Export one card as its file. The overview is a list of links; if it is lost, the links are lost, and that is what a backup of the data directory is for. |
 | A change counter with per-field diffing | A dirty flag is enough to decide whether "save" does anything. |
 | Recipes shipped inside the app | Cards are data, not code. The sample cards live in the tests, where they are fixtures. |
-| Accounts, sessions, cookies | A collection link does what an account would, with nothing to reset and nothing to forget. |
+| Accounts as the only way in | A collection link does what an account would, and under `ACCESS=public` it still is the whole story. A door is opt-in, not the price of entry. |
 | An admin interface over the cards | The operator has the data directory; `ls`, `cat` and `rm` need no code and cannot be reached from the network. Reading other people's recipes is not a feature. |
 | A card belonging to a collection | Ownership would mean the server must know who holds what. A collection holds links, so the only question is ever whether you hold a key. |
 | A database | Get by id is the only access pattern, and rename is already atomic. A directory of text files can be grepped, diffed, rsynced and restored by hand. |

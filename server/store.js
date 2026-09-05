@@ -45,15 +45,28 @@ function shelf(directory, extension, nextId) {
       await mkdir(directory, { recursive: true })
     },
 
-    async create(text, label) {
+    async create(text, label, owner = null) {
       let id = nextId(label)
       while (await meta(id)) id = nextId(label)
 
       const key = newId(KEY_LENGTH)
       const now = new Date().toISOString()
       await put(body(id), text)
-      await put(envelope(id), JSON.stringify({ key: hash(key), created: now, updated: now, touched: now }))
+      await put(
+        envelope(id),
+        JSON.stringify({ key: hash(key), owner, created: now, updated: now, touched: now }),
+      )
       return { id, key }
+    },
+
+    /**
+     * Who is answerable for this record, or null on anything made before there were
+     * people - which reads as nobody's, so a private instance does not lock its operator
+     * out of what they already had.
+     */
+    async owner(id) {
+      const found = await meta(id)
+      return found ? (found.owner ?? null) : null
     },
 
     async read(id) {
