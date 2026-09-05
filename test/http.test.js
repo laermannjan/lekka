@@ -232,3 +232,102 @@ test('every answer carries the headers that stop a link leaking', async (t) => {
   assert.equal(headers.get('x-content-type-options'), 'nosniff')
   assert.match(headers.get('content-security-policy'), /default-src 'self'/)
 })
+
+test('a shared card names itself in the head, and is kept out of the index', async (t) => {
+  const app = fileURLToPath(new URL('../app', import.meta.url))
+  const { call, close } = await serve({ app })
+  t.after(close)
+
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+
+  const shared = await call(`/r/${id}`)
+  assert.equal(shared.status, 200)
+  assert.equal(shared.headers.get('x-robots-tag'), 'noindex')
+  const html = await shared.text()
+  assert.match(html, /<title>Dinkelquarkbrot<\/title>/)
+  assert.match(html, /<meta property="og:title" content="Dinkelquarkbrot" \/>/)
+
+  // The link shape that carried the key in the path is still read, and still unlisted.
+  assert.equal((await call(`/r/${id}/anything`)).headers.get('x-robots-tag'), 'noindex')
+
+  // A card that is gone still answers as the app, which is what says so in words.
+  const absent = await call('/r/nothing-here')
+  assert.equal(absent.status, 200)
+  assert.match(await absent.text(), /<title>lekka<\/title>/)
+
+  // The overview is not a shared link and is not held back from anyone.
+  const home = await call('/')
+  assert.equal(home.headers.get('x-robots-tag'), null)
+  assert.match(await home.text(), /<title>lekka<\/title>/)
+})
+
+test('a name is written into the head as text, not as markup', async (t) => {
+  const app = fileURLToPath(new URL('../app', import.meta.url))
+  const { call, close } = await serve({ app })
+  t.after(close)
+
+  const title = 'Brot & "Butter" <script>'
+  const { id } = await (
+    await call('/api/cards', { method: 'POST', body: `# ${title}\n\n- backen\n  - Mehl: 1 g\n` })
+  ).json()
+
+  const html = await (await call(`/r/${id}`)).text()
+  assert.equal(html.includes('<script>Brot'), false)
+  assert.match(html, /<title>Brot &amp; &quot;Butter&quot; &lt;script&gt;<\/title>/)
+})
+
+test('creating is rate limited per source, reading is not', async (t) => {
+  const { call, close } = await serve({ createsPerHour: 2 })
+  t.after(close)
+
+  const made = []
+  for (let n = 0; n < 3; n++) made.push(await call('/api/cards', { method: 'POST', body: CARD }))
+  assert.deepEqual(
+    made.map((response) => response.status),
+    [201, 201, 429],
+  )
+
+  const { id } = await made[0].json()
+  for (let n = 0; n < 5; n++) assert.equal((await call(`/api/cards/${id}`)).status, 200)
+})
+
+test('guessing links is rate limited, and a link that works never is', async (t) => {
+  const { call, close } = await serve({ triesPerMinute: 3 })
+  t.after(close)
+
+  const { id, key } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+
+  for (let n = 0; n < 3; n++) assert.equal((await call(`/api/cards/guess-${n}`)).status, 404)
+  assert.equal((await call('/api/cards/guess-again')).status, 429)
+
+  // A wrong key spends the same budget, because the two answer alike and must stay alike.
+  assert.equal((await call(`/api/cards/${id}`, { method: 'PUT', body: CARD, key: 'no' })).status, 429)
+
+  const { call: fresh, close: shut } = await serve({ triesPerMinute: 0 })
+  t.after(shut)
+  const other = await (await fresh('/api/cards', { method: 'POST', body: CARD })).json()
+  for (let n = 0; n < 20; n++) assert.equal((await fresh(`/api/cards/miss-${n}`)).status, 404)
+  assert.equal((await fresh(`/api/cards/${other.id}`)).status, 200)
+})
+
+test('a collection longer than the cap is refused', async (t) => {
+  const { call, close } = await serve({ maxRows: 2 })
+  t.after(close)
+
+  const rows = (count) =>
+    JSON.stringify(Array.from({ length: count }, (unused, n) => ({ id: `card-${n}` })))
+
+  assert.equal((await call('/api/collections', { method: 'POST', body: rows(2) })).status, 201)
+  assert.equal((await call('/api/collections', { method: 'POST', body: rows(3) })).status, 413)
+
+  const { id, key } = await (
+    await call('/api/collections', { method: 'POST', body: rows(1) })
+  ).json()
+  const grown = await call(`/api/collections/${id}`, {
+    method: 'PUT',
+    body: rows(3),
+    key,
+    version: '*',
+  })
+  assert.equal(grown.status, 413)
+})

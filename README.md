@@ -35,10 +35,26 @@ The documents that define it: [FORMAT.md](FORMAT.md) for the file,
 Node 22 or newer. No dependencies, no build step.
 
 ```
-npm run serve        # http://localhost:8080
+npm run serve        # http://localhost:8080, restarted when a server file changes
 npm test
+npm run check        # drive the editor in a real browser; needs Chrome
 npm run show test/cards/erdkruste.lekka 2   # draw a card in the terminal, doubled
 ```
+
+With [mise](https://mise.jdx.dev), which runs those same scripts under a pinned
+Node and the two settings a checkout needs:
+
+```
+mise run serve       # http://localhost:8080
+mise run serve 8081  # somewhere else, for one run
+mise run up          # the container, on http://localhost:8380
+```
+
+`serve` watches what the server imports - `server/` and the two modules it
+shares with the app - and restarts on a change to any of it. The rest of `app/`
+is read from disk on every request, so a browser reload is enough there. The
+image starts the server directly rather than through npm, because it must not
+watch and wants to be PID 1.
 
 ## Deploying it
 
@@ -75,7 +91,18 @@ not hardened for the open internet.
 | `DATA_DIR` | `./data` | the only thing to back up |
 | `CREATE_TOKEN` | unset | when set, creating a card needs `Authorization: Bearer <token>` |
 | `MAX_CARD_BYTES` | 65536 | largest card accepted |
+| `MAX_COLLECTION_ROWS` | unset | most recipes one collection may hold; unset means no cap |
+| `MAX_CREATES_PER_HOUR` | unset | creations one address may make in an hour; unset means no limit |
+| `MAX_TRIES_PER_MINUTE` | unset | links one address may follow to nothing in a minute; unset means no limit |
+| `TRUST_PROXY` | unset | set to `1` behind a reverse proxy, so the two limits above count the forwarded address rather than the proxy |
 | `TTL_DAYS` | unset | delete what nobody has opened for this long; unset means never |
+
+The last five are off by default, and on a network you already trust they should
+stay off: the people who can reach the port are the household, and a recipe box
+that starts refusing its owner is worse than no limit at all. They exist for an
+instance on a public address, which needs all of them - and needs more than them.
+`TRUST_PROXY` is opt-in because a forwarded address believed without being asked
+for is a limit anyone walks around by typing a different name into a header.
 
 The container has a read-only filesystem and a volume at `/data`. Mounting a
 directory of your own instead is one line in `compose.yaml`, and needs no
@@ -102,9 +129,14 @@ There are no accounts. A link is what grants access, so treat one like a key.
 | | |
 |---|---|
 | `/r/<id>` | read a card |
-| `/r/<id>/<key>` | read and edit it |
+| `/r/<id>#<key>` | read and edit it |
 | `/c/<name>` | read a collection, with every edit key stripped out |
-| `/c/<name>/<key>` | read and change it; opening this adopts the collection on the device |
+| `/c/<name>#<key>` | read and change it; opening this adopts the collection on the device |
+
+The key is after the `#`, which is the one part of an address a browser sends
+nowhere: not in the request line, not in a `Referer`, so not into an access log,
+a proxy or a CDN. The older shape, with the key as a path segment, is still read
+and is rewritten on arrival, so links already handed out keep working.
 
 A collection is a list of card links, and that is all it is. Cards do not belong
 to it.

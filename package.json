@@ -5,9 +5,9 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
+    "serve": "node --watch server/main.js",
     "test": "node --test",
     "check": "node tools/check.mjs",
-    "show": "node tools/show.mjs",
-    "serve": "node server/main.js"
+    "show": "node tools/show.mjs"
   }
 }

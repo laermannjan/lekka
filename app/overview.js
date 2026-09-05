@@ -1,3 +1,5 @@
+import { address } from './link.js'
+
 /**
  * The collection, as a table.
  *
@@ -51,7 +53,7 @@ function blanks(acts) {
 
 function row({ id, key, card }, { onRemove, onDelete }) {
   const link = element('a', 'name', card ? card.title : id)
-  link.href = key ? `/r/${id}/${key}` : `/r/${id}`
+  link.href = address('/r/', id, key)
   const name = element('span', 'card')
   name.append(link)
 
@@ -67,6 +69,30 @@ function row({ id, key, card }, { onRemove, onDelete }) {
   if (onRemove) drop.append(button('Remove', 'warn', () => onRemove(id)))
 
   return [name, erase, drop]
+}
+
+/**
+ * The collections this device holds: the recipe table one column narrower, a name and
+ * the one act that is not opening it. `Forget` drops the link here and nothing else.
+ */
+export function renderHeld(entries, current, { onUse, onForget }) {
+  const table = element('div', 'records holding')
+  table.append(element('span', 'label', 'Collection'), element('span', 'label', 'Forget'))
+
+  for (const entry of entries) {
+    const name = element('span', 'card')
+    if (entry.id === current) name.append(element('span', 'none', entry.id))
+    else name.append(button(entry.id, '', () => onUse(entry)))
+    const drop = element('span')
+    drop.append(button('Forget', 'warn', () => onForget(entry.id)))
+    table.append(name, drop)
+  }
+
+  const box = element('div', 'sheetbox')
+  const scroll = element('div', 'scroll')
+  scroll.append(table)
+  box.append(scroll)
+  return box
 }
 
 function button(text, kind, run) {

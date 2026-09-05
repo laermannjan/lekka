@@ -196,7 +196,11 @@ const store = await openStore(data).open()
 const server = createServer(handler(store, { app, createToken: null, maxBytes: 65536 }))
 
 try {
-  await writeFile(page, index.replace('/main.js', '/_shot.js'))
+  // Served as a file, not through `page()`, so its head is put in by hand.
+  await writeFile(
+    page,
+    index.replace('/main.js', '/_shot.js').replace('%HEAD%', '<title>lekka</title>'),
+  )
   await writeFile(code, SCENES)
   await new Promise((ready) => server.listen(0, '127.0.0.1', ready))
   const { port } = server.address()

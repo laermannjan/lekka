@@ -18,6 +18,8 @@ services:
       PGID: ${PGID:-1000}
       # CREATE_TOKEN: set this to keep anyone on the network from adding cards
       # TTL_DAYS: set this to delete cards nobody has opened for that long
+      # MAX_CREATES_PER_HOUR, MAX_TRIES_PER_MINUTE, MAX_COLLECTION_ROWS, TRUST_PROXY:
+      # limits for a public address. On a network you trust, leave them unset.
     ports:
       - "8380:8080"
     volumes:
