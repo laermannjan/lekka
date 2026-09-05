@@ -53,7 +53,16 @@ for everybody else.
 
 A **link** grant is what a per-card key used to be, and better in the three ways
 that matter: there can be several on one recipe, each is revocable on its own,
-and each can expire. The token is returned once and stored only as a SHA-256.
+and each can expire. The token is returned once and stored only as a SHA-256, so
+the share panel can never show it again - which is why it is shown at the moment
+it is minted, with a QR code, and not filed away for later.
+
+Only an owner may look at who holds a recipe or hand it to anybody. Somebody
+granted `edit` may change the recipe and never who else can see it, and every
+refusal here is a 404 - the answer a recipe that is not there gives - so asking
+about somebody else's card cannot even tell you it exists. The owner grant is on
+the list like any other and is the one row that cannot be revoked: a recipe with
+no owner is one nobody could reach again, so the panel offers `Delete` instead.
 
 A card's `id` is its title as a slug, then 10 random characters. The slug is for
 a human reading a directory listing; the random part is what makes an id
@@ -168,8 +177,9 @@ reaches the server at all.
 
 Controls are sorted by what each one touches, which is the rule that says where
 anything goes. The scale (½× 1× 1½× 2×) and `Fit to screen` change how the recipe
-is drawn, so they sit above the table, beside what they change. `Edit` changes
-the recipe itself, so it sits below, out of the way of reading. It is offered on
+is drawn, so they sit above the table, beside what they change. `Edit` and
+`Share` change the recipe or who holds it, so they sit below, out of the way of
+reading. It is offered on
 every recipe you can see: whether the write lands is the server's to say, and it
 says so by refusing, which the editor reports in place. Hiding it on a guess
 would be worse, since under `GRANT` the answer is a row this browser cannot read.

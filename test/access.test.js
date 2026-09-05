@@ -300,3 +300,126 @@ test('a mode nobody meant to type refuses to start', async () => {
   assert.equal(mode('grant'), 'GRANT', 'the case a person types is the case that works')
   assert.throws(() => mode('public'), /ACCESS_CONTROL/)
 })
+
+test('only the owner may see who holds a recipe, or hand it to anybody', async (t) => {
+  const { call, people, close } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const his = cookieOf(await signIn(call))
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD, as: his })).json()
+
+  people.add('Rita', 'a different passphrase')
+  const hers = cookieOf(await signIn(call, 'Rita', 'a different passphrase'))
+
+  assert.equal((await call(`/api/cards/${id}/grants`, { as: hers })).status, 404)
+  assert.equal((await call(`/api/cards/${id}/grants`, { as: null })).status, 404)
+  assert.equal(
+    (await call(`/api/cards/${id}/grants`, { as: hers, method: 'POST', body: '{"name":"Rita"}' }))
+      .status,
+    404,
+    'and a stranger cannot grant themselves anything',
+  )
+
+  const mine = await (await call(`/api/cards/${id}/grants`, { as: his })).json()
+  assert.deepEqual(
+    mine.map((row) => [row.kind, row.scope, row.who]),
+    [['person', 'owner', 'Jan']],
+    'the owner grant is a row like any other, and says whose it is',
+  )
+})
+
+test('a recipe is handed to a person by name, and taken back by one row', async (t) => {
+  const { call, people, close } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const his = cookieOf(await signIn(call))
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD, as: his })).json()
+  people.add('Rita', 'a different passphrase')
+  const hers = cookieOf(await signIn(call, 'Rita', 'a different passphrase'))
+
+  const nobody = await call(`/api/cards/${id}/grants`, {
+    as: his,
+    method: 'POST',
+    body: JSON.stringify({ name: 'Mallory', scope: 'read' }),
+  })
+  assert.equal(nobody.status, 404, 'a name nobody signs in under grants nothing')
+
+  const given = await call(`/api/cards/${id}/grants`, {
+    as: his,
+    method: 'POST',
+    body: JSON.stringify({ name: 'rita', scope: 'edit' }),
+  })
+  assert.equal(given.status, 201)
+  const grant = await given.json()
+  assert.equal(grant.kind, 'person')
+  assert.equal(grant.token, undefined, 'a person needs no token; she signs in as herself')
+
+  assert.equal(
+    (await call(`/api/cards/${id}`, { as: hers, method: 'PUT', body: OTHER })).status,
+    204,
+    'and she may now change it',
+  )
+
+  assert.equal(
+    (await call(`/api/grants/${grant.id}`, { as: hers, method: 'DELETE' })).status,
+    404,
+    'she cannot take back a grant on a recipe that is not hers',
+  )
+  assert.equal((await call(`/api/grants/${grant.id}`, { as: his, method: 'DELETE' })).status, 204)
+  assert.equal((await call(`/api/cards/${id}`, { as: hers })).status, 404, 'and she is out again')
+})
+
+test('a link grant comes back once as a token, and the owner grant stays', async (t) => {
+  const { call, close } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+
+  const made = await call(`/api/cards/${id}/grants`, {
+    method: 'POST',
+    body: JSON.stringify({ scope: 'read', days: 7 }),
+  })
+  assert.equal(made.status, 201)
+  const link = await made.json()
+  assert.equal(link.kind, 'link')
+  assert.equal(link.token.length, 22)
+  assert.ok(link.expires > new Date().toISOString())
+
+  assert.equal((await call(`/api/cards/${id}`, { as: null, token: link.token })).status, 200)
+
+  const listed = await (await call(`/api/cards/${id}/grants`)).json()
+  assert.equal(listed.length, 2)
+  for (const row of listed) assert.equal(row.token, undefined, 'never shown a second time')
+
+  const owner = listed.find((row) => row.scope === 'owner')
+  assert.equal((await call(`/api/grants/${owner.id}`, { method: 'DELETE' })).status, 409)
+})
+
+test('a grant reads or edits; owning is not something you hand over', async (t) => {
+  const { call, close } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+
+  for (const body of [{ scope: 'owner' }, { scope: 'anything' }, { scope: 'read', days: 0 }])
+    assert.equal(
+      (await call(`/api/cards/${id}/grants`, { method: 'POST', body: JSON.stringify(body) }))
+        .status,
+      400,
+      JSON.stringify(body),
+    )
+})
+
+test('sharing does not exist where nothing is owned', async (t) => {
+  for (const mode of ['NONE', 'AUTH']) {
+    const { call, close } = await serve(mode)
+    t.after(close)
+    if (mode === 'AUTH') await signUp(call)
+    const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+    assert.equal((await call(`/api/cards/${id}/grants`)).status, 404, mode)
+  }
+})

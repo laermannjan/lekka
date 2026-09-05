@@ -6,6 +6,7 @@ import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
 import { section, specification } from './page.js'
 import { devices as renderDevices, firstPerson as firstPersonForm, signIn as signInForm } from './door.js'
+import { shareSheet } from './share.js'
 import { address, arrive } from './link.js'
 
 const SCALES = [
@@ -251,7 +252,7 @@ async function showCard(id, token, state = {}) {
     section(card.title, card.yields),
     body(card, id, token, here, fitting.tell),
     // What changes the recipe itself sits past it, out of the way of reading.
-    after(composer(id, token, card)),
+    after(composer(id, token, card), sharer(id, card)),
     specification(card),
   )
 }
@@ -299,6 +300,42 @@ function fitter(id, token, state) {
 function composer(id, token, card) {
   const button = element('button', 'quiet', 'Edit')
   button.onclick = () => showEditor(id, token, toDraft(card))
+  return button
+}
+
+/**
+ * Offered wherever there is such a thing as owning a recipe. Whether this one is yours is
+ * the server's to say, and it says so when the panel asks - hiding the button on a guess
+ * would need a second request on every card just to decide whether to draw itself.
+ */
+function sharer(id, card) {
+  if (instance.mode !== 'GRANT') return null
+  const button = element('button', 'quiet', 'Share')
+  button.onclick = () =>
+    shareSheet({
+      id,
+      title: card.title,
+      onList: async () => {
+        try {
+          return await api.grantsOn(id)
+        } catch (error) {
+          notice(
+            error instanceof api.ApiError && error.status === 404
+              ? 'This recipe is not yours to share.'
+              : `Who holds this did not load. ${reason(error)}`,
+          )
+          return null
+        }
+      },
+      onGive: async (asked) => {
+        try {
+          return await api.share(id, asked)
+        } catch (error) {
+          return { error: `Not shared. ${reason(error)}` }
+        }
+      },
+      onRevoke: (grant) => attempt(() => api.revokeGrant(grant), 'It was not revoked.'),
+    })
   return button
 }
 

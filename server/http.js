@@ -7,6 +7,8 @@ import { clear, cookie, COOKIE, encrypted, forged, guarded, keep, may, mayCreate
 import { limiter, source } from './limit.js'
 
 const CARD = /^\/api\/cards\/([^/]+)$/
+const SHARE = /^\/api\/cards\/([^/]+)\/grants$/
+const GRANT = /^\/api\/grants\/([a-z0-9]{1,64})$/
 const SESSION = /^\/api\/sessions\/([a-z0-9]{1,64})$/
 const ID = /^[a-z0-9-]{1,64}$/
 
@@ -120,6 +122,15 @@ async function route(store, options, request, response) {
       throw new Refusal(429, 'too many requests')
     return create(store, response, card(await body(request, options)), session?.person ?? null)
   }
+
+  const asShare = SHARE.exec(path)
+  if (asShare)
+    return guessing(options, request, () =>
+      shareRoute(store, options, request, response, asShare[1], session),
+    )
+
+  const asGrant = GRANT.exec(path)
+  if (asGrant) return grantRoute(options, request, response, asGrant[1], session)
 
   const asCard = CARD.exec(path)
   if (asCard)
@@ -254,6 +265,66 @@ async function guessing(options, request, work) {
     if (error instanceof Refusal && error.status === 404) options.limits.tries.charge(asker)
     throw error
   }
+}
+
+/**
+ * Who holds a recipe, and handing it to somebody else. Only its owner may look or give:
+ * a person granted `edit` may change the recipe, never who else can see it.
+ *
+ * Refusals are 404, the answer a recipe that is not there gives, so that asking who holds
+ * somebody else's card cannot even tell you the card exists.
+ */
+async function shareRoute(store, options, request, response, id, session) {
+  const { mode, grants, people } = options
+  if (mode !== 'GRANT') throw missing()
+  if (!store.has(id)) throw missing()
+  if (!session || !grants.may(id, { person: session.person }, 'owner')) throw missing()
+
+  if (request.method === 'GET') return json(response, 200, grants.on(id))
+  if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
+
+  const { name = null, scope = 'read', days = null } = parse(await body(request, options))
+  if (!['read', 'edit'].includes(scope))
+    throw new Refusal(400, 'a grant reads or edits; owning is not given away')
+  const expires = days === null ? null : expiry(days)
+
+  /* Named, and it is a person: the grant survives the link being forwarded, and taking
+   * it back is one row. Unnamed, it is a link: whoever holds the token, until revoked. */
+  if (name !== null) {
+    const person = people?.named(String(name))
+    if (!person) throw new Refusal(404, 'nobody here signs in under that name')
+    if (person.id === session.person) throw new Refusal(409, 'you already own this one')
+    return json(
+      response,
+      201,
+      grants.give(id, { person: person.id, scope, by: session.person, expires }),
+    )
+  }
+
+  return json(response, 201, grants.give(id, { scope, by: session.person, expires }))
+}
+
+/** Taking one back. Only the owner of the recipe it sits on, and never the owner grant. */
+async function grantRoute(options, request, response, id, session) {
+  const { mode, grants } = options
+  if (mode !== 'GRANT') throw missing()
+  if (request.method !== 'DELETE') throw new Refusal(405, 'method not allowed')
+
+  const found = grants.find(id)
+  if (!found) throw missing()
+  if (!session || !grants.may(found.card, { person: session.person }, 'owner')) throw missing()
+  if (found.scope === 'owner')
+    throw new Refusal(409, 'a recipe cannot be left with no owner; delete it instead')
+
+  grants.revoke(id)
+  return send(response, 204)
+}
+
+function expiry(days) {
+  const many = Number(days)
+  if (!Number.isFinite(many) || many <= 0 || many > 3650)
+    throw new Refusal(400, 'an expiry between 1 and 3650 days')
+  return new Date(Date.now() + many * 24 * 60 * 60 * 1000).toISOString()
 }
 
 async function cardRoute(store, options, request, response, id, token, session) {

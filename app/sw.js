@@ -15,6 +15,7 @@ const SHELL = [
   '/form.js',
   '/page.js',
   '/door.js',
+  '/share.js',
   '/read.js',
   '/overview.js',
   '/link.js',

@@ -55,6 +55,23 @@ export async function writeCard(id, text, token) {
   return send('PUT', `/api/cards/${id}`, { token, body: text })
 }
 
+/** Who holds this recipe. Only its owner may ask, and a 404 is how the server says so. */
+export async function grantsOn(id) {
+  return send('GET', `/api/cards/${id}/grants`)
+}
+
+/**
+ * Hand it to somebody. A name makes a grant that person holds; no name mints a link,
+ * and the token comes back exactly once.
+ */
+export async function share(id, { name = null, scope = 'read', days = null } = {}) {
+  return send('POST', `/api/cards/${id}/grants`, { body: JSON.stringify({ name, scope, days }) })
+}
+
+export async function revokeGrant(id) {
+  return send('DELETE', `/api/grants/${id}`)
+}
+
 export async function deleteCard(id, token) {
   return send('DELETE', `/api/cards/${id}`, { token })
 }

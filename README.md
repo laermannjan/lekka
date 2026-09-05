@@ -136,7 +136,11 @@ One setting decides, and it names the mechanism rather than how secret it feels.
 
 Under `GRANT` a grant is one row saying *this subject may do this, until taken
 back*. The subject is a person, who signs in as themselves, or a link, which is
-whoever holds the token. A link token rides in the fragment of `/r/<id>#<token>`,
+whoever holds the token. `Share` on a recipe you own lists everyone who holds it
+and gives it to somebody else: name a person and the grant is theirs, forwarding
+the link forwards nothing, and taking it back is one act; name nobody and you get
+a link, shown once with a QR code, that expires when you say and is revocable on
+its own. A link token rides in the fragment of `/r/<id>#<token>`,
 which is the one part of an address a browser sends nowhere: not in the request
 line, not in a `Referer`, so not into an access log, a proxy or a CDN. The older
 shape, with the token as a path segment, is still read and rewritten on arrival.

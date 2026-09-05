@@ -60,6 +60,16 @@ export function openPeople(db) {
       return { id, name, created: now }
     },
 
+    /**
+     * A person by the name they sign in under. Only ever asked by somebody who is
+     * already inside and about to share a recipe with them, so it tells them whether
+     * the name exists - which inside one household is the answer they need.
+     */
+    named(name) {
+      const found = byHandle.get('password', handle(name))
+      return found ? this.person(found.person) : null
+    },
+
     /** Null for a wrong password and null for a name nobody has, told apart nowhere. */
     verify(name, password) {
       const found = byHandle.get('password', handle(name))
