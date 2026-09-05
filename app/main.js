@@ -5,7 +5,12 @@ import * as api from './api.js'
 import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
 import { section, specification } from './page.js'
-import { devices as renderDevices, joining as joiningForm, signIn as signInForm } from './door.js'
+import {
+  devices as renderDevices,
+  household as renderHousehold,
+  joining as joiningForm,
+  signIn as signInForm,
+} from './door.js'
 import { shareSheet } from './share.js'
 import { address, arrive } from './link.js'
 
@@ -115,7 +120,7 @@ async function showJoining(token) {
     )
 
   show(
-    section(invite.kind === 'device' ? 'Add this browser' : 'Join'),
+    section('Join'),
     joiningForm({
       invite,
       onJoin: async (who) => {
@@ -138,6 +143,10 @@ async function showDevices() {
   const list = await attempt(() => api.sessions(), 'The list did not load.')
   if (list === FAILED) return
 
+  const everyone = instance.person?.admin
+    ? await api.people().catch(() => null)
+    : null
+
   show(
     section('Devices'),
     renderDevices(list, instance.session, {
@@ -145,8 +154,8 @@ async function showDevices() {
         if (await attempt(() => api.revokeSession(id), 'It was not revoked.') === FAILED) return
         showDevices()
       },
-      onInvite: async (kind) => {
-        const made = await attempt(() => api.makeInvite(kind), 'No link was made.')
+      onInvite: async () => {
+        const made = await attempt(() => api.makeInvite(), 'No link was made.')
         return made === FAILED ? null : made
       },
       onSignOut: async () => {
@@ -157,6 +166,22 @@ async function showDevices() {
         showSignIn('Signed out.')
       },
     }),
+    everyone ? section('People') : null,
+    everyone
+      ? renderHousehold(everyone, instance.person.id, {
+          onRemove: async (person) => {
+            if (
+              !confirm(
+                `Remove ${person.name}? They are signed out everywhere, and any recipe they own becomes yours.`,
+              )
+            )
+              return
+            if ((await attempt(() => api.removePerson(person.id), 'They were not removed.')) === FAILED)
+              return
+            showDevices()
+          },
+        })
+      : null,
   )
 }
 
@@ -336,6 +361,15 @@ function sharer(id, card) {
     shareSheet({
       id,
       title: card.title,
+      me: instance.person?.id ?? null,
+      onPeople: () => api.people().catch(() => null),
+      onLink: async (asked) => {
+        try {
+          return await api.share(id, { ...asked, name: null })
+        } catch (error) {
+          return { error: `No link was made. ${reason(error)}` }
+        }
+      },
       onList: async () => {
         try {
           return await api.grantsOn(id)
@@ -427,6 +461,14 @@ async function describe(list) {
       }
     }),
   )
+}
+
+/** Deleting drops the recipe itself, for everyone who could open it. */
+async function erase(id, card) {
+  const name = card ? card.title : id
+  if (!confirm(`Delete ${name} for everyone who can open it?`)) return
+  if ((await attempt(() => api.deleteCard(id), 'The recipe was not deleted.')) === FAILED) return
+  showOverview()
 }
 
 /**

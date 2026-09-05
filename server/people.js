@@ -14,9 +14,9 @@ const HOUR = 60 * 60 * 1000
  */
 export function openPeople(db) {
   const one = (sql) => db.prepare(sql)
-  const find = one('select id, name, created from people where id = ?')
+  const find = one('select id, name, admin, created from people where id = ?')
   const byHandle = one('select person, secret from credentials where kind = ? and handle = ?')
-  const addPerson = one('insert into people (id, name, created) values (?, ?, ?)')
+  const addPerson = one('insert into people (id, name, admin, created) values (?, ?, ?, ?)')
   const addCredential = one(
     'insert into credentials (kind, handle, person, secret) values (?, ?, ?, ?)',
   )
@@ -35,6 +35,21 @@ export function openPeople(db) {
   )
   const drop = one('delete from sessions where person = ? and id = ?')
   const dropToken = one('delete from sessions where token = ?')
+  const everyone = one(
+    `select p.id, p.name, p.admin, p.created, max(s.seen) as seen
+       from people p left join sessions s on s.person = p.id
+      group by p.id order by p.created`,
+  )
+  const dropPerson = one('delete from people where id = ?')
+  const dropLent = one("delete from grants where kind = 'person' and subject = ? and scope <> 'owner'")
+  const clearWay = one(
+    `delete from grants
+      where kind = 'person' and subject = ?
+        and card in (select card from grants where kind = 'person' and subject = ? and scope = 'owner')`,
+  )
+  const handOver = one(
+    "update grants set subject = ?, issued_by = ? where kind = 'person' and subject = ? and scope = 'owner'",
+  )
 
   return {
     /** Nobody has signed up yet, which is what the operator's bootstrap link is for. */
@@ -49,15 +64,43 @@ export function openPeople(db) {
     /**
      * A name is a display name and may repeat; the handle it signs in under may not,
      * which the credentials key already enforces.
+     *
+     * The first person to arrive keeps the instance. Nobody grants that and nobody can
+     * be promoted into it: on a box you own, whoever set it up is who set it up.
      */
     add(name, password) {
       const id = newId()
       const now = new Date().toISOString()
+      const admin = this.empty() ? 1 : 0
       inside(db, () => {
-        addPerson.run(id, name, now)
+        addPerson.run(id, name, admin, now)
         addCredential.run('password', handle(name), id, digest(password))
       })
-      return { id, name, created: now }
+      return { id, name, admin: admin === 1, created: now }
+    },
+
+    /** Everybody here: the picker that shares a recipe and the screen that removes one. */
+    all() {
+      return everyone.all().map((row) => ({ ...row, admin: row.admin === 1 }))
+    },
+
+    /**
+     * Somebody removed, and everything that hung off them. Their sessions, credentials
+     * and invites go with the foreign keys.
+     *
+     * Their grants take two paths. What they were *lent* goes with them - it was never
+     * theirs. What they *owned* is handed to whoever removed them, because a recipe left
+     * with no owner is one nobody could reach again. A person holds at most one grant per
+     * recipe, so any lesser grant the new owner already held on it is dropped first,
+     * rather than colliding with the one arriving.
+     */
+    remove(id, to) {
+      return inside(db, () => {
+        dropLent.run(id)
+        clearWay.run(to, id)
+        handOver.run(to, to, id)
+        return dropPerson.run(id).changes > 0
+      })
     },
 
     /**
@@ -68,6 +111,11 @@ export function openPeople(db) {
     named(name) {
       const found = byHandle.get('password', handle(name))
       return found ? this.person(found.person) : null
+    },
+
+    /** Whether this person is the one who keeps the instance. */
+    admin(id) {
+      return find.get(id)?.admin === 1
     },
 
     /** Null for a wrong password and null for a name nobody has, told apart nowhere. */

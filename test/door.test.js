@@ -9,7 +9,7 @@ Object.defineProperty(globalThis, 'navigator', {
   value: { clipboard: { writeText: async () => {} } },
   configurable: true,
 })
-const { devices, joining, signIn } = await import('../app/door.js')
+const { devices, household, joining, signIn } = await import('../app/door.js')
 
 const fields = (form) => all(form).filter((node) => node.tag === 'input')
 const submit = (form) => form.onsubmit({ preventDefault: () => {} })
@@ -57,19 +57,6 @@ test('an invite from somebody says who asked you in', () => {
   assert.equal(fields(form).length, 2)
 })
 
-test('a device link asks for nothing at all, because the link is the proof', () => {
-  const said = []
-  const form = joining({ invite: { kind: 'device', who: 'Jan' }, onJoin: (who) => said.push(who) })
-  body.replaceChildren(form)
-
-  assert.match(text(form), /adds the browser you are reading it on to Jan's recipes/)
-  assert.match(text(form), /No password needed/)
-  assert.equal(fields(form).length, 0, 'no name, no password')
-
-  submit(form)
-  assert.deepEqual(said, [null])
-})
-
 test('the device list names this browser and refuses to revoke it', () => {
   const now = new Date().toISOString()
   const old = new Date(Date.now() - 3 * 86400000).toISOString()
@@ -113,34 +100,51 @@ test('a browser that is not in the list yet still gets a sign-out', () => {
   assert.match(text(box), /Sign out of this browser/)
 })
 
-test('the two invites differ only in what the link will do', async () => {
-  const asked = []
+test('inviting somebody hands you a link, once', async () => {
+  let asked = 0
   const box = devices([], null, {
     onRevoke: () => {},
     onSignOut: () => {},
-    onInvite: async (kind) => {
-      asked.push(kind)
-      return { kind, token: 'atokenof22characters22' }
+    onInvite: async () => {
+      asked++
+      return { token: 'atokenof22characters22' }
     },
   })
   body.replaceChildren(box)
 
-  const button = (label) =>
-    one(box, (node) => node.tag === 'button' && node.textContent === label, label)
-
-  tap(button('Add another browser'))
-  await new Promise((done) => setTimeout(done, 0))
-  assert.deepEqual(asked, ['device'])
-  assert.match(text(box), /Open this on the other browser/)
-  const shown = fields(box).find((node) => node.readOnly)
   assert.equal(
-    shown.value,
-    'https://kitchen.example/join#atokenof22characters22',
-    'the token rides in the fragment, where no browser sends it',
+    all(box).filter((node) => node.tag === 'button' && node.textContent === 'Add another browser')
+      .length,
+    0,
+    'there is no second-browser invite: signing in is that already',
   )
 
-  tap(button('Invite someone'))
+  tap(one(box, (node) => node.tag === 'button' && node.textContent === 'Invite someone', 'invite'))
   await new Promise((done) => setTimeout(done, 0))
-  assert.deepEqual(asked, ['device', 'person'])
+  assert.equal(asked, 1)
   assert.match(text(box), /Send this to them/)
+  const shown = fields(box).find((node) => node.readOnly)
+  assert.equal(shown.value, 'https://kitchen.example/join#atokenof22characters22')
+})
+
+test('the household screen removes anybody but you, and says what that costs', () => {
+  const removed = []
+  const box = household(
+    [
+      { id: 'jan', name: 'Jan', admin: true, seen: new Date().toISOString() },
+      { id: 'rita', name: 'Rita', admin: false, seen: null },
+    ],
+    'jan',
+    { onRemove: (person) => removed.push(person.id) },
+  )
+  body.replaceChildren(box)
+
+  assert.match(text(box), /Jan · you/)
+  assert.match(text(box), /keeps this instance/)
+  assert.match(text(box), /last seen never/, 'somebody who has never signed in says so')
+
+  const drops = all(box).filter(byClass('danger'))
+  assert.equal(drops.length, 1, 'you are not on the list of people you can remove')
+  tap(drops[0])
+  assert.deepEqual(removed, ['rita'])
 })

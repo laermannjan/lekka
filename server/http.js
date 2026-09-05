@@ -11,6 +11,7 @@ const SHARE = /^\/api\/cards\/([^/]+)\/grants$/
 const GRANT = /^\/api\/grants\/([a-z0-9]{1,64})$/
 const SESSION = /^\/api\/sessions\/([a-z0-9]{1,64})$/
 const INVITE = /^\/api\/invites\/([a-z0-9]{1,64})$/
+const PERSON = /^\/api\/people\/([a-z0-9]{1,64})$/
 const ID = /^[a-z0-9-]{1,64}$/
 
 /** The address a shared recipe is read at, in either shape the app has ever written. */
@@ -103,12 +104,17 @@ async function route(store, options, request, response) {
   if (forged(request)) throw new Refusal(403, 'cross-site request refused')
   const session = options.people?.session(cookie(request, COOKIE)) ?? null
 
-  if (path.startsWith('/api/session') || path.startsWith('/api/invite') || path === '/api/me')
-    return peopleRoute(options, request, response, path, session)
+  if (
+    path.startsWith('/api/session') ||
+    path.startsWith('/api/invite') ||
+    path.startsWith('/api/people') ||
+    path === '/api/me'
+  )
+    return peopleRoute(store, options, request, response, path, session)
 
   if (path === '/api/cards') {
     /* The library. Where nothing is owned everybody sees everything, which is what
-     * `NONE` and `AUTH` mean; under `GRANT` you see what a grant names you on. A library
+     * `NONE` and `LOGIN` mean; under `GRANT` you see what a grant names you on. A library
      * is always somebody's, so unlike a single recipe it is never opened by a token. */
     if (request.method === 'GET') {
       if (options.mode === 'NONE') return json(response, 200, store.all())
@@ -153,7 +159,7 @@ async function route(store, options, request, response) {
  * name and a wrong password answer alike, and both are charged against the same counter
  * that a guessed link is, since both are somebody trying strings.
  */
-async function peopleRoute(options, request, response, path, session) {
+async function peopleRoute(store, options, request, response, path, session) {
   const { people, invites, mode, bootstrap } = options
   if (!people) throw missing()
   const secure = encrypted(request, options.limits.trustProxy)
@@ -163,21 +169,39 @@ async function peopleRoute(options, request, response, path, session) {
     return json(response, 200, {
       mode,
       empty: people.empty(),
-      person: session ? { id: session.person, name: session.name } : null,
+      person: session
+        ? { id: session.person, name: session.name, admin: people.admin(session.person) }
+        : null,
       // Named so the device list can say which row is the browser reading it.
       session: session ? { id: session.id, label: session.label } : null,
     })
   }
 
-  /* Made by somebody who is already in. `device` is another browser for them; `person`
-   * is somebody new, who picks their own name and password when they open it. */
+  /* Made by anybody already inside. There is nothing here for a second browser of your
+   * own: signing in is that already. */
   if (path === '/api/invites') {
     if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
     if (!session) throw new Refusal(401, 'sign in first')
-    const { kind } = parse(await body(request, options))
-    if (!['device', 'person'].includes(kind))
-      throw new Refusal(400, 'an invite is for a device or a person')
-    return json(response, 201, invites.make(kind, session.person))
+    return json(response, 201, invites.make(session.person))
+  }
+
+  /* Everybody here. Any signed-in person may look, because sharing a recipe means
+   * picking one of them by name; only the one who keeps the instance may remove. */
+  if (path === '/api/people') {
+    if (request.method !== 'GET') throw new Refusal(405, 'method not allowed')
+    if (!session) throw new Refusal(401, 'sign in first')
+    return json(response, 200, people.all())
+  }
+
+  const asPerson = PERSON.exec(path)
+  if (asPerson) {
+    if (request.method !== 'DELETE') throw new Refusal(405, 'method not allowed')
+    if (!session || !people.admin(session.person)) throw missing()
+    if (asPerson[1] === session.person)
+      throw new Refusal(409, 'somebody has to keep the instance; this is you')
+    if (!people.person(asPerson[1])) throw missing()
+    people.remove(asPerson[1], session.person)
+    return send(response, 204)
   }
 
   const asInvite = INVITE.exec(path)
@@ -190,30 +214,29 @@ async function peopleRoute(options, request, response, path, session) {
 
     if (request.method === 'GET') {
       const found = invites.read(token)
-      if (found) return json(response, 200, { kind: found.kind, who: found.who })
-      if (first()) return json(response, 200, { kind: 'person', who: null, first: true })
+      if (found) return json(response, 200, { who: found.who })
+      if (first()) return json(response, 200, { who: null, first: true })
       throw missing()
     }
     if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')
     if (!options.limits.tries.charge(who(options, request)))
       throw new Refusal(429, 'too many requests')
 
+    const starting = first()
     const found = invites.spend(token)
-    if (!found && !first()) throw missing()
-
-    /* Another browser for a person already here needs no name and no password: the
-     * invite is the proof, since only they could have made it. */
-    if (found?.kind === 'device') {
-      const them = people.person(found.person)
-      if (!them) throw missing()
-      return json(response, 201, { id: them.id, name: them.name }, cookieFor(people, them, request, secure))
-    }
+    if (!found && !starting) throw missing()
 
     const { name, password } = parse(await body(request, options))
     named(name)
     strong(password)
     if (people.named(name.trim())) throw new Refusal(409, 'somebody here already signs in as that')
     const person = people.add(name.trim(), password)
+
+    /* Recipes made before the door went up belong to nobody, and under `GRANT` that
+     * means nobody can reach them. The first person to arrive takes them, which is the
+     * one moment where an answer is obvious: there is nobody else it could be. */
+    if (starting) options.grants.adopt(person.id)
+
     return json(response, 201, { id: person.id, name: person.name }, cookieFor(people, person, request, secure))
   }
 
@@ -534,7 +557,7 @@ async function statics(store, options, path, response, session) {
   // is the one place a closed instance could still say what a card is called.
   const shared = READ.exec(path)
   if (shared) {
-    const open = mode === 'NONE' || (mode === 'AUTH' && session)
+    const open = mode === 'NONE' || (mode === 'LOGIN' && session)
     return page(app, response, {
       title: open ? await titleOf(store, shared[1]) : null,
       unlisted: true,

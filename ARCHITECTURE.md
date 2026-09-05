@@ -33,10 +33,10 @@ rule, so no route can disagree with another.
 | `ACCESS_CONTROL` | | |
 |---|---|---|
 | `NONE` | no door | everyone who reaches the port reads, writes and deletes every recipe |
-| `AUTH` | one door | everyone signed in does the same |
+| `LOGIN` | one door | everyone signed in does the same |
 | `GRANT` | one door, and owners | a recipe answers to a grant |
 
-Under `NONE` and `AUTH` nothing is anybody's, so the library is the whole server
+Under `NONE` and `LOGIN` nothing is anybody's, so the library is the whole server
 and there is nothing to check per recipe. Under `GRANT` every question - who owns
 this, who else may open it - is one lookup in `grants`:
 
@@ -84,15 +84,26 @@ is what a shared link is about. `app/link.js` is the one place that knows the
 shape. Older links, with the token as a path segment, are read and rewritten on
 arrival.
 
-Somebody new arrives through an invite, which is one table and one screen with two
-outcomes. A `device` invite adds another browser to the person who made it, and asks
-for nothing: only they could have made it, so the link is the whole proof. A `person`
-invite makes somebody new, who chooses the name and password they will sign in with.
-The operator's first-boot link is not a row - there is nobody yet to have issued it -
-but it answers at the same address as the `person` invite it is, so the screen that
-opens a link never has to know where the link came from.
+Somebody new arrives through an invite: a link, made by anybody already inside, which
+whoever opens it turns into an account of their own. There is nothing for a second
+browser of your own, because signing in is that already. The operator's first-boot
+link is not a row - there is nobody yet to have issued it - but it answers at the
+same address as the invite it is, so the screen that opens a link never has to know
+where the link came from.
 
-Under `AUTH` and `GRANT` a browser is a session: an opaque token in an `HttpOnly`
+The first person to arrive keeps the instance: a flag on the row, set because they
+were first, and the only thing it buys is seeing everybody and removing somebody. It
+is a flag rather than a role table because there are two kinds of person here and no
+third one coming. Removing somebody takes their sessions, credentials and invites
+with the foreign keys; their grants take two paths, since what they were *lent* goes
+with them and what they *owned* is handed to whoever removed them.
+
+That same person takes every recipe nobody owns when they arrive. Under `NONE` there
+is no session, so a recipe is made with no owner grant - and under `GRANT` a recipe
+nobody owns is one nobody can reach. Adopting them once, at the moment the instance
+gains its first person, is the only point where the answer is not a guess.
+
+Under `LOGIN` and `GRANT` a browser is a session: an opaque token in an `HttpOnly`
 cookie, and a row naming the person it belongs to. `Secure` is set only over a
 connection that is one, because the deployment this is written for is a LAN over
 plain HTTP. A cookie is ambient authority, so every write also needs a matching
@@ -152,7 +163,7 @@ editor changes a cell on screen and has to write it into the right node.
 ## Screens
 
 **Overview at `/`.** The library, from `GET /api/cards`. What that answers
-depends on the instance: every recipe on the server under `NONE` and `AUTH`, and
+depends on the instance: every recipe on the server under `NONE` and `LOGIN`, and
 the ones a grant names you on under `GRANT`. Nothing about it is remembered
 locally - the service worker already caches the response and serves it when the
 network is gone, and a second copy in `localStorage` was the same bytes in a
@@ -584,7 +595,7 @@ work.
 **The server is meant for a network you already trust**: a LAN, or a VPN such as
 Tailscale or Wireguard. It is not meant to be reachable from the internet, and
 nothing in it is built for that. There is no admin interface and no rate limiting,
-and those absences are deliberate. `ACCESS_CONTROL=AUTH` or `GRANT` adds a login, which
+and those absences are deliberate. `ACCESS_CONTROL=LOGIN` or `GRANT` adds a login, which
 narrows who may read what - it does not make the server safe on a public address, and
 none of the work listed at the end of this section has been done.
 

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { newId } from '../app/id.js'
+import { inside } from './db.js'
 
 const TOKEN_LENGTH = 22
 const HOUR = 60 * 60 * 1000
@@ -96,6 +97,23 @@ export function openGrants(db) {
     /** The cards a person holds any live grant on, most recently changed first. */
     cards(person) {
       return person ? forPerson.all(person, new Date().toISOString()) : []
+    },
+
+    /**
+     * Every recipe nobody owns, handed to one person. Only ever called once, when the
+     * first person arrives on an instance whose recipes were made before there was
+     * anybody to own them.
+     */
+    adopt(person) {
+      const now = new Date().toISOString()
+      const orphans = db
+        .prepare("select id from cards where id not in (select card from grants where scope = 'owner')")
+        .all()
+      inside(db, () => {
+        for (const card of orphans)
+          add.run(newId(), card.id, 'person', person, 'owner', person, now, null)
+      })
+      return orphans.length
     },
 
     revoke(id) {

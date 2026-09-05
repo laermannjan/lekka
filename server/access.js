@@ -1,6 +1,6 @@
 export const COOKIE = 'lekka'
 
-const MODES = ['NONE', 'AUTH', 'GRANT']
+const MODES = ['NONE', 'LOGIN', 'GRANT']
 const YEAR = 365 * 24 * 60 * 60
 
 /**
@@ -8,7 +8,7 @@ const YEAR = 365 * 24 * 60 * 60
  * secret it feels.
  *
  *   NONE   no door. Everyone who reaches the port reads, writes and deletes everything.
- *   AUTH   one door. Everyone signed in reads, writes and deletes everything.
+ *   LOGIN  one door. Everyone signed in reads, writes and deletes everything.
  *   GRANT  one door, and every recipe answers to a grant: yours, or one you were given.
  *
  * An unknown value is a typo, and a typo must not quietly open an instance.
@@ -28,7 +28,7 @@ export const guarded = (mode) => mode !== 'NONE'
  */
 export function may(mode, session, asked) {
   if (mode === 'NONE') return true
-  if (mode === 'AUTH') return Boolean(session)
+  if (mode === 'LOGIN') return Boolean(session)
   // Under GRANT the row is the whole answer, and being signed in is not part of the
   // question: a link grant exists precisely so somebody with no account here can open
   // the one recipe they were sent.

@@ -26,17 +26,24 @@ export async function invite(token) {
   return send('GET', `/api/invites/${token}`)
 }
 
-/** Made by somebody already inside: another browser for them, or somebody new. */
-export async function makeInvite(kind) {
-  return send('POST', '/api/invites', { body: JSON.stringify({ kind }) })
+/** Made by anybody already inside, for somebody who is not here yet. */
+export async function makeInvite() {
+  return send('POST', '/api/invites', { body: '{}' })
 }
 
-/**
- * Spending one. A device invite needs nothing said - the link is the proof. A person
- * invite is where somebody new picks the name and password they will sign in with.
- */
-export async function redeem(token, who = null) {
-  return send('POST', `/api/invites/${token}`, { body: who ? JSON.stringify(who) : undefined })
+/** Everybody here. Any signed-in person may ask, because that is who they can share with. */
+export async function people() {
+  return send('GET', '/api/people')
+}
+
+/** Only the person who keeps the instance. What they owned comes to whoever removes them. */
+export async function removePerson(id) {
+  return send('DELETE', `/api/people/${id}`)
+}
+
+/** Spending one: where somebody new picks the name and password they sign in with. */
+export async function redeem(token, who) {
+  return send('POST', `/api/invites/${token}`, { body: JSON.stringify(who) })
 }
 
 export async function sessions() {

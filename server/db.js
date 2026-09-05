@@ -38,9 +38,13 @@ create unique index if not exists grants_owner on grants (card) where scope = 'o
 create unique index if not exists grants_once on grants (card, kind, subject);
 create index if not exists grants_subject on grants (kind, subject);
 
+/* The first person to arrive keeps the instance: they are the one who can see everybody
+ * and remove somebody. It is a flag rather than a role table, because there are two
+ * kinds of person here and there is no third one coming. */
 create table if not exists people (
   id      text primary key,
   name    text not null,
+  admin   integer not null default 0,
   created text not null
 );
 
@@ -63,11 +67,10 @@ create table if not exists sessions (
 
 create index if not exists sessions_person on sessions (person);
 
-/* How somebody new arrives: another browser for a person already here, or a person who
- * is not. Single use and short lived, so the table is small and mostly empty. */
+/* How somebody new arrives, made by whoever is already inside. Single use and short
+ * lived, so the table is small and mostly empty. */
 create table if not exists invites (
   token   text primary key,
-  kind    text not null,
   person  text references people(id) on delete cascade,
   created text not null,
   expires text not null

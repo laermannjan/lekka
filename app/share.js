@@ -13,7 +13,7 @@ import { address } from './link.js'
  * A token is shown once, at the moment it is made, and never again - the server keeps
  * only its hash, so there is nothing to show later even if the panel wanted to.
  */
-export function shareSheet({ id, title, onList, onGive, onRevoke }) {
+export function shareSheet({ id, title, me, onList, onPeople, onGive, onLink, onRevoke }) {
   const box = element('dialog', 'compose')
   const form = element('form', 'body')
   form.method = 'dialog'
@@ -26,7 +26,7 @@ export function shareSheet({ id, title, onList, onGive, onRevoke }) {
   const minted = element('div', 'list')
   minted.hidden = true
 
-  const who = field('Person', 'text', 'a name, or leave empty for a link')
+  const who = people()
   const scope = choose('They may', [
     ['read', 'Read it'],
     ['edit', 'Read and change it'],
@@ -43,8 +43,14 @@ export function shareSheet({ id, title, onList, onGive, onRevoke }) {
   done.onclick = () => box.close()
 
   const refresh = async () => {
-    const list = await onList()
+    const [list, everyone] = await Promise.all([onList(), onPeople()])
     held.replaceChildren(...(list === null ? [] : rows(list, onRevoke, refresh)))
+    // Everyone but you, each saying what they already hold, so choosing one of them is
+    // a decision made with the answer in front of you rather than from memory.
+    who.fill(
+      (everyone ?? []).filter((person) => person.id !== me),
+      list ?? [],
+    )
   }
 
   form.onsubmit = async (event) => {
@@ -53,22 +59,43 @@ export function shareSheet({ id, title, onList, onGive, onRevoke }) {
     if (give.disabled) return
     give.disabled = true
 
-    const name = who.input.value.trim()
+    const chosen = who.chosen()
     const many = days.input.value.trim()
-    const made = await onGive({
-      name: name || null,
-      scope: scope.value(),
-      days: many === '' ? null : Number(many),
-    })
+    const asked = { scope: scope.value(), days: many === '' ? null : Number(many) }
+
+    if (chosen.length === 0) {
+      wrong.textContent = 'Choose somebody, or make a link instead.'
+      wrong.hidden = false
+      give.disabled = false
+      return
+    }
+
+    // One act, however many people are in it: granting somebody who already holds
+    // something changes what they hold rather than adding a second row.
+    for (const name of chosen) {
+      const made = await onGive({ ...asked, name })
+      if (made?.error) {
+        wrong.textContent = made.error
+        wrong.hidden = false
+        break
+      }
+    }
+
     give.disabled = false
+    days.input.value = ''
+    await refresh()
+  }
+
+  const link = element('button', 'quiet', 'Make a link instead')
+  link.type = 'button'
+  link.onclick = async () => {
+    const many = days.input.value.trim()
+    const made = await onLink({ scope: scope.value(), days: many === '' ? null : Number(many) })
     if (made?.error) {
       wrong.textContent = made.error
       wrong.hidden = false
       return
     }
-
-    who.input.value = ''
-    days.input.value = ''
     if (made?.token) showToken(minted, id, made.token)
     await refresh()
   }
@@ -78,18 +105,17 @@ export function shareSheet({ id, title, onList, onGive, onRevoke }) {
     element('div', 'hint', 'Everyone who holds this recipe, and what they may do with it.'),
     held,
     minted,
-    element('div', 'row wide', undefined, [...who.parts]),
+    who.node,
     scope.node,
     element('div', 'row wide', undefined, [...days.parts]),
     wrong,
-    element('div', 'actions', undefined, [give, done]),
+    element('div', 'actions', undefined, [give, link, done]),
   )
   box.append(form)
   box.onclose = () => box.remove()
   document.body.append(box)
   box.showModal()
   refresh()
-  who.input.focus()
   return box
 }
 
@@ -106,6 +132,9 @@ function rows(list, onRevoke, refresh) {
     // row that cannot go: a recipe with no owner is one nobody could ever reach again.
     if (grant.scope !== 'owner') {
       const drop = element('button', 'quiet danger', 'Revoke')
+      // Inside a form, a button with no type submits it. Without this, Revoke minted a
+      // link and left Share looking pressed.
+      drop.type = 'button'
       drop.onclick = async () => {
         await onRevoke(grant.id)
         await refresh()
@@ -129,6 +158,49 @@ function showToken(box, id, token) {
     linkOut(url, 'This link, once. It is not stored, so it cannot be shown again.'),
   )
   box.hidden = false
+}
+
+/**
+ * Everybody else here, each with a box and what they already hold beside their name.
+ *
+ * It was a field you typed a name into, which asked you to remember both who is here
+ * and what you had already given them. Neither is a thing to remember when the server
+ * knows both.
+ */
+function people() {
+  const list = element('div', 'list')
+  const node = element('div', 'row wide', undefined, [element('span', 'name', 'Share with'), list])
+  const held = []
+
+  return {
+    node,
+    fill(everyone, grants) {
+      held.length = 0
+      if (everyone.length === 0) {
+        list.replaceChildren(element('div', 'row', 'Nobody else here yet. Invite somebody first.'))
+        return
+      }
+      const has = new Map(grants.filter((one) => one.who).map((one) => [one.who, one.scope]))
+      list.replaceChildren(
+        ...everyone.map((person) => {
+          const box = element('input')
+          box.type = 'checkbox'
+          box.value = person.name
+          const now = has.get(person.name)
+          const line = element('label', 'choice', undefined, [
+            box,
+            element('span', 'what', person.name),
+            element('span', 'aside', now ? says({ scope: now }) : 'holds nothing'),
+          ])
+          held.push(box)
+          return line
+        }),
+      )
+    },
+    chosen() {
+      return held.filter((box) => box.checked).map((box) => box.value)
+    },
+  }
 }
 
 function field(name, type, hint) {

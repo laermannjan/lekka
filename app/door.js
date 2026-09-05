@@ -53,29 +53,11 @@ export function signIn({ onSignIn }) {
 }
 
 /**
- * A join link, opened. The server has already said what it is for, so this screen only
- * has to say it back and take the one thing it still needs.
- *
- * A `device` link needs nothing at all: it was made by the person it belongs to, and
- * only they could have made it, so the link is the whole proof. A `person` link is where
- * somebody new chooses the name and password they will sign in with from then on.
+ * A join link, opened: where somebody new chooses the name and password they will sign
+ * in with from then on. The server has already said whether this is the operator's
+ * first-boot link or an invite from a person, so the screen only says it back.
  */
 export function joining({ invite, onJoin }) {
-  if (invite.kind === 'device') {
-    const box = element('form', 'list')
-    const add = element('button', 'go', 'Add this browser')
-    add.type = 'submit'
-    box.append(
-      element('div', 'band', `This link adds the browser you are reading it on to ${invite.who}'s recipes. No password needed - it was made from a browser already signed in.`),
-      element('div', 'bar after', undefined, [add]),
-    )
-    box.onsubmit = (event) => {
-      event.preventDefault()
-      onJoin(null)
-    }
-    return box
-  }
-
   const name = field('Name', 'text', { hint: 'what to call you', focus: true })
   const password = field('Password', 'password', { hint: 'at least 12 characters' })
   password.input.autocomplete = 'new-password'
@@ -107,6 +89,7 @@ export function devices(list, here, { onRevoke, onSignOut, onInvite }) {
     )
     if (!mine) {
       const drop = element('button', 'quiet danger', 'Revoke')
+      drop.type = 'button'
       drop.onclick = () => onRevoke(row.id)
       line.append(drop)
     }
@@ -116,20 +99,39 @@ export function devices(list, here, { onRevoke, onSignOut, onInvite }) {
   const shown = element('div', 'list')
   shown.hidden = true
 
-  /* Two buttons, one flow. What differs is only what redeeming the link does, and that
-   * is decided here, by whoever is holding a browser that is already signed in. */
-  const another = element('button', 'quiet', 'Add another browser')
-  another.onclick = () => hand(shown, onInvite('device'))
   const someone = element('button', 'quiet', 'Invite someone')
-  someone.onclick = () => hand(shown, onInvite('person'))
+  someone.type = 'button'
+  someone.onclick = () => hand(shown, onInvite())
 
   const out = element('button', 'quiet', 'Sign out of this browser')
+  out.type = 'button'
   out.onclick = () => onSignOut()
 
-  box.append(
-    element('div', 'bar after', undefined, [another, someone, out]),
-    shown,
-  )
+  box.append(element('div', 'bar after', undefined, [someone, out]), shown)
+  return box
+}
+
+/**
+ * Everybody on this instance, for whoever keeps it. Removing somebody ends their
+ * sessions and hands what they owned to you, because a recipe left with no owner is one
+ * nobody could reach again - the confirmation says so in those words.
+ */
+export function household(everyone, me, { onRemove }) {
+  const box = element('div', 'list')
+  for (const person of everyone) {
+    const line = element('div', 'row')
+    line.append(
+      element('span', 'name', person.id === me ? `${person.name} · you` : person.name),
+      element('span', 'aside', person.admin ? 'keeps this instance' : `last seen ${when(person.seen)}`),
+    )
+    if (person.id !== me) {
+      const drop = element('button', 'quiet danger', 'Remove')
+      drop.type = 'button'
+      drop.onclick = () => onRemove(person)
+      line.append(drop)
+    }
+    box.append(line)
+  }
   return box
 }
 
@@ -138,18 +140,14 @@ async function hand(box, asked) {
   if (!made) return
   const url = new URL(`/join#${made.token}`, location.origin).href
   box.replaceChildren(
-    linkOut(
-      url,
-      made.kind === 'device'
-        ? 'Open this on the other browser. It works once, and until it expires.'
-        : 'Send this to them. It works once, and until it expires.',
-    ),
+    linkOut(url, 'Send this to them. It works once, and until it expires in an hour.'),
   )
   box.hidden = false
 }
 
 /** Rough on purpose: a device list wants "yesterday", not a timestamp to the second. */
 function when(stamp) {
+  if (!stamp) return 'never'
   const days = Math.floor((Date.now() - new Date(stamp).getTime()) / 86400000)
   if (!Number.isFinite(days)) return 'at some point'
   if (days < 1) return 'today'

@@ -91,7 +91,7 @@ not hardened for the open internet.
 |---|---|---|
 | `PORT` | 8080 | |
 | `DATA_DIR` | `./data` | the only thing to back up |
-| `ACCESS_CONTROL` | `NONE` | how much of it this instance does - see below. `AUTH` and `GRANT` print a one-time link on first boot, which is how the first person is made |
+| `ACCESS_CONTROL` | `NONE` | how much of it this instance does - see below. `LOGIN` and `GRANT` print a one-time link on first boot, which is how the first person is made |
 
 | `CREATE_TOKEN` | unset | when set, creating a card needs `Authorization: Bearer <token>` |
 | `MAX_CARD_BYTES` | 65536 | largest card accepted |
@@ -132,35 +132,45 @@ One setting decides, and it names the mechanism rather than how secret it feels.
 | `ACCESS_CONTROL` | | |
 |---|---|---|
 | `NONE` | no door | everyone who reaches the port reads, writes and deletes every recipe. The library is the whole server |
-| `AUTH` | one door | everyone signed in does the same. Nothing behind the door is anybody's in particular |
+| `LOGIN` | one door | everyone signed in does the same. Nothing behind the door is anybody's in particular |
 | `GRANT` | one door, and owners | a recipe answers to a grant. Yours are yours; the rest you were given |
 
 ### Getting in, and letting others in
 
-`AUTH` and `GRANT` print a link on first boot - `Open /join#… to make the first
+`LOGIN` and `GRANT` print a link on first boot - `Open /join#… to make the first
 one` - and whoever opens it becomes the first person and picks their password.
 It works once.
+
+Whoever opens that first link **keeps the instance**: they are the one who can see
+everybody on it and remove somebody. Nobody grants that and nobody is promoted into
+it - on a box you own, whoever set it up is who set it up.
 
 After that, everything happens from **your name in the masthead**, which opens the
 list of browsers you are signed in on:
 
-- **Add another browser** hands you a link that adds the browser you open it on to
-  *you*. No second password, no second account - it was made from a browser already
-  signed in, and that is the whole proof.
-- **Invite someone** hands you a link for somebody else, who picks their own name
-  and password when they open it. They arrive with an empty library.
+- **Invite someone** hands you a link for somebody who is not here yet. They pick
+  their own name and password when they open it, and arrive with an empty library.
+  It works once and expires in an hour; only its hash is stored, so a lost link is
+  reissued rather than recovered.
 - **Sign out of this browser** ends this session, and **Revoke** ends another one.
+- **People**, for whoever keeps the instance, lists everybody and removes somebody.
+  Removing them ends their sessions and hands any recipe they owned to you, because
+  a recipe left with no owner is one nobody could reach again.
 
-Both links work once and expire in an hour. Only the hash is stored, so a lost link
-is reissued rather than recovered.
+There is nothing for adding a second browser of your own, because signing in is that
+already.
+
+Recipes made while `ACCESS_CONTROL` was `NONE` belong to nobody. The first person to
+arrive takes them, which is the one moment the answer is obvious.
 
 Under `GRANT` a grant is one row saying *this subject may do this, until taken
 back*. The subject is a person, who signs in as themselves, or a link, which is
-whoever holds the token. `Share` on a recipe you own lists everyone who holds it
-and gives it to somebody else: name a person and the grant is theirs, forwarding
-the link forwards nothing, and taking it back is one act; name nobody and you get
-a link, shown once with a QR code, that expires when you say and is revocable on
-its own. A link token rides in the fragment of `/r/<id>#<token>`,
+whoever holds the token. `Share` on a recipe you own lists everyone who holds it,
+and offers everybody else on the instance with what they already hold beside their
+name - so choosing is done with the answer in front of you. Choosing somebody who
+already holds something changes what they hold rather than adding a second row.
+`Make a link instead` mints one for somebody with no account here, shown once with
+a QR code, expiring when you say and revocable on its own. A link token rides in the fragment of `/r/<id>#<token>`,
 which is the one part of an address a browser sends nowhere: not in the request
 line, not in a `Referer`, so not into an access log, a proxy or a CDN. The older
 shape, with the token as a path segment, is still read and rewritten on arrival.
