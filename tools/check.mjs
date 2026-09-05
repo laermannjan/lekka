@@ -313,46 +313,7 @@ requestAnimationFrame(() => {
     prep.getBoundingClientRect().right <= first.getBoundingClientRect().left + 1,
     \`prep to \${prep.getBoundingClientRect().right.toFixed(0)}, column 01 from \${first.getBoundingClientRect().left.toFixed(0)}\`)
 
-  /*
-   * Done, rolled along. It is as wide as the widest row still standing in it, and no
-   * wider - it used to be the whole ingredient block whenever any row waited anywhere,
-   * so one short row left over held a lane of nothing open beside it.
-   *
-   * The card here is roggenquarkbrot, where Haferflocken waits until column 04 while
-   * every other row has gone into a step by column 03.
-   */
-  const scroll = tall.querySelector('.scroll')
-  const place = tall.querySelector('.place')
-  const block = tall.querySelector('.grid .label.heading').getBoundingClientRect().width
-  let narrowest = Infinity
-  let grew = 0
-
-  const roll = (at) => {
-    if (at > 2400) {
-      check('Done shrinks to the row still standing in it, not the whole block',
-        narrowest < block - 100, \`narrowest \${narrowest.toFixed(0)}, block \${block.toFixed(0)}\`)
-      check('and no row gains a line as Done closes up', grew < 30, \`tallest row \${grew.toFixed(0)}\`)
-      report()
-      return
-    }
-    scroll.scrollLeft = at
-    scroll.dispatchEvent(new Event('scroll'))
-    setTimeout(() => {
-      const wide = Number.parseFloat(place.style.width) || 0
-      // Only while a row is still standing: past that Done is one step wide by both
-      // rules, and proves nothing either way.
-      // A row is standing while its own span still reaches the left edge - which is the
-      // same thing that keeps its sticky cells there, so it needs no second rule.
-      const standing = [...tall.querySelectorAll('.grid > .hold')].some(
-        (one) => one.getBoundingClientRect().right > scroll.getBoundingClientRect().left + 1,
-      )
-      if (standing && wide > 0) narrowest = Math.min(narrowest, wide)
-      for (const one of tall.querySelectorAll('.grid > .hold'))
-        grew = Math.max(grew, one.getBoundingClientRect().height)
-      roll(at + 240)
-    }, 320)
-  }
-  roll(0)
+  report()
 })
 
 function report() {

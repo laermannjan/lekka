@@ -112,18 +112,19 @@ the objection this arrangement was once dropped for: a column is
 preparation *bound* to a column would silently move to a different moment - but
 one bound to its step moves with the step, which is where it belongs.
 
-**Done is as wide as what is standing in it.** A row is drawn from the ingredient
-column to the step that takes it, and it holds the left edge for exactly that
-long, because a sticky cell cannot leave its own row. So the rows still standing
-once a column is done are the rows taken *after* it, and the Done place needs the
-width of the widest of those - never more than the ingredient block, never less
-than the step whose right edge comes to rest on the line.
+**Done is a whole ingredient block wide while any row is still waiting**, and the
+width of the step itself once none is.
 
-It was the whole block whenever any row still waited anywhere on the card. That
-block is as wide as the longest name there is, so a card down to one short row
-held a lane of nothing open for it: on `roggenquarkbrot` at 1040 px, 379 px of
-Done for a row that wanted 231. A standing row is held to that width as the card
-rolls, which cuts nothing, because the width was measured from the row.
+It is wider than it has to be, and deliberately. The rows still standing once a
+column is done are the rows taken after it, so Done could be the width of the
+widest of *those* - on `roggenquarkbrot` at 1040 px that is 231 px against 379,
+and it was built that way for a while. The trouble is what follows: Done
+narrower than the block means the block reaches past the line and paints over
+what is Now, so a standing row has to be held to it - and a row held to less than
+its own column is dragged off the left edge by its own sticky clamp, which puts
+the name where nothing else on the table sits. Two attempts at that, one wrapping
+every clamped name and growing its line, the other showing the tails of names on
+their way out. The lane of nothing is the cheaper of the two.
 
 **Free area belongs to the step it flows into.** A step's cell stands at the right
 of the rows it takes, and the blank those rows wait in reaches back under them:

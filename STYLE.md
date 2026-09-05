@@ -129,15 +129,14 @@ Sorted by what it touches, which settles every question of placement:
 
 | touches | goes |
 |---|---|
-| the page | the masthead, beside the name - `Fit to screen` |
-| a column of the recipe | that column's own heading cell - the scale |
+| the page, or the whole recipe at once | the masthead - the scale, `Fit to screen` |
 | the recipe itself | below the table, out of the way of reading - `Edit`, `Save`, `Done` |
 
-**Beside what it changes means inside the table when the thing it changes is in
-the table.** The scale multiplies the amounts, and the heading cell of the
-ingredient column heads the column the amounts stand in - so it goes there, and
-the page keeps a row it would otherwise have spent. Fitting is not that: it acts
-on the page, so it goes where page acts go.
+**Nothing goes inside the table.** The scale was put in the heading cell of the
+ingredient column once, on the grounds that it multiplies the amounts and that
+cell heads them. It is true and it did not work: that cell is held at the left
+edge while the card rolls, so the switch was carried out over the middle of the
+table. A control has to stay where it was put.
 
 A control that would do nothing is not drawn. `Fit to screen` is offered only on a
 recipe that does not fit, and `Cancel` reads `Done` when there is nothing to
@@ -331,20 +330,22 @@ inside them. A qualifier drops to its own line.
 - `+ Ingredient` adds an empty row and opens the form on it. There is no form to
   fill in first: the thing is made and then named, and a blank one is simply a
   fault until it is not.
-- **No row of controls above the table, and none below it.** The scale sits in
-  the heading cell of the ingredient column, which heads the amounts it
-  multiplies - beside what it changes in the strictest sense there is, and
-  costing the page no row of its own. It holds the left edge with that column
-  when the card is rolled along, so it is still there to reach.
-
-  Fitting acts on the page rather than on the recipe, so it goes to the masthead
-  where printing does. Only `Edit` and `Save to collection` sit under the table:
-  acts that change the recipe, past the thing they act on.
+- **No row of controls above the table.** The scale and `Fit to screen` are in
+  the masthead. Neither is about a point in the recipe - one multiplies every
+  amount on it, the other decides how the page draws the whole thing - so both
+  belong where the page's own controls are. Only `Edit` and `Save to collection`
+  sit under the table: acts that change the recipe, past the thing they act on.
 
   They were a bar between the heading and the table - the right instinct in the
   wrong place, because writing has nothing to put there, so the table rose by the
   height of that row the moment `Edit` was pressed, out from under the pointer
-  that pressed it. There is no row to lose now.
+  that pressed it.
+
+  The scale then went into the heading cell of the ingredient column, which is
+  nearer still to the amounts it multiplies and costs the page no row at all.
+  That cell is held at the left edge while the card rolls, so the switch was
+  dragged out over the middle of the table. Near the thing it changes is worth
+  less than staying where it was put.
 - **The name is the same box read and written**: same height, same baseline, same
   left edge. Pressing `Edit` puts a field around the name it is already on.
 - **`Save` and `Cancel` are the only buttons on the page**, under the table where

@@ -104,33 +104,33 @@ async function showCard(id, key, state = {}) {
   const fitting = fitter(id, key, here)
 
   /*
-   * No row of controls above the table, and none below it either.
+   * No row of controls above the table, and none below it but the acts.
    *
-   * The scale sits in the heading cell of the ingredient column, which heads the amounts
-   * it multiplies - beside what it changes in the strictest sense, and costing the page
-   * no row of its own. Fitting acts on the page rather than on the recipe, so it goes to
-   * the masthead where printing does.
+   * The scale and the fit are in the masthead. Neither is about a point in the recipe -
+   * one multiplies every amount on it, the other decides how the page draws the whole
+   * thing - so they belong where the page's own controls are.
    *
    * They were a bar between the heading and the table, which was the right instinct in
    * the wrong place: writing has nothing to put there, so the table rose by the height
    * of that row the moment `Edit` was pressed - out from under the pointer that pressed
-   * it. Now there is no row to lose.
+   * it. The scale then went into the heading cell of the ingredient column, which is
+   * nearer still to what it changes - but that cell is held at the left edge while the
+   * card rolls, so the switch was dragged out over the middle of the table.
    */
-  page(key ? `/r/${id}/${key}` : `/r/${id}`, fitting.button)
+  page(key ? `/r/${id}/${key}` : `/r/${id}`, scales(id, key, here), fitting.button)
   show(
     section(card.title),
-    body(card, id, key, here, fitting.tell, scales(id, key, here)),
+    body(card, id, key, here, fitting.tell),
     // What changes the recipe itself sits past it, out of the way of reading.
     after(composer(id, key, card), keeper(id, key, here)),
     specification(card),
   )
 }
 
-function body(card, id, key, state, onFits, beside) {
+function body(card, id, key, state, onFits) {
   // Reading is a scroll, not a redraw: the place is only kept so that changing the scale
   // comes back to the step the cook was standing on.
   return renderReading(card, state.scale, state.at, {
-    beside,
     fit: state.fit,
     onFits,
     onAt: (at) => {
