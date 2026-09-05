@@ -35,24 +35,26 @@ The documents that define it: [FORMAT.md](FORMAT.md) for the file,
 Node 22 or newer. No dependencies, no build step.
 
 ```
-npm run serve        # http://localhost:8080
+npm run serve        # http://localhost:8080, restarted when a server file changes
 npm test
+npm run check        # drive the editor in a real browser; needs Chrome
 npm run show test/cards/erdkruste.lekka 2   # draw a card in the terminal, doubled
 ```
 
-With [mise](https://mise.jdx.dev), which pins the Node version and the two
-settings a checkout runs on:
+With [mise](https://mise.jdx.dev), which runs those same scripts under a pinned
+Node and the two settings a checkout needs:
 
 ```
-mise run serve       # http://localhost:8080, restarted whenever a server file changes
+mise run serve       # http://localhost:8080
 mise run serve 8081  # somewhere else, for one run
-mise run test
+mise run up          # the container, on http://localhost:8380
 ```
 
-`mise run serve` watches what the server imports - `server/` and the two modules
-it shares with the app - and restarts on a change to any of it. The rest of
-`app/` is read from disk on every request, so a browser reload is already enough
-there and nothing restarts for it.
+`serve` watches what the server imports - `server/` and the two modules it
+shares with the app - and restarts on a change to any of it. The rest of `app/`
+is read from disk on every request, so a browser reload is enough there. The
+image starts the server directly rather than through npm, because it must not
+watch and wants to be PID 1.
 
 ## Deploying it
 

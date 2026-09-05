@@ -22,4 +22,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
   CMD wget -q -O - http://127.0.0.1:8080/healthz || exit 1
 
 ENTRYPOINT ["/srv/entrypoint.sh"]
+# Not `npm run serve`: that one watches for changes, and the server wants to be PID 1.
 CMD ["node", "server/main.js"]

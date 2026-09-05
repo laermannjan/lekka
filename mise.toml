@@ -8,15 +8,19 @@ DATA_DIR = "./data"
 [tasks.serve]
 description = "App and API on $PORT, restarted when a server file changes"
 usage = 'arg "[port]" help="Listen here instead of $PORT"'
-run = 'PORT="${usage_port:-$PORT}" exec node --watch server/main.js'
+run = 'PORT="${usage_port:-$PORT}" exec npm run serve'
 
 [tasks.test]
 description = "Run the tests once"
-run = "node --test"
+run = "npm test"
+
+[tasks.check]
+description = "Drive the editor in a real browser"
+run = "npm run check"
 
 [tasks.show]
 description = "Draw a card in the terminal"
-run = "node tools/show.mjs"
+run = "npm run show --"
 
 [tasks.up]
 description = "Build and start the container (http://localhost:8380)"
