@@ -42,10 +42,14 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false, besi
    */
   let stops = [0]
 
-  /* How wide the Done place is at a given stop. Never wider than it has to be: an
-     ingredient block while one may still be standing there, the step's own width after
-     that. Set once the card has been measured. */
+  /* How wide the Done place is at a given stop. Never wider than it has to be: the
+     widest row still standing there, the step's own width once none is. Set once the
+     card has been measured. */
   let doneAt = () => 0
+
+  /* Every row that waits, with the column it waits until and the width it wants. The
+     two questions Done is measured from, asked once per settle rather than per stop. */
+  let waiting = []
 
   const settle = () => {
     /* Measured as the card is drawn when it is drawn whole. The reading tracks are wider
@@ -103,18 +107,43 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false, besi
     table.style.setProperty('--unit', (widths[1] || 0) + 'px')
 
     /*
-     * The last column an ingredient is still waiting in. Up to there the Done place has
-     * to be a whole ingredient block wide, because one may be standing in it; past there
-     * nothing wide is left and it can be no wider than the step itself, which pulls the
-     * rest of the card leftwards instead of leaving a lane of nothing.
+     * How wide Done has to be, column by column.
+     *
+     * A row is drawn from the ingredient column to the step that takes it, and it holds
+     * the left edge for exactly that long, because a sticky cell cannot leave its own
+     * row. So the rows still standing once `column` is done are the rows taken *after*
+     * it - and Done needs the width of the widest of those, and nothing more.
+     *
+     * It used to be the whole ingredient block whenever any row was still waiting
+     * anywhere on the card. That block is as wide as the longest name on the card, so a
+     * card with one short row left over held a lane of nothing open for it: on
+     * `roggenquarkbrot` at 1040px, 379px of Done for a row that wanted 231.
      */
-    let held = 0
+    waiting = []
     for (const slot of table.querySelectorAll('.hold')) {
-      const span = Number(slot.style.gridArea.split('span').pop())
-      held = Math.max(held, span - 2)
+      const name = slot.querySelector('.name')
+      if (!name) continue
+      const range = document.createRange()
+      range.selectNodeContents(name)
+      const edge = getComputedStyle(name)
+      waiting.push({
+        name,
+        // The column of the step that takes this row, which is where it stops standing.
+        usedAt: Number(slot.style.gridArea.split('span').pop()) - 2,
+        // A pixel over, because a range is measured and a track is laid out.
+        wants:
+          widths[0] + widths[1] + range.getBoundingClientRect().width +
+          Number.parseFloat(edge.paddingLeft) + Number.parseFloat(edge.paddingRight) + 1,
+      })
     }
 
-    doneAt = (column) => (column < held ? lead : stepWidth(column) || lead)
+    const roomFor = (column) =>
+      Math.max(0, ...waiting.filter((one) => one.usedAt > column).map((one) => one.wants))
+
+    // Never wider than the block, and never narrower than the step whose right edge has
+    // to come to rest on the line.
+    doneAt = (column) =>
+      Math.min(lead, Math.max(stepWidth(column) || 0, roomFor(column))) || lead
 
     /*
      * Every cell holds where its right edge meets the Done line, not where its left edge
@@ -142,6 +171,20 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false, besi
   const dress = (index) => {
     const widths = getComputedStyle(table).gridTemplateColumns.split(' ').map(Number.parseFloat)
     const here = doneAt(index)
+
+    /*
+     * Done can now be narrower than the ingredient block, so a row standing in it would
+     * reach past the line and paint over what is Now. Each standing row is held to the
+     * width Done was measured from, which is its own - so nothing that can be seen is
+     * cut, and nothing wraps.
+     *
+     * Only the standing ones. A row that has already gone is off the screen to the left,
+     * but its height is still the height of its line of the table: hold that one to a
+     * width its name does not fit in and the row grows a second line in plain view.
+     */
+    for (const one of waiting)
+      one.name.style.maxWidth =
+        one.usedAt > index ? `${Math.max(0, here - widths[0] - widths[1])}px` : ''
     // The track after the last step is the tail, which is blank room rather than a step,
     // so at the last stop there is nothing to be doing and Next has the rest.
     const next = index >= countOf(table) ? 0 : widths[3 + index] || 0

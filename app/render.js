@@ -150,8 +150,6 @@ export function renderGrid(grid, scale = 1, edit = null, beside = null) {
     hold.style.gridArea = `${row} / 1 / span 1 / span ${lead + waits}`
     if (last) hold.classList.add('lowest')
     for (const field of ingredientFields(node, scale)) {
-      // The reading view hides these a row at a time as steps take them over.
-      field.node.dataset.row = String(index)
       area(field.node, field.column, field.columnSpan, 1, 1)
       hold.append(field.node)
     }
