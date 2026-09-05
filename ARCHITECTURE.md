@@ -134,6 +134,14 @@ it, who else may open it, who is signed in - because those are small, numerous,
 and read by more than one column. Asking a directory "what does this person own"
 means opening every file in it; asking an index means one query.
 
+The schema is applied on every open, and is written to be idempotent: the tables are
+created where they are missing, then any column added since the file was written, then
+the indexes - in that order, because an index can stand on a column an older data
+directory has never heard of. That is the whole of it. Every change so far has been a
+column with a default, which can simply be added; the first one that has to *move* data
+rather than make room for it will need a version written into the file, and that is
+deliberately not built yet.
+
 `node:sqlite` ships with Node, so this is still a server with no dependencies and
 one container. It is why the project is pinned to Node 24: the module is stable
 there, and prints an experimental warning on every boot under 22.
