@@ -231,7 +231,10 @@ itself never moves, so the page keeps its edges however long the recipe is.
   and above the heading, because it is about the page, not about the recipe.
 
 **What the card says about itself** is under the table: read, its notes and
-nothing else. It carried a block of sums too - how long the recipe takes, what it
+nothing else, one to a line. A note is a sentence and gets the width of the sheet
+rather than half of it - two to a line on a wide screen was a thousand-pixel line
+of text beside another one just like it. Written, the rows run two to a line:
+there are eight or ten of them and they are short. It carried a block of sums too - how long the recipe takes, what it
 weighs, how many rows and steps it has - and they were true and nobody wanted
 them. A cook reads the table; a count of the rows in it describes the drawing
 rather than the food. Written, every one of them is back, because that is the

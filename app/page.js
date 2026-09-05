@@ -99,12 +99,23 @@ export function specification(card, edit = null) {
   ]
 
   if (rows.length === 0) return null
-  // The grid runs two pairs to a line; an odd count would leave the last line open.
-  if (rows.length % 2) rows.push({ label: element('span', 'label'), value: element('span', 'value') })
+
+  /*
+   * Written, the grid runs two pairs to a line: there are eight or ten of them and they
+   * are short. Read, there are only notes, and a note is a sentence - so they go one to
+   * a line, where a sentence belongs, and none of them has to share a line with another.
+   */
+  if (edit && rows.length % 2)
+    rows.push({ label: element('span', 'label'), value: element('span', 'value') })
 
   return element('div', '', undefined, [
     section(edit ? 'Specification' : 'Notes'),
-    element('div', 'spec', undefined, rows.flatMap(({ label, value }) => [label, value])),
+    element(
+      'div',
+      edit ? 'spec' : 'spec listed',
+      undefined,
+      rows.flatMap(({ label, value }) => [label, value]),
+    ),
   ])
 }
 
