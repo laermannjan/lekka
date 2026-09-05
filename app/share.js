@@ -13,7 +13,7 @@ import { address } from './link.js'
  * A token is shown once, at the moment it is made, and never again - the server keeps
  * only its hash, so there is nothing to show later even if the panel wanted to.
  */
-export function shareSheet({ id, title, me, onList, onPeople, onGive, onLink, onRevoke }) {
+export function shareSheet({ id, title, me, held: known, onList, onPeople, onGive, onLink, onRevoke }) {
   const box = element('dialog', 'compose')
   const form = element('form', 'body')
   form.method = 'dialog'
@@ -22,8 +22,8 @@ export function shareSheet({ id, title, me, onList, onPeople, onGive, onLink, on
   heading.id = 'share-title'
   box.setAttribute('aria-labelledby', heading.id)
 
-  const held = element('div', 'list')
-  const minted = element('div', 'list')
+  const held = element('div', 'inputs')
+  const minted = element('div', 'sheetnote')
   minted.hidden = true
 
   const who = people()
@@ -42,8 +42,8 @@ export function shareSheet({ id, title, me, onList, onPeople, onGive, onLink, on
   done.type = 'button'
   done.onclick = () => box.close()
 
-  const refresh = async () => {
-    const [list, everyone] = await Promise.all([onList(), onPeople()])
+  const refresh = async (first = null) => {
+    const [list, everyone] = await Promise.all([first ? first : onList(), onPeople()])
     held.replaceChildren(...(list === null ? [] : rows(list, onRevoke, refresh)))
     // Everyone but you, each saying what they already hold, so choosing one of them is
     // a decision made with the answer in front of you rather than from memory.
@@ -115,17 +115,18 @@ export function shareSheet({ id, title, me, onList, onPeople, onGive, onLink, on
   box.onclose = () => box.remove()
   document.body.append(box)
   box.showModal()
-  refresh()
+  // The holders are already in hand, since asking for them is how we knew to open at all.
+  refresh(known ?? null)
   return box
 }
 
 function rows(list, onRevoke, refresh) {
-  if (list.length === 0) return [element('div', 'row', 'Nobody yet.')]
+  if (list.length === 0) return [element('div', 'choice', 'Nobody yet.')]
 
   return list.map((grant) => {
-    const line = element('div', 'row')
+    const line = element('div', 'choice')
     line.append(
-      element('span', 'name', grant.who ?? 'Anyone with the link'),
+      element('span', 'what', grant.who ?? 'Anyone with the link'),
       element('span', 'aside', says(grant)),
     )
     // The owner is on the list because it is a grant like any other, but it is the one
@@ -168,7 +169,7 @@ function showToken(box, id, token) {
  * knows both.
  */
 function people() {
-  const list = element('div', 'list')
+  const list = element('div', 'inputs')
   const node = element('div', 'row wide', undefined, [element('span', 'name', 'Share with'), list])
   const held = []
 
@@ -177,7 +178,9 @@ function people() {
     fill(everyone, grants) {
       held.length = 0
       if (everyone.length === 0) {
-        list.replaceChildren(element('div', 'row', 'Nobody else here yet. Invite somebody first.'))
+        list.replaceChildren(
+          element('div', 'choice', 'Nobody else here yet. Invite somebody first.'),
+        )
         return
       }
       const has = new Map(grants.filter((one) => one.who).map((one) => [one.who, one.scope]))

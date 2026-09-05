@@ -1288,6 +1288,51 @@ textarea:focus {
   text-align: right;
 }
 
+/*
+ * The share panel's lists are `.inputs` of `.choice`, like every other list in a modal -
+ * a name, what they hold, and the one act. `.aside` above already takes the middle and
+ * pushes what follows it to the right edge, so a row needs nothing of its own.
+ *
+ * The link it mints once is a note under them. `.compose .row` flattens a row to a block,
+ * which is right for a sentence and wrong for a field beside its button, so the two that
+ * are laid out sideways say so.
+ */
+.compose .sheetnote {
+  border: 1px solid var(--edge);
+  box-shadow: var(--cast);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.compose .sheetnote .list {
+  border: 0;
+  box-shadow: none;
+}
+
+.compose .sheetnote .row {
+  border: 0;
+  padding: 0;
+}
+
+.compose .sheetnote .row.wide {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.compose .sheetnote .row.wide input[type='text'] {
+  flex: 1;
+}
+
+.compose .sheetnote .code svg {
+  display: block;
+  margin: 0 auto;
+  max-width: 190px;
+  width: 100%;
+}
+
 /* Ticked, and painted the colour the table paints what is coming in - so what the list
    said is what you come back to. It used to mean something else here, and said so with
    `display: block`, which flattened the line it was on. */

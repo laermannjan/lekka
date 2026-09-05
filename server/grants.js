@@ -8,6 +8,7 @@ const HOUR = 60 * 60 * 1000
 
 /** What each scope carries. Owning a card is editing it, plus being answerable for it. */
 const CARRIES = { owner: ['owner', 'edit', 'read'], edit: ['edit', 'read'], read: ['read'] }
+const RANK = { read: 1, edit: 2, owner: 3 }
 
 /**
  * Who may do what to which card. One row per permission, so every one of them can be
@@ -82,6 +83,35 @@ export function openGrants(db) {
         }
       }
       return false
+    },
+
+    /**
+     * A link, taken up by somebody who turns out to have an account here.
+     *
+     * Holding a link is not the same as holding a recipe: the token lives in an address
+     * bar, so the library cannot be built from it and the panel cannot say who took it.
+     * Opening one while signed in therefore writes the person their own grant, at the
+     * scope the link carried. It appears in their library, it shows in the panel under
+     * their name, and it can be taken back from them alone.
+     *
+     * Never a downgrade: somebody who already holds more keeps what they have, so the
+     * owner opening their own link does not demote themselves to a reader.
+     */
+    take(card, token, person) {
+      if (!token || !person) return null
+      const now = new Date().toISOString()
+      const link = forSubject.get(card, 'link', hash(token))
+      if (!live(link, now)) return null
+
+      const held = forSubject.get(card, 'person', person)
+      if (live(held, now) && RANK[held.scope] >= RANK[link.scope]) return null
+
+      return this.give(card, {
+        person,
+        scope: link.scope,
+        by: link.issued_by,
+        expires: link.expires,
+      })
     },
 
     /** Every grant on a card, for the panel that says who holds what. */

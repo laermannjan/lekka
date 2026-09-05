@@ -357,11 +357,26 @@ function composer(id, token, card) {
 function sharer(id, card) {
   if (instance.mode !== 'GRANT') return null
   const button = element('button', 'quiet', 'Share')
-  button.onclick = () =>
+  button.onclick = async () => {
+    /* Whether this one is yours is the server's to say, so it is asked before anything
+     * opens. A panel that appears and then explains it cannot do anything is worse than
+     * no panel: it was showing an empty list of holders behind its own refusal. */
+    let held
+    try {
+      held = await api.grantsOn(id)
+    } catch (error) {
+      return notice(
+        error instanceof api.ApiError && error.status === 404
+          ? 'This recipe is not yours to share.'
+          : `Who holds this did not load. ${reason(error)}`,
+      )
+    }
+
     shareSheet({
       id,
       title: card.title,
       me: instance.person?.id ?? null,
+      held,
       onPeople: () => api.people().catch(() => null),
       onLink: async (asked) => {
         try {
@@ -374,11 +389,7 @@ function sharer(id, card) {
         try {
           return await api.grantsOn(id)
         } catch (error) {
-          notice(
-            error instanceof api.ApiError && error.status === 404
-              ? 'This recipe is not yours to share.'
-              : `Who holds this did not load. ${reason(error)}`,
-          )
+          notice(`Who holds this did not load. ${reason(error)}`)
           return null
         }
       },
@@ -391,6 +402,7 @@ function sharer(id, card) {
       },
       onRevoke: (grant) => attempt(() => api.revokeGrant(grant), 'It was not revoked.'),
     })
+  }
   return button
 }
 

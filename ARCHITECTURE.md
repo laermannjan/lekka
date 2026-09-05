@@ -57,6 +57,13 @@ and each can expire. The token is returned once and stored only as a SHA-256, so
 the share panel can never show it again - which is why it is shown at the moment
 it is minted, with a QR code, and not filed away for later.
 
+Holding a link is not the same as holding a recipe: the token lives in an address bar,
+so a library cannot be built from it and the panel cannot say who has it. A link opened
+by somebody signed in therefore writes them their own grant at the scope the link
+carried - never a downgrade, so an owner opening their own read link stays the owner.
+It appears in their library, it shows in the panel under their name, and it can be
+taken back from them alone.
+
 Only an owner may look at who holds a recipe or hand it to anybody. Somebody
 granted `edit` may change the recipe and never who else can see it, and every
 refusal here is a 404 - the answer a recipe that is not there gives - so asking

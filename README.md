@@ -184,7 +184,10 @@ and offers everybody else on the instance with what they already hold beside the
 name - so choosing is done with the answer in front of you. Choosing somebody who
 already holds something changes what they hold rather than adding a second row.
 `Make a link instead` mints one for somebody with no account here, shown once with
-a QR code, expiring when you say and revocable on its own. A link token rides in the fragment of `/r/<id>#<token>`,
+a QR code, expiring when you say and revocable on its own. If the person who opens
+it turns out to have an account, they get their own grant at the same scope - so it
+lands in their library, the panel shows who actually took it up, and you can take it
+back from one of them without killing the link for everybody. A link token rides in the fragment of `/r/<id>#<token>`,
 which is the one part of an address a browser sends nowhere: not in the request
 line, not in a `Referer`, so not into an access log, a proxy or a CDN. The older
 shape, with the token as a path segment, is still read and rewritten on arrival.

@@ -703,3 +703,95 @@ test('adopting never takes a recipe that somebody else owns', async (t) => {
   assert.equal(grants.adopt(people.operator().id), 0)
   assert.equal(grants.may(hersOwn.id, { person: rita.id }, 'owner'), true, 'still hers')
 })
+
+test('a link opened by somebody signed in becomes theirs, and shows in their library', async (t) => {
+  const { call, grants, people, close } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const his = cookieOf(await signIn(call))
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD, as: his })).json()
+  const link = await (
+    await call(`/api/cards/${id}/grants`, {
+      as: his,
+      method: 'POST',
+      body: JSON.stringify({ scope: 'read' }),
+    })
+  ).json()
+
+  people.add('Test', 'a different passphrase')
+  const theirs = cookieOf(await signIn(call, 'Test', 'a different passphrase'))
+  const test = people.named('Test')
+
+  assert.deepEqual(await (await call('/api/cards', { as: theirs })).json(), [], 'nothing yet')
+
+  // Opening the link while signed in.
+  assert.equal((await call(`/api/cards/${id}`, { as: theirs, token: link.token })).status, 200)
+
+  assert.deepEqual(
+    (await (await call('/api/cards', { as: theirs })).json()).map((row) => [row.id, row.scope]),
+    [[id, 'read']],
+    'and now it is in their library, in their own name',
+  )
+  assert.equal(
+    (await call(`/api/cards/${id}`, { as: theirs })).status,
+    200,
+    'reachable without the link from then on',
+  )
+  assert.deepEqual(
+    (await (await call(`/api/cards/${id}/grants`, { as: his })).json())
+      .filter((row) => row.who === 'Test')
+      .map((row) => row.scope),
+    ['read'],
+    'and the owner can see who took it up, and take it back from them alone',
+  )
+  void test
+  void grants
+})
+
+test('taking up a link never costs somebody what they already hold', async (t) => {
+  const { call, grants, people, close } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const his = cookieOf(await signIn(call))
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD, as: his })).json()
+  const jan = people.named('Jan')
+  const link = await (
+    await call(`/api/cards/${id}/grants`, {
+      as: his,
+      method: 'POST',
+      body: JSON.stringify({ scope: 'read' }),
+    })
+  ).json()
+
+  // The owner opening his own read link must not demote himself to a reader.
+  assert.equal((await call(`/api/cards/${id}`, { as: his, token: link.token })).status, 200)
+  assert.equal(grants.may(id, { person: jan.id }, 'owner'), true, 'still his')
+
+  // Nor should a reader taking up a second, lesser link lose the edit they were given.
+  people.add('Rita', 'a different passphrase')
+  const rita = people.named('Rita')
+  grants.give(id, { person: rita.id, scope: 'edit', by: jan.id })
+  const hers = cookieOf(await signIn(call, 'Rita', 'a different passphrase'))
+  assert.equal((await call(`/api/cards/${id}`, { as: hers, token: link.token })).status, 200)
+  assert.equal(grants.may(id, { person: rita.id }, 'edit'), true, 'still hers to change')
+})
+
+test('a link taken up by nobody in particular stays a link', async (t) => {
+  const { call, close } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+  const link = await (
+    await call(`/api/cards/${id}/grants`, {
+      method: 'POST',
+      body: JSON.stringify({ scope: 'read' }),
+    })
+  ).json()
+
+  assert.equal((await call(`/api/cards/${id}`, { as: null, token: link.token })).status, 200)
+  const listed = await (await call(`/api/cards/${id}/grants`)).json()
+  assert.equal(listed.length, 2, 'the owner and the link, and nobody invented in between')
+})

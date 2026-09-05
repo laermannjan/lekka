@@ -24,6 +24,7 @@ async function open(list = [], answer = {}, everyone = [{ id: 'rita', name: 'Rit
     id: 'dinkelquarkbrot-7kmq2rxvbn',
     title: 'Dinkelquarkbrot',
     me: 'jan',
+    held: list,
     onList: async () => list,
     onPeople: async () => everyone,
     onGive: async (what) => {
@@ -165,4 +166,26 @@ test('Revoke is a button, not a second way to submit the form', async () => {
   const drop = all(box).filter(byClass('danger'))
   assert.equal(drop.length, 1)
   assert.equal(drop[0].type, 'button', 'without this it minted a link and pressed Share')
+})
+
+test('the two lists are the ones a modal has, not the ones a screen has', async () => {
+  const { box } = await open(
+    [{ id: 'g1', kind: 'person', scope: 'owner', who: 'Jan' }],
+    {},
+    [{ id: 'rita', name: 'Rita' }],
+  )
+
+  // `.list` and `.row` mean something else inside `.compose`, which flattens them.
+  const wrong = all(box).filter(
+    (node) => node.className === 'list' || node.className === 'row',
+  )
+  assert.deepEqual(wrong, [], 'the panel builds .inputs of .choice, like every other modal list')
+
+  const lists = all(box).filter(byClass('inputs'))
+  assert.equal(lists.length, 3, 'who holds it, who could, and what they may do')
+  for (const row of all(box).filter(byClass('choice')))
+    assert.ok(
+      all(row).some((child) => child.className === 'what'),
+      'and every row names somebody in the cell that carries a name',
+    )
 })

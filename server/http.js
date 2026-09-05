@@ -407,6 +407,8 @@ async function cardRoute(store, options, request, response, id, token, session) 
     if (!allowed('read')) throw missing()
     const text = await store.read(id)
     if (text === null) throw missing()
+    // Somebody signed in who opened a link now holds the recipe in their own name.
+    if (mode === 'GRANT') grants.take(id, token, person)
     await store.touch(id)
     return send(response, 200, 'text/plain; charset=utf-8', text)
   }
