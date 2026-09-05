@@ -19,13 +19,28 @@ class Element {
     this.dataset = {}
     this.style = { setProperty: (name, value) => (this.style[name] = value) }
     this.classList = {
-      add: (...names) => {
+      add: (...names) => this.classList.set(names, true),
+      remove: (...names) => this.classList.set(names, false),
+      toggle: (name, on) => this.classList.set([name], on ?? !this.classList.contains(name)),
+      contains: (name) => this.className.split(' ').includes(name),
+      set: (names, on) => {
         const held = new Set(this.className.split(' ').filter(Boolean))
-        for (const name of names) held.add(name)
+        for (const name of names) if (on) held.add(name)
+        else held.delete(name)
         this.className = [...held].join(' ')
       },
-      contains: (name) => this.className.split(' ').includes(name),
     }
+    /* The sheet listens for `cancel`, which is Escape and the backdrop. Neither exists
+       here, so the listener is kept and never fired. */
+    this.listeners = new Map()
+  }
+
+  addEventListener(kind, run) {
+    this.listeners.set(kind, run)
+  }
+
+  removeEventListener(kind) {
+    this.listeners.delete(kind)
   }
 
   get textContent() {
@@ -55,6 +70,23 @@ class Element {
     this.parent = null
   }
 
+  /** Swapping one node for another in place, which is how a fault list is refreshed
+      without the table under it being drawn again. */
+  replaceWith(node) {
+    if (!this.parent) return
+    this.parent.children[this.parent.children.indexOf(this)] = node
+    node.parent = this.parent
+    this.parent = null
+  }
+
+  insertBefore(node, before) {
+    const at = before ? this.children.indexOf(before) : -1
+    node.parent = this
+    if (at === -1) this.children.push(node)
+    else this.children.splice(at, 0, node)
+    return node
+  }
+
   setAttribute(name, value) {
     this[name] = String(value)
   }
@@ -66,6 +98,8 @@ class Element {
     const wanted = selector.split(',').map((part) => part.trim())
     return descendants(this).find((node) => wanted.includes(node.tag)) ?? null
   }
+
+  select() {}
 
   /** A form reset returns fields to what they were built with, which is always empty. */
   reset() {
@@ -83,6 +117,8 @@ class Element {
     this.open = false
     this.onclose?.()
   }
+
+  settle() {}
 }
 
 export function descendants(root) {

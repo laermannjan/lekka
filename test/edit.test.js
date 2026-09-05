@@ -5,7 +5,7 @@ import { parseCard, formatCard } from '../app/card.js'
 import {
   toDraft, fromDraft, candidates, inputs, holds, parentOf, beneath,
   addIngredient, addStep, editIngredient, editStep, removeNode, claim, upheaval,
-  fieldsOf, preparationLines, validate, label, storedForm, sweptBy, titleFault,
+  fieldsOf, preparationLines, validate, label, storedForm, sweptBy,
 } from '../app/edit.js'
 
 const PANCAKES = `# Pfannkuchen (12 Stück)
@@ -344,12 +344,3 @@ test('a draft with more than one strand cannot be stored', () => {
   assert.equal(storedForm(draft), null)
 })
 
-test('a title is asked the same question before there is a card to put it in', () => {
-  assert.equal(titleFault('Pfannkuchen'), null)
-  assert.equal(titleFault('  '), 'A card needs a title.')
-  // `Chili (scharf)` would be stored as a title of "Chili" that yields "scharf".
-  assert.match(titleFault('Chili (scharf)'), /Brackets cannot be part of a title/)
-  assert.match(titleFault('Suppe (heiß'), /Brackets cannot be part of a title/)
-  // A colon is fine in a title: the head line is never split at one.
-  assert.equal(titleFault('Abendessen: Reis'), null)
-})

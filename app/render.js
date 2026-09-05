@@ -1,8 +1,23 @@
 import { buildGrid } from './grid.js'
 import { formatAmount, scaleAmount } from './amount.js'
 
+/*
+ * Where the ingredient block ends when nothing is being written. Writing puts a column
+ * of ticks in front of it, so everything after moves one column right; the arithmetic
+ * below reads `lead`, which is this plus that column when there is one.
+ */
 const NAME_COLUMN = 3
 const UNIT = /(\d)\s+(?=[^\s\d]{1,3}(?:[\s,]|$))/g
+
+/**
+ * A duration inside a verb: `15 min`, `1,5 h`, `70-80 min`.
+ *
+ * It lived in a module of sums that worked out what a whole recipe takes and weighs.
+ * Nothing asks a card those questions any more, so the sums are gone and this is what
+ * was left of them - a pattern for finding the one thing in a verb a cook looks for
+ * while the pan is already hot.
+ */
+const DURATION = /(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*(min|h)\b/g
 
 /** A card as a table. Column 0 of the grid is the three ingredient columns. */
 export function renderCard(card, scale = 1, edit = null) {
@@ -19,20 +34,28 @@ export function renderCard(card, scale = 1, edit = null) {
  * that node back on a click is the whole back-reference, so the editor never has to work
  * out from a position in the DOM what was clicked.
  *
- *   `onPick(node)`     a cell was tapped
- *   `onChoose(...)`    a row was chosen, or a run of them
- *   `onAdd()`          draw a row under the last ingredient that adds one
+ *   `onPick(node)`   a row or a step was tapped
+ *   `here(node)`     it is the one being written, and is ringed
+ *   `chosen(node)`   it goes into the one being written, and is shaded
+ *   `onAdd()`        draw a row under the last ingredient that adds one
+ *   `onStep()`       draw a column after the last step that adds one
  *
- * Choosing happens on the row itself - shift-click with a mouse, a long press with a
- * thumb - rather than in a column of checkboxes down the left. A column that exists only
- * while writing is a column the card has to make room for, and on a phone that is eight
- * per cent of the screen spent on a control used only when building a step.
+ * Nothing here writes. A table being written is the table it is read as, to the pixel:
+ * the same columns, the same rows, the same cells, and the only thing that ever differs
+ * is colour. Every field is in the form, which is a layer over the page - so a recipe
+ * cannot change shape under the hand that is writing it, because nothing about the hand
+ * is in the table at all.
+ *
+ * That was not the first arrangement. Cells opened where they stood, and a field is not
+ * the words it replaces: it wraps at a different width, so the text reflowed in the one
+ * cell being looked at. The column of boxes went the same way. Both are in the form now.
  */
 export function renderGrid(grid, scale = 1, edit = null) {
   // A slice of the card numbers its columns with the places they hold in the whole of
   // it, so the header still says when this is.
   const numbers = grid.numbers ?? Array.from({ length: grid.columns }, (_, index) => index + 1)
-  const put = (node, spec) => place(node, grid, spec)
+  const lead = NAME_COLUMN
+  const put = (node, spec) => place(node, grid, spec, lead)
 
   /*
    * What takes each ingredient, so its cell can be given the columns it waits through.
@@ -43,80 +66,13 @@ export function renderGrid(grid, scale = 1, edit = null) {
   for (const cell of grid.cells)
     for (const child of cell.node.children)
       if (child.kind === 'ingredient') takenBy.set(child, cell.column)
-  const pick = (box, node) => {
+  /* A row or a step, as a target: a tap on it opens the form on that one thing. */
+  const target = (box, node) => {
     if (!edit?.onPick) return box
     box.classList.add('pickable')
+    if (edit.here?.(node)) box.classList.add('here')
+    if (edit.chosen?.(node)) box.classList.add('chosen')
     box.onclick = () => edit.onPick(node)
-    return box
-  }
-
-  /*
-   * Taking a set of rows at once: a heading takes what stands under it. Holding it and
-   * clicking it with a modifier are the same act, so they are wired together here - the
-   * hold is the only one a thumb has, and without it a phone could not take a strand at
-   * all once the column of checkboxes went.
-   */
-  /*
-   * A press held on a control. Six pixels of drift is a hand holding still, not a drag,
-   * which is the same threshold the reading view uses; a pixel used to call the press
-   * off and lose the row. The callout is suppressed because a long press on a phone
-   * would otherwise raise the selection menu over whatever it has just chosen.
-   */
-  const onHold = (box, run) => {
-    let waiting = null
-    let from = null
-    const drop = () => { if (waiting) clearTimeout(waiting); waiting = null }
-    box.addEventListener?.('pointerdown', (event) => {
-      from = { x: event?.clientX ?? 0, y: event?.clientY ?? 0 }
-      waiting = setTimeout(() => { waiting = null; run() }, 450)
-    })
-    box.addEventListener?.('pointerup', drop)
-    box.addEventListener?.('pointercancel', drop)
-    box.addEventListener?.('pointermove', (event) => {
-      if (!waiting || !from) return
-      const moved = Math.max(
-        Math.abs((event?.clientX ?? 0) - from.x),
-        Math.abs((event?.clientY ?? 0) - from.y),
-      )
-      if (moved > 6) drop()
-    })
-    box.addEventListener?.('contextmenu', (event) => event?.preventDefault?.())
-  }
-
-  const takes = (box, gather) => {
-    if (!edit?.onChoose) return box
-    const run = () => {
-      const nodes = gather()
-      if (nodes.length === 0) return
-      edit.onChoose(nodes, !nodes.every((node) => edit.chosen(node)), false)
-    }
-    box.classList.add('pickable')
-    let took = false
-    box.onclick = (event) => {
-      if (took) return void (took = false)
-      if (event?.shiftKey || event?.ctrlKey || event?.metaKey) run()
-    }
-    onHold(box, () => { took = true; run() })
-    return box
-  }
-
-  /*
-   * A row is chosen on the row itself, not in a column of checkboxes: hold to take one,
-   * shift to take the run from the last one touched. A plain tap still opens the row,
-   * which is what a tap on a cell has always meant, so the three never collide.
-   */
-  const choosable = (box, node) => {
-    if (!edit?.onChoose) return pick(box, node)
-    box.classList.add('pickable')
-    // A press that has already chosen the row must not also open it on the way up.
-    let took = false
-    box.onclick = (event) => {
-      if (took) return void (took = false)
-      if (event?.shiftKey) return edit.onChoose([node], !edit.chosen(node), true)
-      if (event?.ctrlKey || event?.metaKey) return edit.onChoose([node], !edit.chosen(node), false)
-      if (edit.onPick) edit.onPick(node)
-    }
-    onHold(box, () => { took = true; edit.onChoose([node], !edit.chosen(node), false) })
     return box
   }
 
@@ -132,33 +88,41 @@ export function renderGrid(grid, scale = 1, edit = null) {
   // the first thing every new card is, so this is the common case, not the corner.
   if (grid.columns === 0) table.classList.add('flat')
 
-  const head = grid.band.length
+  const band = grid.band
+  const head = band.length
+  // With preparations above it the head is no longer the first row of the table, so it
+  // needs a rule of its own on top; without them the box around the table draws one.
+  if (head > 0) table.classList.add('banded')
   // The row that adds an ingredient is a row of the table like any other, so it counts
   // towards where the bottom is. Otherwise the rows above it are drawn as the last ones
   // and drop their bottom rule, and the table ends twice.
   const adds = edit?.onAdd ? 1 : 0
   const bottom = head + 1 + grid.rows.length + adds
 
-  grid.band.forEach((entries, index) => {
-    const ends = new Set(entries.map((entry) => entry.column + entry.columnSpan - 1))
+  /*
+   * Preparations go over the head of the table, each above the column it comes before.
+   *
+   * A preparation is something done before something else, and what it is done before is
+   * a step - so it is drawn over that step's column, above the number that names it,
+   * which is when it happens. One belonging to the recipe is the same thing said about
+   * the first step there is, so it goes over the ingredient block.
+   *
+   * The band is rows 1 to `head`, the head is row `head + 1`, and the rows of the card
+   * go on starting where they always did.
+   */
+  band.forEach((entries, index) => {
     for (const entry of entries) {
-      const box = pick(preparationField(entry.node), entry.node)
-      if (ends.has(entry.column - 1)) box.classList.add('joined')
-      if (entry.column === 0) {
-        box.style.gridColumn = '1 / -1'
-        box.style.gridRow = String(index + 1)
-      } else area(box, NAME_COLUMN + entry.column, entry.columnSpan, index + 1, 1)
+      const box = preparationField(entry.node)
+      if (entry.column === 0) box.classList.add('whole')
+      area(box, entry.column === 0 ? 1 : lead + entry.column, entry.column === 0 ? lead : 1, index + 1, 1)
       table.append(box)
     }
   })
 
   // The reading view puts steps in this column too, so it names it for what it holds.
   const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
-  label.style.gridColumn = `1 / ${NAME_COLUMN + 1}`
+  label.style.gridColumn = `1 / ${lead + 1}`
   label.style.gridRow = String(head + 1)
-  // The heading takes the whole strand, which is what choosing every row of it means;
-  // it is where the header checkbox used to be.
-  if (grid.rows.length > 0) takes(label, () => grid.rows)
   table.append(label)
   /*
    * A column number takes the rows the steps in that column stand on - what this moment
@@ -168,12 +132,8 @@ export function renderGrid(grid, scale = 1, edit = null) {
    */
   for (let column = 1; column <= grid.columns; column++) {
     const box = element('div', 'label', pad(numbers[column - 1]))
-    takes(box, () =>
-      grid.cells
-        .filter((cell) => cell.column === column)
-        .flatMap((cell) => grid.rows.slice(cell.row, cell.row + cell.rowSpan)))
     table.append(put(box, {
-      column: NAME_COLUMN + column, columnSpan: 1, row: head + 1, rowSpan: 1,
+      column: lead + column, columnSpan: 1, row: head + 1, rowSpan: 1,
     }))
   }
 
@@ -187,17 +147,15 @@ export function renderGrid(grid, scale = 1, edit = null) {
     // is waiting rather than as a rectangle worked out separately.
     const waits = (takenBy.get(node) ?? grid.columns + 1) - 1
     const hold = element('div', 'hold')
-    hold.style.gridArea = `${row} / 1 / span 1 / span ${NAME_COLUMN + waits}`
+    hold.style.gridArea = `${row} / 1 / span 1 / span ${lead + waits}`
     if (last) hold.classList.add('lowest')
-    if (edit?.chosen?.(node)) hold.classList.add('chosen')
     for (const field of ingredientFields(node, scale)) {
-      // The reading view hides these a row at a time as steps take them over.
-      field.node.dataset.row = String(index)
       area(field.node, field.column, field.columnSpan, 1, 1)
       hold.append(field.node)
     }
-    choosable(hold, node)
-    table.append(hold)
+    // The row is the target, not its three cells: they are one line of the card split
+    // into three columns, and the blank it waits through is as much the row as they are.
+    table.append(target(hold, node))
   })
 
   /*
@@ -206,13 +164,21 @@ export function renderGrid(grid, scale = 1, edit = null) {
    * a sticky cell may not leave its own slot, so the next step pushes it out exactly as
    * it arrives. That is the roll.
    */
+  /*
+   * A step's region: its own cell, and every rectangle of blank that flows into it.
+   * Together they make an L - the cell standing at the right of the rows it takes, and
+   * the space those rows wait in reaching back under them - and an L is one shape. It
+   * takes one colour, it lights up at once, and it is one target.
+   */
+  const region = new Map()
   for (const cell of grid.cells) {
-    const box = pick(stepField(cell.node), cell.node)
+    const box = target(stepField(cell.node), cell.node)
+    region.set(cell, [box])
     const holder = element('div', 'holds')
     area(box, 1, 1, 1, 1)
     holder.append(box)
     table.append(put(holder, {
-      column: NAME_COLUMN + cell.column, columnSpan: 1,
+      column: lead + cell.column, columnSpan: 1,
       row: head + 2 + cell.row, rowSpan: cell.rowSpan,
       last: head + 1 + cell.row + cell.rowSpan === bottom,
     }))
@@ -227,12 +193,30 @@ export function renderGrid(grid, scale = 1, edit = null) {
    */
   for (const free of grid.frees) {
     const box = element('div', free.into ? 'free open' : 'free')
+    if (free.into) {
+      region.get(free.into)?.push(box)
+      if (edit?.chosen?.(free.into.node)) box.classList.add('chosen')
+    }
     table.append(put(box, {
-      column: NAME_COLUMN + free.column, columnSpan: free.columnSpan,
+      column: lead + free.column, columnSpan: free.columnSpan,
       row: head + 2 + free.row, rowSpan: free.rowSpan,
       last: head + 1 + free.row + free.rowSpan === bottom,
     }))
   }
+
+  /*
+   * The region wired as one. Pointing anywhere in it lights all of it and opens the
+   * step, because all of it is that step: you aimed at the blank inside `vermengen` and
+   * got `Magerquark` back when the blank belonged to the row waiting in it.
+   */
+  if (edit?.onPick)
+    for (const [cell, boxes] of region)
+      for (const box of boxes) {
+        box.classList.add('reaches')
+        box.onclick = () => edit.onPick(cell.node)
+        box.onpointerenter = () => boxes.forEach((one) => one.classList.add('lit'))
+        box.onpointerleave = () => boxes.forEach((one) => one.classList.remove('lit'))
+      }
 
   // Under the last ingredient, where the next one goes. It runs the width of the
   // ingredient column, because a row that starts halfway leaves a notch.
@@ -240,12 +224,12 @@ export function renderGrid(grid, scale = 1, edit = null) {
     const box = element('div', 'add', '+ Ingredient')
     box.onclick = edit.onAdd
     table.append(put(box, {
-      column: 1, columnSpan: NAME_COLUMN, row: bottom, rowSpan: 1, last: true,
+      column: 1, columnSpan: lead, row: bottom, rowSpan: 1, last: true,
     }))
     // and the rest of that row, so the table has an edge along its whole width.
     if (grid.columns > 0)
       table.append(put(element('div', 'free'), {
-        column: NAME_COLUMN + 1, columnSpan: grid.columns, row: bottom, rowSpan: 1, last: true,
+        column: lead + 1, columnSpan: grid.columns, row: bottom, rowSpan: 1, last: true,
       }))
   }
 
@@ -255,11 +239,12 @@ export function renderGrid(grid, scale = 1, edit = null) {
   if (edit?.onStep) {
     const box = element('div', 'add step', '+ Step')
     box.onclick = edit.onStep
+    // Everything under the head: every row, and the row that adds one.
     table.append(put(box, {
-      column: NAME_COLUMN + grid.columns + 1,
+      column: lead + grid.columns + 1,
       columnSpan: 1,
-      row: head + 1,
-      rowSpan: 1 + grid.rows.length + adds,
+      row: head + 2,
+      rowSpan: bottom - head - 1,
       last: true,
     }))
   }
@@ -271,8 +256,10 @@ function pad(number) {
   return String(number).padStart(2, '0')
 }
 
+/** A preparation, over the column of the step it comes before. */
 function preparationField(node) {
-  const box = element('div', 'preparation', bind(node.text))
+  const box = element('div', 'preparation')
+  box.append(element('span', '', bind(node.text)))
   if (node.aside) box.append(element('span', 'aside', bind(node.aside)))
   return box
 }
@@ -305,14 +292,21 @@ function ingredientFields(node, scale) {
 
 function stepField(node) {
   const cell = element('div', 'step')
-  cell.append(element('div', 'verb', bind(node.verb)))
+  cell.append(marked('verb', node.verb))
   if (node.aside) cell.append(element('div', 'note', bind(node.aside)))
   return cell
 }
 
-function place(node, grid, { column, columnSpan, row, rowSpan, last }) {
+/** A field as tall as what it holds. Guarded: a stub DOM measures nothing. */
+export function fit(area) {
+  if (!area || typeof area.scrollHeight !== 'number') return
+  area.style.height = 'auto'
+  area.style.height = `${area.scrollHeight}px`
+}
+
+function place(node, grid, { column, columnSpan, row, rowSpan, last }, lead) {
   area(node, column, columnSpan, row, rowSpan)
-  if (column + columnSpan - 1 === NAME_COLUMN + grid.columns) node.classList.add('rightmost')
+  if (column + columnSpan - 1 === lead + grid.columns) node.classList.add('rightmost')
   if (last) node.classList.add('lowest')
   return node
 }
@@ -323,6 +317,27 @@ function area(node, column, columnSpan, row, rowSpan) {
 
 function bind(text) {
   return text.replace(UNIT, '$1\u00a0')
+}
+
+/**
+ * A line of a step, with its durations marked.
+ *
+ * How long a step takes is the one thing in a verb a cook looks for while the pan is
+ * already hot, and it is buried in the middle of the words. Only the verb is marked: a
+ * note holds asides like "rotate every 20 min" and second opinions like "gesamt
+ * 70-80 min", and tagging those would mark the same bake twice.
+ */
+function marked(className, text) {
+  const box = element('div', className)
+  const bound = bind(text)
+  let at = 0
+  for (const found of bound.matchAll(DURATION)) {
+    if (found.index > at) box.append(element('span', '', bound.slice(at, found.index)))
+    box.append(element('span', 'time', found[0]))
+    at = found.index + found[0].length
+  }
+  if (at < bound.length) box.append(element('span', '', bound.slice(at)))
+  return box
 }
 
 function element(tag, className, text) {

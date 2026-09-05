@@ -34,7 +34,8 @@ A step spans from the first to the last row of its own subtree.
 ## The ingredient column
 
 Column 0 is not one column but three: amount, unit, then name with its
-qualifier. They are narrow and fixed, so that names line up down the card.
+qualifier. Each is as wide as the widest thing in it and no wider. A track is
+one width for the whole table, so the names still line up down the card.
 
 The amount and unit fields exist even when empty, otherwise the name slides left
 into their place and the column stops lining up. One exception: an amount that
@@ -92,21 +93,67 @@ the grid is simply blank.
 
 ## Around the grid
 
+The head is **closed on both sides** when preparations stand above it: it is no
+longer the first row of the table, so the box around the table no longer draws
+its top rule. Without preparations it is the first row and the box does.
+
 Above the ingredient rows, in this order:
 
-1. the **preparations**. One that belongs to a step sits in that step's column;
-   one written at the outermost level spans the full width, so it travels along
-   when the grid is scrolled sideways. Preparations whose columns do not touch
-   share a band row, otherwise a new row opens below.
+1. the **preparations**, each a tag over the column of the step it comes before,
+   packed into as few rows as will hold them: two on the same step need two
+   rows, two on different steps share one.
 2. a **header row**: a label over the ingredient column, then the columns
    numbered from `01`.
 
-Notes about the card do **not** go into the grid. They belong to the card's
-header, next to the title, because they describe the whole recipe rather than a
-point in it.
+**Every preparation is over the column it comes before**, and above the line that
+names that column, because that is when it happens. A preparation belonging to
+the recipe is the same thing said about the first step there is, so it stands
+over the ingredient block - which is what comes before every column there is.
 
-Step columns share the remaining width equally and never fall below a minimum;
-the ingredient column takes what its content needs. The whole grid scrolls
+The column is worked out when the table is drawn and never stored. That answers
+the objection this arrangement was once dropped for: a column is
+`max(column(input)) + 1` and moves whenever a step is inserted upstream, so a
+preparation *bound* to a column would silently move to a different moment - but
+one bound to its step moves with the step, which is where it belongs.
+
+**Done is a whole ingredient block wide while any row is still waiting**, and the
+width of the step itself once none is.
+
+It is wider than it has to be, and deliberately. The rows still standing once a
+column is done are the rows taken after it, so Done could be the width of the
+widest of *those* - on `roggenquarkbrot` at 1040 px that is 231 px against 379,
+and it was built that way for a while. The trouble is what follows: Done
+narrower than the block means the block reaches past the line and paints over
+what is Now, so a standing row has to be held to it - and a row held to less than
+its own column is dragged off the left edge by its own sticky clamp, which puts
+the name where nothing else on the table sits. Two attempts at that, one wrapping
+every clamped name and growing its line, the other showing the tails of names on
+their way out. The lane of nothing is the cheaper of the two.
+
+**Free area belongs to the step it flows into.** A step's cell stands at the right
+of the rows it takes, and the blank those rows wait in reaches back under them:
+together they make an **L**, and an L is one shape. It takes one colour, it lights
+up at once, and it is one target. Half an L shaded is what this looked like when
+the blank was left out.
+
+A row is its three cells and stops there. It is pointed at by them and shaded
+over them, and it does not reach into the blank - the blank is not the row's, it
+is the space the row is standing in while it waits.
+
+A preparation is deliberately not a step. A step needs a column and a height, and
+something that consumes no ingredient has neither; making one would also make
+`-` mean *flows into* everywhere except there. Keeping it apart costs a line of
+vertical space, which is free, rather than a column, which is the scarce thing on
+this table.
+
+Notes about the recipe do **not** go into the grid, and neither does what it
+yields. They describe the whole recipe rather than a point in it, so they belong
+to the specification under the table.
+
+Step columns are as wide as what stands in them, up to 240 px; each of the three
+ingredient columns takes exactly what its own content needs. Nothing in the table
+is a fixed width - a number that grows when the recipe is scaled has to have
+somewhere to grow. The whole grid scrolls
 sideways as one.
 
 ## Example

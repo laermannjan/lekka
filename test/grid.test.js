@@ -83,8 +83,8 @@ test('a strand shorter than its sibling is pushed right, with its subtree', () =
   })
 })
 
-test('preparations sit over the step they precede, packed into band rows', () => {
-  const { band, columns } = buildGrid(
+test('the band holds every preparation, over the column it comes before', () => {
+  const { band, cells, columns } = buildGrid(
     parseCard(`# A
 * Kohle kaufen
 
@@ -97,15 +97,62 @@ test('preparations sit over the step they precede, packed into band rows', () =>
 `),
   )
   assert.equal(columns, 2)
+
+  /*
+   * All three on one line, each over the column of the step it comes before. What the
+   * recipe itself says to do first goes over the ingredient block, which is column 0:
+   * it is the same thing said about the first step there is.
+   */
   assert.deepEqual(
-    band.map((row) => row.map((entry) => [entry.node.text, entry.column, entry.columnSpan])),
-    [
-      [['Kohle kaufen', 0, 3]],
-      [
-        ['Grill indirekt heizen', 1, 1],
-        ['Grill direkt heizen', 2, 1],
-      ],
-    ],
+    band.map((row) => row.map((entry) => [entry.node.text, entry.column])),
+    [[
+      ['Kohle kaufen', 0],
+      ['Grill indirekt heizen', 1],
+      ['Grill direkt heizen', 2],
+    ]],
+  )
+
+  // The column is never stored. A preparation stays a child of its step, and the step is
+  // what it moves with: inserting a step upstream moves every column after it, and the
+  // preparation is drawn over wherever its own step is standing then.
+  const prepsOf = (verb) =>
+    cells
+      .find((cell) => cell.node.verb === verb)
+      .node.children.filter((child) => child.kind === 'preparation')
+      .map((child) => child.text)
+
+  assert.deepEqual(prepsOf('glasieren'), ['Grill direkt heizen'])
+  assert.deepEqual(prepsOf('räuchern'), ['Grill indirekt heizen'])
+})
+
+test('two preparations on one step take two rows; on different steps, one', () => {
+  const one = buildGrid(
+    parseCard(`# A
+
+- backen
+  * Ofen vorheizen
+  * Blech einfetten
+  - Mehl: 250 g
+`),
+  )
+  assert.deepEqual(
+    one.band.map((row) => row.map((entry) => entry.node.text)),
+    [['Ofen vorheizen'], ['Blech einfetten']],
+  )
+
+  const two = buildGrid(
+    parseCard(`# A
+
+- backen
+  * Ofen vorheizen
+  - kneten
+    * Schüssel wiegen
+    - Mehl: 250 g
+`),
+  )
+  assert.deepEqual(
+    two.band.map((row) => row.map((entry) => entry.node.text)),
+    [['Schüssel wiegen', 'Ofen vorheizen']],
   )
 })
 

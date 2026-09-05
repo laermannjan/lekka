@@ -4,20 +4,27 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>lekka</title>
-    <meta name="theme-color" content="#1E6B4C" />
+    <meta name="theme-color" content="#14140F" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon.svg" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <article class="card">
-      <header class="head">
-        <h1 id="title">lekka</h1>
-        <p id="aside"></p>
-      </header>
+    <div class="page">
+      <div class="masthead">
+        <span class="held">
+          <a class="wordmark" href="/">lekka</a>
+          <span id="stamp"></span>
+        </span>
+        <span class="acts" id="acts"></span>
+      </div>
       <div id="screen"></div>
-    </article>
+      <div class="foot">
+        <span class="said" id="where"></span>
+        <span class="state"><span class="tag build">%VERSION%</span></span>
+      </div>
+    </div>
     <script type="module" src="/main.js"></script>
   </body>
 </html>

@@ -223,6 +223,19 @@ async function body(request, { maxBytes }) {
   return Buffer.concat(chunks).toString('utf8')
 }
 
+/**
+ * The page, stamped with the same hash the worker caches under.
+ *
+ * The foot used to carry `v0.1.0`, typed into the file by hand beside a `package.json`
+ * that also said 0.1.0 - two places for one fact, and only one of them anybody would
+ * think to change. What a person actually wants of that corner is which build they are
+ * looking at, which is the question a stale version number cannot answer.
+ */
+async function page(app, response) {
+  const source = await readFile(join(app, 'index.html'), 'utf8')
+  send(response, 200, TYPES['.html'], source.replace('%VERSION%', await version(app)))
+}
+
 /** The worker's cache version is a hash of the app, so a changed file is a new cache. */
 async function worker(app, response) {
   if (!app) throw missing()
@@ -251,14 +264,18 @@ async function walk(root, inside, digest) {
 
 async function statics(app, path, response) {
   if (!app) throw missing()
-  const file = join(app, normalize(path === '/' ? '/index.html' : path))
+  // The page is stamped, so it is served by the one place that stamps it - by name here,
+  // and by falling through below for every address the app answers for itself.
+  if (path === '/' || path === '/index.html') return page(app, response)
+
+  const file = join(app, normalize(path))
   if (!file.startsWith(app)) throw new Refusal(403, 'forbidden')
 
   try {
     return send(response, 200, TYPES[extname(file)] ?? 'application/octet-stream', await readFile(file))
   } catch {
     if (extname(path)) throw missing()
-    return send(response, 200, TYPES['.html'], await readFile(join(app, 'index.html')))
+    return page(app, response)
   }
 }
 

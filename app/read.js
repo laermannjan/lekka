@@ -12,8 +12,13 @@ import { renderCard } from './render.js'
  *
  * Nothing here knows how far the cook has got. There is no progress to keep: the card
  * is a reference, and where you are looking is the only state it has.
+ *
+ * `fit` is the other answer to a table that will not fit: shrink it until it does. It is
+ * the whole card at once at the cost of the size it was set in, where reading is the size
+ * it was set in at the cost of seeing it all - so the two are exclusive, and fitting turns
+ * the reading affordances off because there is nowhere left to scroll to.
  */
-export function renderReading(card, scale, at, onAt) {
+export function renderReading(card, scale, at, { onAt, onFits, fit = false } = {}) {
   const box = element('div', 'read')
 
   // Done, Now and Next name places on the screen rather than columns, so they cannot
@@ -48,11 +53,27 @@ export function renderReading(card, scale, at, onAt) {
        table is laid out at `max-content` - so a card still wearing the ones the last pass
        gave it can never be found to fit again, and reading is a one-way door. */
     box.classList.remove('reading')
-    table.style.removeProperty('--cap')
     table.style.removeProperty('--tail')
+    table.style.removeProperty('zoom')
 
     const room = scroll.clientWidth
-    const whole = table.scrollWidth <= room + 1
+    const natural = table.scrollWidth
+    const whole = natural <= room + 1
+    onFits?.(whole)
+
+    /*
+     * Shrunk to fit, and never magnified: a card already inside the room it has is
+     * already the size it was written at, and blowing it up would say the screen is
+     * smaller than it is.
+     */
+    if (fit) {
+      table.style.zoom = Math.min(1, room / natural)
+      box.classList.remove('reading')
+      places.hidden = true
+      for (const cell of table.querySelectorAll('.holds > .step')) cell.style.removeProperty('left')
+      stops = [0]
+      return
+    }
 
     box.classList.toggle('reading', !whole)
     places.hidden = whole
@@ -62,18 +83,37 @@ export function renderReading(card, scale, at, onAt) {
       return
     }
 
+    // What the Done place is measured from, and the room left after it for the last
+    // step to be scrolled into. The step columns are capped in the stylesheet at the
+    // same 240px the table takes when it fits; they used to be capped at this width
+    // instead, which tied every column to how wide the ingredient names happened to be.
     const lead = table.querySelector('.heading')?.getBoundingClientRect().width ?? 0
-    table.style.setProperty('--cap', lead + 'px')
     table.style.setProperty('--tail', Math.max(0, room - lead) + 'px')
 
     const widths = getComputedStyle(table).gridTemplateColumns.split(' ').map(Number.parseFloat)
     const stepWidth = (column) => widths[2 + column] || 0
 
     /*
+     * Where the three ingredient cells come to rest when the card is rolled: each holds
+     * the left edge behind the one before it. The tracks are as wide as what stands in
+     * them, so these are measurements and not settings - the stylesheet used to name the
+     * widths and could therefore also name the offsets.
+     */
+    table.style.setProperty('--amount', (widths[0] || 0) + 'px')
+    table.style.setProperty('--unit', (widths[1] || 0) + 'px')
+
+    /*
      * The last column an ingredient is still waiting in. Up to there the Done place has
      * to be a whole ingredient block wide, because one may be standing in it; past there
      * nothing wide is left and it can be no wider than the step itself, which pulls the
      * rest of the card leftwards instead of leaving a lane of nothing.
+     *
+     * It was once measured from the rows actually still standing, which is narrower and
+     * is the truth - `Haferflocken grob` does not need the width of the longest name on
+     * the card. But Done narrower than the block means the block reaches past the line,
+     * so a row had to be held to it; and a row held to less than its column gets dragged
+     * off the left edge by its own sticky clamp, which put the name in a place nothing
+     * else on the table sits in. The lane of nothing is the cheaper of the two.
      */
     let held = 0
     for (const slot of table.querySelectorAll('.hold')) {
@@ -188,7 +228,14 @@ export function renderReading(card, scale, at, onAt) {
   // A trackpad scrolls freely and settles when the hand stops, so the edges grip there too.
   let resting = null
   scroll.addEventListener('scroll', () => {
-    if (pointer !== null || !box.classList.contains('reading')) return
+    if (!box.classList.contains('reading')) return
+    /*
+     * The places are measured again as the card moves, not only where it comes to rest.
+     * They name what is under them, and what is under them changes while you scroll -
+     * so a card dragged half a column showed three places describing where it had been.
+     */
+    dress(place())
+    if (pointer !== null) return
     clearTimeout(resting)
     resting = setTimeout(() => glide(place()), 140)
   }, { passive: true })

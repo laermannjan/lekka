@@ -114,11 +114,19 @@ editor changes a cell on screen and has to write it into the right node.
 collection is a thing on the server; what is local is only which collection you
 are using and a copy of what was in it, so the list still opens with no network.
 
-It is not a list of cards on the server, because there cannot be one. Each row:
-the name links to reading, a badge says whether you can edit it, `Remove` drops
-the link, `Delete` drops the card for everyone who holds one.
+It is not a list of cards on the server, because there cannot be one. It is a
+table of three columns: the name, which links to reading, and the two acts that
+are not the same act - `Remove` drops the link, `Delete` drops the card for
+everyone who holds one, so only the second needs a key. The last row is where
+the table grows: `Import` for a recipe that exists somewhere already, `Create`
+for one that does not.
 
-`Link for another device` opens a dialog: the full link written out, a copy
+The collection's own name is stamped into the masthead, beside the app's. A
+person holds one collection, so it belongs to the app rather than to a screen and
+is said once. It is also the way to the code that carries the collection onto
+another device, so it is drawn as a control and says so before it is pressed.
+
+That stamp opens a dialog: the full link written out, a copy
 button, and the same link as a QR code to scan with a phone. It was once an
 anchor to `/c/<name>/<key>`, which on the device that already holds the
 collection meant adopting what it had, replacing the address with `/`, and
@@ -136,14 +144,38 @@ Holding no collection, the overview offers to make one. Opening `/c/<name>`
 without its key shows somebody else's list and does **not** adopt it, since a
 device that cannot write to a collection has no business calling it its own.
 
-**Writing at `/new`.** A title, and then the editor. A card with only a title
-parses, so it is stored at once and written in. `Write as text` is still there,
-a textarea holding a card as text, which parses before it sends: a card that
-cannot be drawn is never stored.
+**Writing at `/new`.** The editor on an empty draft, with the name field waiting.
+Nothing is sent until the first save: a recipe nobody finished writing never
+reaches the server at all.
 
-**Card at `/r/…`.** Header with title, yield and notes. Below it a bar with
-scale (½× 1× 1½× 2×), the actions, and `Save to collection` when the card is not
-in yours yet. Then the card.
+**Card at `/r/…`.** The name, then the table, and the specification under it.
+
+Controls are sorted by what each one touches, which is the rule that says where
+anything goes. The scale (½× 1× 1½× 2×) and `Fit to screen` change how the recipe
+is drawn, so they sit above the table, beside what they change. `Edit` and `Save
+to collection` change the recipe itself, so they sit below it, out of the way of
+reading.
+
+`Fit to screen` is the second answer to a table wider than the screen. Reading it
+a step at a time keeps the type and gives up seeing it all; fitting shrinks the
+table with `zoom` until it is inside the room it has, keeps the whole card and
+gives up the type. The two are exclusive, so fitting turns the places and the
+snapping off - there is nowhere left to scroll to - and the button is not offered
+at all on a recipe that already fits.
+
+Under the table are the **notes**: what a person wrote about the recipe that is
+not in the table. Read they are text, written they are fields, and two more kinds
+appear while writing - the yield and the recipe's own preparations - because that
+is the only place either can be typed.
+
+It once held sums as well, worked out by an `app/facts.js`: how long the recipe
+takes end to end, what the dough weighs, how many rows and steps it has. They
+were correct and nobody wanted them - a cook reads the table, and a count of the
+rows in it is a fact about the drawing rather than about the food - so they went,
+and the module with them. What survived is one regular expression, in `render.js`
+where its only reader is: a duration inside a verb, which is the one thing in a
+verb a cook looks for while the pan is already hot, and it is tagged so the eye
+can find it in the words.
 
 There is one view, because there is one card. `STYLE.md` already says what to do
 about a table wider than the screen, and that rule is the interface: **a card
@@ -177,21 +209,137 @@ travelled.
 
 ## Editing
 
-Only with a key in the path. Two ways in, for two different jobs.
+Only with a key in the path, and one way in.
 
-**The editor** is where a card is written. `Edit` on a card opens it, and `/new`
-starts in it: a new card is a title and nothing else, which parses, so it can be
-stored at once and filled in here rather than typed as text.
+**The editor** is where a recipe is written. `Edit` opens it, and `Create` starts
+in it on an empty draft. It draws the whole screen and not only the table,
+because everything a person wrote is opened at once: the name above the table,
+and the yield, the notes and the preparations as fields in the specification
+below it. There is no separate form for the recipe itself, and so no second place
+where its name can be changed.
 
-It has one button that adds, in the table rather than over it. `+ Ingredient`
-sits under the last ingredient, always in the same place, because a button that
-moves about is a button nobody finds twice. It asks for amount, unit, name and
-note, and what it makes is a new row with nothing to its right.
+`Save` and `Cancel` sit under the table, where `Edit` stood a moment ago, so the
+button that leaves writing is in the place the button that entered it was.
 
-**A step is built by choosing rows.** Every row carries a checkbox in a column
-of its own, so tapping a row still opens the row and choosing it is a separate
-target the width of a finger. Ticked rows raise a bar saying what they came to,
-and `Process in step` turns them into one.
+**Nothing is written in the table.** A tap on a row or on a step opens the form,
+which is a layer over the page; the table itself is the table it is read as, to
+the pixel - same columns, same rows, same cells, not one field in it - and the
+only thing that ever differs is colour.
+
+That is the third arrangement and the first robust one. Dialogs came first and
+were taken out, because a dialog covers the table you are writing against. Cells
+opening where they stood replaced them, and a field is not the words it replaces:
+it has a border and a padding they do not, so it wraps at a different width. On
+`roggenquarkbrot`, opening `backen` left every column and every row exactly where
+it was and moved the words *inside that one cell* by 13px, 2px narrower and 16px
+shorter. Small, and at the precise point the eye was on. A column of tick boxes
+that came and went beside it moved the rest.
+
+So the dialog came back, built properly this time: docked to the foot of the
+window rather than centred, so the head of the table stays above it, and as tall
+as it needs to be. That last part is what a layer buys over a panel in the page.
+A panel has to fit the room left over, and how much room is left over depends on
+how long the recipe is - measured at 500px wide, a console under the table sat at
+y=290 for a thirteen-row card and would walk off the bottom of a phone for a
+longer one. A layer is in the same place whatever the recipe does. `tools/check.mjs`
+holds the whole claim down: it reads `grid-template-columns` and
+`grid-template-rows` before a cell is touched and after it is opened, typed into
+and applied, and fails if a single track moved.
+
+The form is modal and the page behind it is dimmed. The cost is real and was
+chosen: the table is dimmed, not hidden - the form is 640px at the foot of a
+wider window - so the shading still reads, and the list of inputs also says on
+its own what each one brings.
+
+**The table says two things, in two colours.** Blue rings the one row or step the
+form is open on; amber shades what goes into it. A cell can be both, so the ring
+is a ring and not a fill.
+
+**A step is an L.** Its cell stands at the right of the rows it takes, and the
+blank those rows wait in reaches back under them - `grid.js` already calls that
+blank's owner `into`. The two are one shape and are drawn as one: shaded
+together, lit together, and one target. Shading only the cell left an L with its
+corner missing, which is what it looked like.
+
+A row is its three cells and stops there. It is pointed at by them and shaded
+over them; the blank is not the row's, it is the space the row is standing in
+while it waits. This is also what ended a run of bugs in that rectangle - the row
+used to span it too, so two elements covered the same pixels and every question
+about it (which colour, which target) was settled by CSS specificity. One owner,
+one answer.
+
+`+ Ingredient` sits under the last ingredient, always in the same place, because
+a button that moves about is a button nobody finds twice. It adds an empty row
+and opens the form on it; there is no form to fill in first.
+
+**A preparation belongs to a step, and is drawn over that step's column**, above
+the line that names the column, because that is when it happens. It is a field of
+that step's form when it is written. One belonging to the recipe is the same
+thing said about the first step there is, so it stands over the ingredient block,
+which is what comes before every column there is - and that is the whole of the
+model: there is no second kind of preparation, only one whose step is the card.
+
+The column is worked out by `buildBand` when the table is drawn, and never
+stored. This arrangement was dropped once on the grounds that a band over a
+column says the preparation belongs to the column, and a column is
+`max(column(input)) + 1` - insert a step upstream and every column after it
+moves, so the preparation would silently move to a different moment. That
+objection was about a *stored* column. A derived one moves with its step, which
+is exactly right, and the drawing is correct at every moment in between.
+
+What it cost: a preparation belonging to the recipe used to span the table with
+its words pinned to the visible part, so they stayed where the eye was however
+far the table had scrolled. Standing in the ingredient block it scrolls away with
+that block. `--room` and the resize watch that measured it are gone with it.
+
+**A step is built by ticking boxes, and a box stands for an input.** A step takes
+whole strands, so unticking one row of a strand it swallowed is not a move the
+format has - what goes into `vermengen` is `abkühlen`, not the Roggenschrot three
+steps inside it. The set offered is exactly `candidates`: the step's own inputs
+plus whatever is still loose. A ticked strand is shaded whole - the input, every
+step between it and the rows, and the rows - because a strand goes in whole. The
+step being written stays unshaded: the shading says what is coming in.
+
+The boxes are in the form. That is also what let the table keep the same number
+of columns while a recipe is being written as while it is read: they used to
+stand in a column of their own, which had to be drawn empty for the whole session
+so that opening a step would not shift the table sideways under the hand.
+
+Each box says what it brings, where that is worth saying. A step brings
+everything under it and how much cannot be seen from its name, so it says
+`4 ingredients`; an ingredient brings its own one row, and a list that said so on
+every line would be a column of the word `row`.
+
+**Nothing moves until `Apply`.** Typing writes nothing and ticking writes
+nothing. A row that leaves a step becomes a strand of its own and is drawn
+somewhere else, and a table that rearranges itself under every keystroke is no
+way to decide anything.
+
+`+ Step` makes an unnamed step, opens the form on it, and guesses what it takes:
+every ingredient still waiting, or - when none is waiting - the ends of the
+strands, which is how two of them are joined.
+
+One thing this costs: a strand already inside a step cannot be handed to another
+one, because it is neither a root nor an input of the step being written, so it is
+offered no box. Deleting the step that holds it frees it first. `upheaval` still
+guards that move in `edit.js`, and its tests are there.
+
+What the ticked rows come to is asked of the step's *candidates* - its own inputs
+plus whatever is still loose outside it - and not of `claim`, which answers "what
+holds these rows" and would climb past the step being edited: from inside a step,
+every row of it is also every row of the step above.
+
+Everything that comes and goes - the faults, the messages - is drawn below the
+row of buttons. One appearing above the table pushes the table down under the
+hand that is working in it.
+
+A row that belongs to no candidate is refused by name rather than dropped.
+
+The editor's one dialog is `app/form.js`. It builds the form and nothing else:
+the fields of one row or one step, the boxes of what a step may take, and three
+buttons. It decides nothing - `edit.js` still answers every question about what
+may go into what - and it never touches the draft, it hands back what it was
+told and `Apply` is where that lands.
 
 What a row *means* is not the ingredient on it. It is whatever currently holds
 that ingredient - the rightmost cell in the row, which by right alignment is the
@@ -202,8 +350,8 @@ which then have to come out of it. Choose every row of two strands and you have
 said both roots, which is how strands are joined.
 
 The second half of that move is the half nobody pointed at, so it is said before
-it happens, in the bar and again in the form: *"250 g Mehl comes out of
-verrühren"*. And a step left holding nothing is not a shape the format has
+it happens: *"250 g Mehl comes out of verrühren"*. And a step left holding
+nothing is not a shape the format has
 (`FORMAT.md` rule 5), so it goes with what was taken out of it, and that is
 said too. The same cascade runs when an ingredient is deleted.
 
@@ -228,18 +376,18 @@ nothing.
 Each fault is a line that leads to the node it is about. `Save` is off while
 any fault stands.
 
-Tapping a cell edits it, which needs the back-reference layout keeps: `renderGrid`
+Tapping a step edits it, which needs the back-reference layout keeps: `renderGrid`
 takes an `edit` object and hands back the node a cell was drawn from, so the
-editor never works out from a position in the DOM what was clicked. The three
-fields of an ingredient row all lead to the ingredient, because they are one
-line of the card split across three columns.
+editor never works out from a position in the DOM what was clicked. The same
+object carries the row fields the other way - `onField` when one is committed,
+`onDrawn` so a fault can put the caret in the row it is about.
 
-The checkboxes are the same drawing with one column in front. Only the editor
-has one, so only the editor carries the `choosing` class that puts the track
-there; everywhere else the arithmetic is what it always was, and the card is
-drawn by the same code either way. A count is deliberately not used for this:
-`repeat(0, …)` is not a valid track list, so a browser throws the whole
-template away and draws every element in the wrong place.
+The editor's table is the reading table with one column added, for `+ Step`. Only
+the editor has one, so only the editor carries the `choosing` class that puts the
+track there; everywhere else the arithmetic is what it always was, and the recipe
+is drawn by the same code either way. A count is deliberately not used for this:
+`repeat(0, …)` is not a valid track list, so a browser throws the whole template
+away and draws every element in the wrong place.
 
 **Punctuation is structure.** A colon splits an ingredient line and brackets are
 the aside, so neither may sit inside a name, a verb or a note. This is checked
@@ -249,12 +397,12 @@ round trip can catch that, only knowing what the punctuation means. Saving still
 formats, re-parses and compares the card structurally as a backstop, and fails
 shut.
 
-**The text panel** stays for the rare job the editor is clumsy at: re-indenting
-a subtree by hand. It parses before it saves, and the card above redraws while
-the panel stays open. Tab and shift-tab move the selected lines, enter keeps the
-current indentation, and **wrap in step** takes the line under the cursor
-together with everything indented below it, which is exactly one subtree, and
-hangs it under a new step.
+**Text comes in through `Import`** rather than through an editor of its own.
+There was a second editor - a textarea holding the card as text, with tab to
+indent and a wrap-in-step button - and it was two ways of doing one job, each
+with its own bar, its own save and its own idea of what a card is. Pasting a
+recipe in is the part of it worth keeping, so that is what stayed: the text
+parses before it is sent, and one that cannot be drawn is never stored.
 
 Changes are collected, not sent: a dirty flag decides whether saving does
 anything, and leaving with one set asks first. Live-saving every keystroke would
@@ -329,11 +477,12 @@ work.
   is tested as arithmetic: the candidates are the roots, taking one hides it,
   editing a step sees its own inputs and never the strand it sits in.
 
-- **The editor's wiring, against a stub DOM** (`test/dom.js`, ~120 lines). It
+- **The editor's wiring, against a stub DOM** (`test/dom.js`, ~140 lines). It
   walks what a person does - enter two ingredients, join them in a step, tap a
-  cell, drop an input - and checks which sheet opened, what the list offered and
-  what the save would write. A stub proves none of that is *visible*; it proves
-  the right node reached the right form, which is where the rules live.
+  row, tick a box, delete an input - and checks what the table then says, what
+  the form offers and what the save would write. A stub proves none of that is
+  *visible*; it proves the right node reached the right field, which is where the
+  rules live.
 
 - **A picture, from `node tools/shot.mjs`.** It serves the app, draws the card
   view and the editor into one page, and screenshots it with
@@ -344,17 +493,34 @@ work.
   element present and every column the wrong width. Two of these side by side
   is what caught it.
 
-- **No browser tests, for now.** Three rounds were once lost to a CSS rule that
-  overrode `[hidden]`, where the property said "hidden" and the button was
-  visible, so a DOM stub would have passed. This app answers that by building
-  no element it does not mean: no key, no *Edit* button; no key on a row, no
-  *Delete*. What is absent cannot be shown by a stylesheet. The one thing still
-  toggled with `hidden` is the save-error line, and `[hidden]` carries an
-  `!important` in `style.css` to hold it down.
+- **Forty-three checks in a real browser, from `node tools/check.mjs`.** Same
+  machinery as the picture - own server, headless Chrome - but it drives the
+  editor and reports `PASS`/`FAIL` per line, and exits non-zero.
 
-  Note what this does **not** buy: rights are enforced by the server and tested
-  there. A missing button is not a permission. The browser would only tell us
-  whether the app offers what the server would refuse.
+  It exists because the stub has no layout and no caret. The claim the whole
+  editor rests on - that the table does not move while a recipe is written in it
+  - is a claim about `grid-template-columns`, which a stub does not compute, so
+  the checks read the tracks before a cell is touched and after it is opened,
+  typed into and applied, and fail if one moved. The same for what `zoom` does to
+  the width a band is centred in, and for whether a rectangle drawn only to carry
+  a rule is swallowing the taps aimed at the row beneath it.
+
+  It runs twice. The first pass renders a module into a bare page, which is most
+  of it. The second loads the app's own page with `main.js` running, because the
+  router and the masthead are not modules and hold state across a change of
+  screen: `show` replaces the screen and not the masthead, so a control put there
+  by one view outlives it. A scale button left over from reading answers with
+  `showCard`, which re-reads the recipe from the server - pressing it while
+  writing threw the draft away without asking, and nothing in `node --test` could
+  have seen it, because nothing in `node --test` runs `main.js` at all.
+
+  So the rule is not "no browser tests". It is: assert in `node --test` whatever
+  can be asserted about what the app *builds*, and keep the browser for what only
+  a browser has - the caret, the cascade, layout, and the app assembled.
+
+  What neither buys: rights are enforced by the server and tested there. A missing
+  button is not a permission. The browser would only tell us whether the app
+  offers what the server would refuse.
 
   What the stub still cannot reach is the sheet: `dialog.showModal` taking the
   focus, keeping it inside, and closing on escape are behaviours of a real

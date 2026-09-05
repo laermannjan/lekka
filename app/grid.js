@@ -24,15 +24,14 @@ export function buildForest(strands, preparations = []) {
   for (const strand of strands) measure(strand, rows, span)
 
   const cells = []
-  const attached = []
   const columns = Math.max(0, ...strands.map((strand) => span.get(strand).column))
-  for (const strand of strands) place(strand, columns, span, cells, attached)
+  for (const strand of strands) place(strand, columns, span, cells)
 
   return {
     rows,
     cells,
     frees: findFrees(occupy(rows, cells, columns)),
-    band: buildBand(preparations, attached, columns),
+    band: buildBand(preparations, cells),
     columns,
   }
 }
@@ -54,32 +53,48 @@ function measure(node, rows, span) {
   span.set(node, { row, rowSpan: rows.length - row, column: column + 1 })
 }
 
-function place(node, column, span, cells, attached) {
+function place(node, column, span, cells) {
   if (node.kind === 'ingredient') return
   const { row, rowSpan } = span.get(node)
   cells.push({ node, column, columnSpan: 1, row, rowSpan })
   for (const child of node.children)
-    if (child.kind === 'preparation') attached.push({ node: child, column, columnSpan: 1 })
-    else place(child, column - 1, span, cells, attached)
+    if (child.kind !== 'preparation') place(child, column - 1, span, cells)
 }
 
-function buildBand(global, attached, columns) {
-  const entries = [
-    ...global.map((node) => ({ node, column: 0, columnSpan: columns + 1 })),
-    ...attached.sort((a, b) => a.column - b.column),
+/**
+ * The band: every preparation on the card, over the column it comes before.
+ *
+ * A preparation is always something done before something else, and what it is done
+ * before is a step. One belonging to the recipe is the same thing said about the first
+ * step, so it goes over the ingredient block - column 0 here - which is what comes
+ * before every column there is.
+ *
+ * The column is worked out here and never stored. That answers the objection this was
+ * once dropped for: a column is `max(column(input)) + 1`, so inserting a step upstream
+ * moves every column after it - and the preparation moves with its step, because the
+ * step is what it is attached to and the column is only where that step is standing
+ * today.
+ *
+ * They pack into as few rows as will hold them. Two preparations on the same step need
+ * two rows; two on different steps share one.
+ */
+function buildBand(global, cells) {
+  const wanted = [
+    ...global.map((node) => ({ node, column: 0 })),
+    ...cells.flatMap((cell) =>
+      (cell.node.children ?? [])
+        .filter((child) => child.kind === 'preparation')
+        .map((node) => ({ node, column: cell.column })),
+    ),
   ]
 
-  const band = []
-  for (const entry of entries) {
-    const row = band.find((row) => row.every((other) => !overlaps(other, entry)))
-    if (row) row.push(entry)
-    else band.push([entry])
+  const rows = []
+  for (const entry of wanted) {
+    let row = rows.find((held) => held.every((one) => one.column !== entry.column))
+    if (!row) rows.push((row = []))
+    row.push(entry)
   }
-  return band
-}
-
-function overlaps(a, b) {
-  return a.column < b.column + b.columnSpan && b.column < a.column + a.columnSpan
+  return rows.map((row) => [...row].sort((a, b) => a.column - b.column))
 }
 
 function occupy(rows, cells, columns) {

@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
+    "check": "node tools/check.mjs",
     "show": "node tools/show.mjs",
     "serve": "node server/main.js"
   }

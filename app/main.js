@@ -2,19 +2,10 @@ import { parseCard, ParseError } from './card.js'
 import { renderReading } from './read.js'
 import { renderOverview } from './overview.js'
 import * as api from './api.js'
-import { editable, wrapInStep } from './source.js'
-import { toDraft, titleFault } from './edit.js'
+import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
-import {
-  cache,
-  cached,
-  collection,
-  rows,
-  setRows,
-  setSmallPrint,
-  smallPrint,
-  useCollection,
-} from './library.js'
+import { section, specification } from './page.js'
+import { cache, cached, collection, rows, setRows, useCollection } from './library.js'
 import { svg } from './qr.js'
 
 const SCALES = [
@@ -24,11 +15,11 @@ const SCALES = [
   [2, '2×'],
 ]
 
-const title = document.getElementById('title')
-const aside = document.getElementById('aside')
+const stamp = document.getElementById('stamp')
+const acts = document.getElementById('acts')
 const screen = document.getElementById('screen')
+const where = document.getElementById('where')
 
-const NEW = `# \n\n- \n  - : \n`
 const CARD = /^\/r\/([^/]+)(?:\/([^/]+))?/
 const COLLECTION = /^\/c\/([^/]+)(?:\/([^/]+))?/
 
@@ -43,14 +34,17 @@ async function start() {
   const found = COLLECTION.exec(path)
   if (found) return showCollection(found[1], found[2])
 
+  // The foot says `/new` while a fresh recipe is being written, so the address has to
+  // mean it: without this, opening it lands on the overview under a foot saying `/new`.
   if (path === '/new') return showWriting()
+
   return showOverview()
 }
 
 async function showOverview() {
-  head('lekka', collection()?.id ?? '')
+  page('/')
   const held = collection()
-  if (!held) return show(bar(), welcome())
+  if (!held) return show(section('Recipes'), welcome())
 
   let list = rows()
   let note = null
@@ -58,29 +52,31 @@ async function showOverview() {
     list = (await api.readCollection(held.id, held.key)).rows
     setRows(list)
   } catch {
-    note = band('Offline. Showing the cards this device remembers.')
+    note = band('Offline. Showing the recipes this device remembers.')
   }
 
   show(
-    bar(writeLink(), label('Collection'), share(held)),
     note,
+    section('Recipes'),
     renderOverview(await describe(list), {
       onRemove: (id) => remove(held, id),
       onDelete: (id, key, card) => erase(held, id, key, card),
+      onImport: () => showImport(held),
+      onCreate: () => showWriting(),
     }),
   )
 }
 
 async function showCollection(id, key) {
-  head('lekka', id)
+  page(`/c/${id}`)
   const found = await api.readCollection(id, key).catch(() => null)
   if (!found) return fail('No collection under this link.')
   const list = found.rows
 
   if (!key)
     return show(
-      bar(back()),
-      band('Someone else’s collection. You can read these cards, not change them.'),
+      band('Someone else’s collection. You can read these recipes, not change them.'),
+      section('Recipes'),
       renderOverview(await describe(list)),
     )
 
@@ -91,11 +87,11 @@ async function showCollection(id, key) {
 }
 
 async function showCard(id, key, state = {}) {
-  const { scale = 1, editing = false, at = 0 } = state
-  const here = { scale, editing, at }
+  const { scale = 1, at = 0, fit = false } = state
+  const here = { scale, at, fit }
 
   const text = await load(id)
-  if (text === null) return fail('No card under this link.')
+  if (text === null) return fail('No recipe under this link.')
 
   let card
   try {
@@ -105,57 +101,65 @@ async function showCard(id, key, state = {}) {
     return fail(`Line ${error.line}: ${error.message}`)
   }
 
-  head(card.title, [card.yields, ...card.notes].filter(Boolean).join(' · '))
+  const fitting = fitter(id, key, here)
+
+  /*
+   * No row of controls above the table, and none below it but the acts.
+   *
+   * The scale and the fit are in the masthead. Neither is about a point in the recipe -
+   * one multiplies every amount on it, the other decides how the page draws the whole
+   * thing - so they belong where the page's own controls are.
+   *
+   * They were a bar between the heading and the table, which was the right instinct in
+   * the wrong place: writing has nothing to put there, so the table rose by the height
+   * of that row the moment `Edit` was pressed - out from under the pointer that pressed
+   * it. The scale then went into the heading cell of the ingredient column, which is
+   * nearer still to what it changes - but that cell is held at the left edge while the
+   * card rolls, so the switch was dragged out over the middle of the table.
+   */
+  page(key ? `/r/${id}/${key}` : `/r/${id}`, scales(id, key, here), fitting.button)
   show(
-    bar(
-      back(),
-      // No "Scale" label. STYLE.md gives each group of the toolbar one, but that was
-      // written when there were three groups to tell apart; with the view switch gone
-      // there is only this one, and half a dozen multipliers say what they are.
-      scales(id, key, here),
-      keeper(id, key, here),
-      composer(id, key, card),
-      source(id, key, here),
-      printing(),
-    ),
-    body(card, id, key, here),
-    editing ? panel(id, key, text, here) : null,
+    section(card.title, card.yields),
+    body(card, id, key, here, fitting.tell),
+    // What changes the recipe itself sits past it, out of the way of reading.
+    after(composer(id, key, card), keeper(id, key, here)),
+    specification(card),
   )
 }
 
-function body(card, id, key, state) {
+function body(card, id, key, state, onFits) {
   // Reading is a scroll, not a redraw: the place is only kept so that changing the scale
-  // or opening the source comes back to the step the cook was standing on.
-  return renderReading(card, state.scale, state.at, (at) => {
-    state.at = at
+  // comes back to the step the cook was standing on.
+  return renderReading(card, state.scale, state.at, {
+    fit: state.fit,
+    onFits,
+    onAt: (at) => {
+      state.at = at
+    },
   })
 }
 
 /**
- * Type for the page rather than for the screen.
+ * The whole table at once, or the size it was written at. A recipe wider than the screen
+ * can be read a step at a time or shrunk until it fits, and those are the two answers
+ * there are: one keeps the type and gives up seeing it all, the other keeps the card and
+ * gives up the type. So it is one button that swaps between them.
  *
- * Paper cannot be scrolled, so a printed card is fitted to it, and a card with eight
- * columns has to break words to fit at reading size. Smaller type buys the columns back:
- * Roggenquarkbrot comes off the press 506 px tall instead of 750, with whole words in
- * most of its cells. Which of the two is wanted is a question about the printer and the
- * eyes reading it, so it is asked of the person and not guessed at.
- *
- * The button says what it will do rather than what is set, as `Source` does, because a
- * setting that shows only on paper has nothing on the screen to be pressed against.
+ * It says what it will do rather than what is set, the way every switchable control here
+ * does, and it is not offered at all on a recipe that already fits - there would be
+ * nothing for it to do, and a control that does nothing is worse than no control.
  */
-function printing() {
-  const button = element('button', 'quiet')
-  const set = (small) => {
-    document.body.classList.toggle('small-print', small)
-    button.textContent = small ? 'Print normal' : 'Print small'
+function fitter(id, key, state) {
+  const button = element('button', 'quiet', state.fit ? 'Actual size' : 'Fit to screen')
+  button.onclick = () => showCard(id, key, { ...state, fit: !state.fit })
+  button.hidden = true
+  return {
+    button,
+    // A recipe drawn whole needs no fitting; one already fitted needs the way back.
+    tell: (whole) => {
+      button.hidden = whole && !state.fit
+    },
   }
-  set(smallPrint())
-  button.onclick = () => {
-    const small = !document.body.classList.contains('small-print')
-    setSmallPrint(small)
-    set(small)
-  }
-  return button
 }
 
 function composer(id, key, card) {
@@ -167,85 +171,64 @@ function composer(id, key, card) {
 
 /**
  * The editor holds the draft, so the screen is built once and repaints itself. Coming
- * back out re-reads the card from the server, which is the only copy that counts.
+ * back out re-reads the recipe from the server, which is the only copy that counts.
+ *
+ * A recipe being written for the first time has no id yet. It is made on the first save
+ * and not before: `Create` opens an empty editor with the name waiting, and a recipe
+ * nobody finished writing never reaches the server at all.
  */
 function showEditor(id, key, draft) {
-  const describe = (current) =>
-    head(current.title || 'New card', [current.yields, ...current.notes].filter(Boolean).join(' \u00b7 '))
-  describe(draft)
+  const held = collection()
+
+  /*
+   * The masthead is cleared, because what was on it belongs to the recipe being read.
+   * `show` replaces the screen and not the masthead, so the scale and `Fit to screen`
+   * outlived the view they were put there by - and both answer with `showCard`, which
+   * re-reads the recipe from the server. Pressing one while writing threw the draft away
+   * without so much as asking, which is the one thing `Cancel` exists to prevent.
+   */
+  page(id ? `/r/${id}/${key}` : '/new')
 
   show(
     buildEditor({
       draft,
-      onChange: describe,
-      onClose: () => showCard(id, key),
+      onClose: () => (id ? showCard(id, key) : showOverview()),
       onSave: async (text) => {
+        if (id) {
+          try {
+            await api.writeCard(id, key, text)
+          } catch (error) {
+            return `Not saved. ${reason(error)}`
+          }
+          keep(id, text)
+          return null
+        }
+
+        let made
         try {
-          await api.writeCard(id, key, text)
+          made = await api.createCard(text)
         } catch (error) {
           return `Not saved. ${reason(error)}`
         }
-        // The card is written. Keeping a copy for offline is a convenience, and a full
-        // or blocked localStorage must not turn a save that arrived into one that threw.
+        id = made.id
+        key = made.key
         keep(id, text)
+        history.replaceState(null, '', `/r/${id}/${key}`)
+        page(`/r/${id}/${key}`)
+
+        // The recipe is saved either way. A collection that would not take it is said
+        // out loud rather than reported as a failed save.
+        if (held) {
+          const kept = await attempt(
+            () => change(held, (current) => [...current, made]),
+            'It was saved, but not put in your collection.',
+          )
+          if (kept === FAILED) notice(`Its link is /r/${id}/${key}`)
+        }
         return null
       },
     }),
   )
-}
-
-function source(id, key, state) {
-  if (!key) return null
-  // Not "Edit source": two buttons a word apart, both beginning "Edit", read as one
-  // thing done twice rather than the two different editors they are.
-  const button = element('button', 'quiet', state.editing ? 'Close' : 'Source')
-  button.onclick = () => showCard(id, key, { ...state, editing: !state.editing })
-  return button
-}
-
-function wrapper(area) {
-  const button = element('button', 'quiet', 'Wrap in step')
-  button.onclick = () => wrapInStep(area)
-  return button
-}
-
-function panel(id, key, text, state) {
-  const area = editable(element('textarea', 'source'))
-  area.value = text
-  area.spellcheck = false
-
-  const message = element('div', 'band warning')
-  message.hidden = true
-
-  const save = element('button', 'quiet', 'Save')
-  save.onclick = async () => {
-    try {
-      parseCard(area.value)
-    } catch (error) {
-      if (!(error instanceof ParseError)) throw error
-      message.textContent = `Line ${error.line}: ${error.message}`
-      message.hidden = false
-      return
-    }
-    try {
-      await api.writeCard(id, key, area.value)
-    } catch (error) {
-      message.textContent = `Not saved. ${reason(error)}`
-      message.hidden = false
-      return
-    }
-    cache(id, area.value)
-    showCard(id, key, { ...state, editing: true })
-  }
-
-  const discard = element('button', 'quiet', 'Discard')
-  discard.onclick = () => showCard(id, key, { ...state, editing: true })
-
-  return element('div', 'panel', undefined, [
-    bar(label('Source'), save, discard, wrapper(area)),
-    message,
-    area,
-  ])
 }
 
 /** Caching is a convenience; storage that refuses is not worth failing a write over. */
@@ -299,7 +282,7 @@ function keeper(id, key, state) {
   const list = rows()
   const found = list.find((row) => row.id === id)
   /*
-   * Nothing at all when the card is already kept. A status has no business in a row of
+   * Nothing at all when the recipe is already kept. A status has no business in a row of
    * actions - it read as the heading of the buttons beside it - and the absence of a
    * save is the answer to the question it was asking: there is nothing left to do.
    */
@@ -324,17 +307,18 @@ function keeper(id, key, state) {
 async function remove(held, id) {
   const done = await attempt(
     () => change(held, (current) => current.filter((row) => row.id !== id)),
-    'The card was not removed.',
+    'The recipe was not removed.',
   )
   if (done === FAILED) return
   showOverview()
 }
 
-/** Removing drops the link. Deleting drops the card, for everyone holding one. */
+/** Removing drops the link. Deleting drops the recipe, for everyone holding one. */
 async function erase(held, id, key, card) {
   const name = card ? card.title : id
   if (!confirm(`Delete ${name} for everyone who has its link?`)) return
-  if ((await attempt(() => api.deleteCard(id, key), 'The card was not deleted.')) === FAILED) return
+  if ((await attempt(() => api.deleteCard(id, key), 'The recipe was not deleted.')) === FAILED)
+    return
   await remove(held, id)
 }
 
@@ -354,111 +338,100 @@ async function change(held, edit) {
   throw new Error('the collection kept changing')
 }
 
-function writeLink() {
-  const link = element('a', 'name', '+ New card')
-  link.href = '/new'
-  return link
+/**
+ * A recipe made here, rather than brought in. It starts empty in the editor with its
+ * name waiting: a name is one word, and a whole screen to collect one word is a screen
+ * the editor can collect it in.
+ */
+function showWriting() {
+  // The foot says `/new`, so the address bar has to as well - and a reload has to land
+  // back here, which is what the route in `start` is for. Replaced rather than pushed:
+  // nothing else in this app pushes, and a Back that walked into a draft with no
+  // history to answer it would be worse than one that leaves the page.
+  history.replaceState(null, '', '/new')
+  page('/new')
+  showEditor(null, null, {
+    title: '',
+    yields: null,
+    notes: [],
+    preparations: [],
+    strands: [],
+  })
 }
 
 /**
- * A new card starts with its title and nothing else. An empty card parses - a title is
- * all the format asks for - so it can be stored at once and then written in the editor,
- * which is where entering a recipe belongs. Writing the text by hand stays one tap away
- * for whoever already has the card as text.
+ * A recipe that exists somewhere already. It is read exactly as a stored one is, so
+ * anything the format accepts comes in whole and anything it does not is reported by
+ * line, in the place the line is.
  */
-function showWriting() {
-  const held = collection()
-  head('New card', held ? held.id : '')
+function showImport(held) {
+  const box = element('dialog', 'compose')
+  const form = element('form', 'body')
+  form.method = 'dialog'
 
-  const title = element('input', 'line')
-  title.type = 'text'
-  title.placeholder = 'Pfannkuchen'
-  title.autofocus = true
+  const heading = element('h2', 'heading', 'Import a recipe')
+  heading.id = 'import-title'
+  box.setAttribute('aria-labelledby', heading.id)
 
-  const create = element('button', 'go', 'Start')
-  create.onclick = async () => {
-    // The same rule the editor applies, asked before the card exists: `Chili (scharf)`
-    // would otherwise be stored as a title of "Chili" that yields "scharf".
-    const wrong = titleFault(title.value)
-    if (wrong) return notice(wrong)
-
-    // A tap on a phone is easily two. Without this, both post, and both are kept.
-    if (create.disabled) return
-    create.disabled = true
-    const text = `# ${title.value.trim()}\n`
-
-    const made = await attempt(() => api.createCard(text), 'The card was not created.')
-    if (made === FAILED) return void (create.disabled = false)
-    keep(made.id, text)
-
-    if (held) {
-      const kept = await attempt(
-        () => change(held, (current) => [...current, made]),
-        'The card was made, but not put in your collection.',
-      )
-      // Said and then left standing: showEditor would replace the screen under it.
-      if (kept === FAILED) return notice(`Its link is /r/${made.id}/${made.key}`)
-    }
-
-    // No reload: the draft is already here, and the link is what the address bar shows.
-    history.replaceState(null, '', `/r/${made.id}/${made.key}`)
-    showEditor(made.id, made.key, toDraft(parseCard(text)))
-  }
-
-  const asText = element('button', 'quiet', 'Write as text')
-  asText.onclick = showSource
-
-  const row = element('div', 'row', undefined, [element('span', 'label', 'Title'), title, create])
-  show(bar(back(), asText), element('div', 'list', undefined, [row]))
-  title.focus()
-}
-
-function showSource() {
-  const held = collection()
-  head('New card', held ? held.id : '')
-
-  const area = editable(element('textarea', 'source'))
-  area.value = NEW
+  const area = element('textarea')
+  area.rows = 9
   area.spellcheck = false
+  area.placeholder = '# Pfannkuchen (12 Stück)\n\n- braten (2 min je Seite)\n  - verrühren\n    - Mehl: 250 g'
 
-  const create = element('button', 'quiet', 'Create')
-  create.onclick = async () => {
+  const field = element('label', 'row wide', undefined, [
+    element('span', 'name', 'Text'),
+    area,
+    element('span', 'hint', 'Paste a recipe. Anything the format accepts is read whole.'),
+  ])
+
+  const wrong = element('span', 'hint warn')
+  wrong.hidden = true
+
+  const take = element('button', 'go', 'Import')
+  take.type = 'submit'
+
+  const cancel = element('button', 'quiet', 'Cancel')
+  cancel.type = 'button'
+  cancel.onclick = () => box.close()
+
+  form.onsubmit = async (event) => {
+    event.preventDefault()
     try {
       parseCard(area.value)
     } catch (error) {
-      return show(
-        bar(back(), create, wrapper(area)),
-        band(`Line ${error.line}: ${error.message}`, 'warning'),
-        area,
-      )
+      if (!(error instanceof ParseError)) throw error
+      wrong.textContent = `Line ${error.line}: ${error.message}`
+      wrong.hidden = false
+      return
     }
+    if (take.disabled) return
+    take.disabled = true
 
-    // One tap, one card: the same double-tap guard the title form has.
-    if (create.disabled) return
-    create.disabled = true
+    const made = await attempt(() => api.createCard(area.value), 'The recipe was not created.')
+    if (made === FAILED) return void (take.disabled = false)
+    keep(made.id, area.value)
 
-    const made = await attempt(() => api.createCard(area.value), 'The card was not created.')
-    if (made === FAILED) return void (create.disabled = false)
-
-    const link = `/r/${made.id}/${made.key}`
-    if (held) {
-      const kept = await attempt(
-        () => change(held, (current) => [...current, made]),
-        'The card was made, but not put in your collection.',
-      )
-      if (kept === FAILED) return notice(`Its link is ${link}`)
-    }
-    location.assign(link)
+    const kept = await attempt(
+      () => change(held, (current) => [...current, made]),
+      'It was imported, but not put in your collection.',
+    )
+    box.close()
+    if (kept === FAILED) return notice(`Its link is /r/${made.id}/${made.key}`)
+    showOverview()
   }
 
-  show(bar(back(), create, wrapper(area)), area)
+  form.append(heading, field, wrong, element('div', 'actions', undefined, [take, cancel]))
+  box.append(form)
+  box.onclose = () => box.remove()
+  document.body.append(box)
+  box.showModal()
   area.focus()
 }
 
 function welcome() {
   const box = element('div', 'list')
   const line = element('div', 'row')
-  const create = element('button', 'quiet', 'Create a collection')
+  const create = element('button', 'go', 'Create a collection')
   create.onclick = async () => {
     const made = await attempt(() => api.createCollection([]), 'The collection was not made.')
     if (made === FAILED) return
@@ -471,13 +444,36 @@ function welcome() {
 }
 
 /**
- * The link was once an anchor, which opened the collection this device already holds:
- * a flash, and back to where one started. It is a button now, and what it opens says so.
+ * The collection, stamped into the masthead.
+ *
+ * A person holds one collection, so it belongs to the app rather than to any screen and
+ * is said once. It is a value, so it is tinted like a tag; it is also the only way to
+ * the code that carries the collection onto another device, so it is drawn like a
+ * control and says what it will do the moment it is pointed at.
  */
-function share(held) {
-  const button = element('button', 'quiet name', 'Link for another device')
+function showStamp() {
+  const held = collection()
+  if (!held) return void stamp.replaceChildren()
+
+  const button = element('button', 'stamp')
+  button.type = 'button'
+  button.append(mark(), element('span', 'value', held.id), element('span', 'hint', 'Show QR code →'))
   button.onclick = () => showShare(held)
-  return button
+  stamp.replaceChildren(button)
+}
+
+/** A code, drawn small enough to say "code" and no more. */
+function mark() {
+  const box = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  box.setAttribute('class', 'mark')
+  box.setAttribute('viewBox', '0 0 9 9')
+  box.setAttribute('fill', 'currentColor')
+  box.setAttribute('aria-hidden', 'true')
+  box.innerHTML =
+    '<path d="M0 0h3v3H0zM6 0h3v3H6zM0 6h3v3H0z"/>' +
+    '<path d="M4 0h1v1H4zM4 2h1v1H4zM0 4h1v1H0zM2 4h1v1H2zM4 4h1v1H4zM6 4h1v1H6zM8 4h1v1H8z' +
+    'M4 6h1v1H4zM6 6h1v1H6zM8 6h1v1H8zM4 8h1v1H4zM6 8h1v1H6zM8 8h1v1H8z"/>'
+  return box
 }
 
 function showShare(held) {
@@ -526,7 +522,7 @@ function showShare(held) {
   box.append(
     title,
     code,
-    element('p', 'note', 'Scan the code, or open the link. Whoever has it can change these cards.'),
+    element('p', 'note', 'Scan the code, or open the link. Whoever has it can change these recipes.'),
     field,
     element('div', 'bar', undefined, [copy, close]),
   )
@@ -560,14 +556,16 @@ function notice(message) {
   screen.prepend(band(message, 'warning'))
 }
 
-function head(name, note) {
-  title.textContent = name
-  aside.textContent = note
+/** What the masthead and the foot say, which is the same on every screen but one thing. */
+function page(path, ...actions) {
+  showStamp()
+  acts.replaceChildren(...actions.filter(Boolean))
+  where.textContent = path
 }
 
 function fail(message) {
-  head('lekka', '')
-  show(bar(back()), band(message, 'warning'))
+  page(location.pathname)
+  show(band(message, 'warning'))
 }
 
 function show(...parts) {
@@ -575,21 +573,12 @@ function show(...parts) {
 }
 
 function band(message, kind = '') {
-  return element('div', `band ${kind}`, message)
+  return element('div', `band ${kind}`.trim(), message)
 }
 
-function bar(...parts) {
-  return element('div', 'bar', undefined, parts)
-}
-
-function label(text) {
-  return element('span', 'label', text)
-}
-
-function back() {
-  const link = element('a', 'name', '← Cards')
-  link.href = '/'
-  return link
+function after(...parts) {
+  const kept = parts.filter(Boolean)
+  return kept.length ? element('div', 'bar after', undefined, kept) : null
 }
 
 function scales(id, key, state) {
@@ -616,7 +605,7 @@ function element(tag, className = '', text, children = []) {
   node.className = className
   if (text !== undefined) node.textContent = text
   // A part that is not there is left out. Several of the toolbar's controls answer with
-  // nothing on a card nobody may change, and `append(null)` writes the word "null".
+  // nothing on a recipe nobody may change, and `append(null)` writes the word "null".
   node.append(...children.filter(Boolean))
   return node
 }

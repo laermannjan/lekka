@@ -35,53 +35,167 @@ function open(text, refuse = null, throws = false) {
   return { screen, saved, hold: () => (release = () => {}), let_go: () => release?.() }
 }
 
-const sheet = () => one(body, (node) => node.tag === 'dialog', 'sheet')
-const click = (root, text) => tap(one(root, byText(text), `"${text}"`))
-const field = (form, name) =>
-  one(form, (node) => node.tag === 'label' && node.children[0]?.textContent === name, name)
-    .children[1]
+/**
+ * A field of the specification, found by the label beside it. The specification is a
+ * flat grid of label and value cells, so the value is the cell after the label.
+ */
+function type(screen, name, value) {
+  const spec = one(screen, byClass('spec'), 'specification')
+  const at = spec.children.findIndex((node) => byClass('label')(node) && node.textContent === name)
+  assert.notEqual(at, -1, `no "${name}" row`)
+  const input = one(spec.children[at + 1], (node) => node.tag === 'input', `${name} field`)
+  input.value = value
+  input.onchange?.()
+}
 
+/** What a row of the specification reads, or null when the recipe has no answer. */
+function said(screen, name) {
+  const spec = one(screen, byClass('spec'), 'specification')
+  const at = spec.children.findIndex((node) => byClass('label')(node) && node.textContent === name)
+  return at === -1 ? null : plain(spec.children[at + 1])
+}
+
+/* A bar holding one button reads as that button, so a press means the button. */
+const click = (root, text) => {
+  const found = all(root).filter(byText(text))
+  return tap(found.find((node) => node.tag === 'button') ?? one(root, byText(text), `"${text}"`))
+}
+/*
+ * Writing. Nothing in the table is a field: a tap on a row or a step opens the form,
+ * which is where every field is, and `Apply` is the only thing that writes.
+ */
+
+const holdsOf = (screen) => all(onlyTable(screen)).filter(byClass('hold'))
+// `+ Step` is `add step`, and is a button rather than a cell.
+const stepCells = (screen) =>
+  all(onlyTable(screen)).filter((node) => byClass('step')(node) && !byClass('add')(node))
+
+/** What a cell of the table says. The table is only ever read, so this is only ever text. */
+function says(cell, kind) {
+  const shownAs = all(cell).find(byClass(kind === 'verb' ? 'verb' : 'noun'))
+  return shownAs ? plain(shownAs) : ''
+}
+
+/** The form now open, or null. There is at most one: opening a second closes the first. */
+const formOpen = () => descendants(body).find((node) => node.tag === 'dialog' && node.open) ?? null
+
+/** The one form: its heading, its fields by the names written above them, its buttons. */
+function held() {
+  const box = formOpen()
+  if (!box) throw new Error('no form is open')
+  const fields = all(box).filter((node) => node.tag === 'input' || node.tag === 'textarea')
+  const named = (name) => fields.find(byClass(name))
+  return {
+    box,
+    kind: one(box, byClass('kind'), 'kind').textContent,
+    place: one(box, byClass('place'), 'place').textContent,
+    amount: named('amount'),
+    unit: named('unit'),
+    name: named('name'),
+    aside: named('aside'),
+    verb: named('verb'),
+    before: fields.filter(byClass('before')),
+    apply: () => click(box, 'Apply'),
+    leave: () => click(box, 'Close'),
+    erase: () => click(box, 'Delete'),
+  }
+}
+
+/** Open the row whose name reads this. */
+function openRow(screen, name) {
+  const at = named(screen).indexOf(name)
+  if (at === -1) throw new Error(`no row named ${name} among ${JSON.stringify(named(screen))}`)
+  tap(holdsOf(screen)[at])
+  return held()
+}
+
+/** Open the nth row, top to bottom. */
+function openAt(screen, index) {
+  const hold = holdsOf(screen)[index]
+  if (!hold) throw new Error(`no row ${index} of ${holdsOf(screen).length}`)
+  tap(hold)
+  return held()
+}
+
+/** The step cell whose verb reads this. */
+function cellNamed(screen, verb) {
+  const found = stepCells(screen).find((cell) => says(cell, 'verb') === verb)
+  if (!found)
+    throw new Error(`no step "${verb}" among ${JSON.stringify(stepCells(screen).map((c) => says(c, 'verb')))}`)
+  return found
+}
+
+/** Open the step whose verb reads this. */
+function openStep(screen, verb) {
+  tap(cellNamed(screen, verb))
+  return held()
+}
+
+/** Type into the open form and press Apply, which is the only thing that writes. */
 function fill(values) {
-  const form = one(sheet(), (node) => node.tag === 'form', 'form')
-  for (const [name, value] of Object.entries(values)) field(form, name).value = value
-  return form
+  const form = held()
+  for (const [key, value] of Object.entries(values)) {
+    if (key === 'before') form.before.at(-1).value = value
+    else form[key].value = value
+  }
+  form.apply()
 }
 
-const submit = () => {
-  const form = one(sheet(), (node) => node.tag === 'form', 'form')
-  form.onsubmit()
-  sheet().close()
+/** Add an ingredient the way a person does: a row, then the form it opens. */
+function enter(screen, values) {
+  click(screen, '+ Ingredient')
+  fill(values)
 }
 
-/* Choosing rows. The row itself is the target: shift-click with a mouse, long press
-   with a thumb. There is no column of checkboxes to aim at any more. */
-
-/** Choose the row whose ingredient name matches, in the order the tables are drawn. */
-function tick(screen, name, shift = false) {
-  const grid = onlyTable(screen)
-  const at = named(grid).indexOf(name)
-  if (at === -1) throw new Error(`no row named ${name}`)
-  return tap(all(grid).filter(byClass('hold'))[at], { shiftKey: shift, ctrlKey: !shift })
+/** Name the step that has no name yet: the one `+ Step` has just made. */
+function nameStep(screen, verb, values = {}) {
+  fill({ verb, ...values })
 }
 
-const process = (screen) => click(screen, 'Process in step')
-const takes = (screen) => one(screen, byClass('takes'), 'takes').textContent
+/** Rename a step where it stands. */
+function rename(screen, from, to) {
+  openStep(screen, from)
+  fill({ verb: to })
+}
 
-/** The tick list. The read-only summary of what was taken is `.choice.taken`. */
-const choices = () =>
-  all(sheet())
-    .filter((node) => byClass('choice')(node) && !byClass('taken')(node))
+/**
+ * Every box the open form offers, by what it stands for. A box belongs to an input, and
+ * a step takes whole strands, so what is offered is a strand and never a row inside one.
+ */
+function boxesOf() {
+  return all(held().box)
+    .filter(byClass('choice'))
     .map((line) => ({
-      text: line.children[1].textContent,
-      carries: line.children[2]?.textContent ?? null,
-      box: line.children[0],
+      what: one(line, byClass('what'), 'what').textContent,
+      box: one(line, (node) => node.type === 'checkbox', 'box'),
     }))
+}
+
+const ticked = () => boxesOf().filter((one) => one.box.checked).map((one) => one.what)
+const offered = () => boxesOf().map((one) => one.what)
+
+/** Tick or untick what a box stands for. */
+function tick(name) {
+  const found = boxesOf().find((one) => one.what === name)
+  if (!found) throw new Error(`no box for ${name} among ${JSON.stringify(offered())}`)
+  found.box.checked = !found.box.checked
+  return found.box.onchange()
+}
+
+/** A step, taking whatever the editor guessed, with the form open and no name yet. */
+const process = (screen) => tap(one(onlyTable(screen), byText('+ Step'), '+ Step'))
 
 /** What the editor drew, as the card's own text does not exist until it is saved. */
-const plain = (node) => node.textContent.replace(/\u00a0/g, ' ')
-const shown = (screen) => all(screen).filter(byClass('verb')).map(plain)
+const plain = (node) => node.textContent.replace(/ /g, ' ')
+const shown = (screen) => stepCells(screen).map((cell) => says(cell, 'verb'))
 /** Every ingredient row of the one table, top to bottom. */
-const named = (screen) => all(screen).filter(byClass('noun')).map((node) => node.textContent)
+const named = (screen) => holdsOf(screen).map((hold) => says(hold, 'name'))
+
+/** What the table shades: everything coming into the step the form is open on. */
+const shaded = (screen) => [
+  ...holdsOf(screen).filter(byClass('chosen')).map((hold) => says(hold, 'name')),
+  ...stepCells(screen).filter(byClass('chosen')).map((cell) => says(cell, 'verb')),
+]
 
 /** There is one table. An unused ingredient is a row in it, not a table of its own. */
 function onlyTable(screen) {
@@ -89,6 +203,7 @@ function onlyTable(screen) {
   assert.equal(grids.length, 1, `${grids.length} tables, wanted 1`)
   return grids[0]
 }
+
 const faults = (screen) => all(screen).filter(byClass('fault')).map(plain)
 
 test('an empty card offers only the two ways to add, and says so', () => {
@@ -107,12 +222,9 @@ test('an empty card offers only the two ways to add, and says so', () => {
 test('ingredients entered one after another wait, and are named as unused', () => {
   const { screen } = open('# Neu\n')
 
-  click(screen, '+ Ingredient')
-  fill({ Amount: '250', Unit: 'g', Name: 'Mehl' })
-  // "Add and another" keeps the sheet open, which is what entering a list needs.
-  one(sheet(), byText('Add and another'), 'another').onclick()
-  fill({ Amount: '500', Unit: 'ml', Name: 'Milch' })
-  submit()
+  enter(screen, { amount: '250', unit: 'g', name: 'Mehl' })
+  // A second row is a second `+ Ingredient`; there is no form to keep open.
+  enter(screen, { amount: '500', unit: 'ml', name: 'Milch' })
 
   // Both are rows of the one table, with nothing to the right of them.
   onlyTable(screen)
@@ -124,63 +236,50 @@ test('ingredients entered one after another wait, and are named as unused', () =
   assert.equal(one(screen, byText('Save'), 'Save').disabled, true)
 })
 
-test('ticking rows and processing them builds the step', async () => {
+test('a new step takes what is waiting, and is then named', async () => {
   const { screen, saved } = open('# Neu\n')
 
-  click(screen, '+ Ingredient')
-  fill({ Amount: '250', Unit: 'g', Name: 'Mehl' })
-  submit()
-  click(screen, '+ Ingredient')
-  fill({ Amount: '500', Unit: 'ml', Name: 'Milch' })
-  submit()
+  enter(screen, { amount: '250', unit: 'g', name: 'Mehl' })
+  enter(screen, { amount: '500', unit: 'ml', name: 'Milch' })
 
-  // Nothing ticked, nothing offered: the table is quiet until the cook has said what
-  // they mean.
-  assert.equal(all(screen).filter(byClass('takes')).length, 0)
+  // No boxes until a step is open: they are in the form, and no form is up.
+  assert.equal(formOpen(), null)
 
-  tick(screen, 'Mehl')
-  assert.equal(takes(screen), '250 g Mehl')
-  tick(screen, 'Milch')
-  assert.equal(takes(screen), '250 g Mehl + 500 ml Milch')
-
+  // `+ Step` takes every ingredient still waiting, which is what is almost always meant.
   process(screen)
-  fill({ Instruction: 'verrühren' })
-  submit()
+  assert.deepEqual(ticked(), ['250 g Mehl', '500 ml Milch'])
+  nameStep(screen, 'verrühren')
 
   assert.deepEqual(shown(screen), ['verrühren'])
   assert.deepEqual(faults(screen), [])
   onlyTable(screen)
-  // Committing clears the ticks, so the next move starts from nothing.
-  assert.equal(all(screen).filter(byClass('takes')).length, 0)
+  // Applying closes the form, so the next move starts from the table again.
+  assert.equal(formOpen(), null)
 
   await one(screen, byText('Save'), 'Save').onclick()
   assert.deepEqual(saved, ['# Neu\n\n- verrühren\n  - Mehl: 250 g\n  - Milch: 500 ml\n'])
 })
 
-test('a row stands for whatever is holding it, so a whole strand reads as its last step', () => {
+test('with nothing waiting, a new step takes the ends of the strands', () => {
   const { screen } = open(PANCAKES)
 
-  // Mehl is inside verrühren, which is inside braten. Ticking every row of the card
-  // therefore says braten, not four ingredients.
-  for (const name of ['Mehl', 'Milch']) tick(screen, name)
-  assert.equal(takes(screen), 'braten')
+  // Every ingredient is already inside a step, so what is left to take is braten
+  // itself - the end of the one strand there is.
+  process(screen)
+  assert.deepEqual(ticked(screen), ['braten'])
+  nameStep(screen, 'anrichten')
 
-  // Just the rows under verrühren say verrühren.
-  tick(screen, 'Milch')
-  assert.equal(takes(screen), '250 g Mehl')
+  assert.deepEqual(faults(screen), [])
+  assert.deepEqual(shown(screen).sort(), ['anrichten', 'braten', 'verrühren'])
 })
 
 test('two strands that never meet are refused until a step joins them', () => {
   const { screen } = open('# Reis mit Hähnchen\n')
 
   for (const [name, verb] of [['Reis', 'kochen'], ['Hähnchen', 'braten']]) {
-    click(screen, '+ Ingredient')
-    fill({ Name: name, Amount: '200', Unit: 'g' })
-    submit()
-    tick(screen, name)
+    enter(screen, { name, amount: '200', unit: 'g' })
     process(screen)
-    fill({ Instruction: verb })
-    submit()
+    nameStep(screen, verb)
   }
 
   assert.deepEqual(shown(screen).sort(), ['braten', 'kochen'])
@@ -190,13 +289,11 @@ test('two strands that never meet are refused until a step joins them', () => {
   assert.equal(one(screen, byText('Save'), 'Save').disabled, true)
 
   // Ticking every row of both says both strands, which is how they are joined.
-  tick(screen, 'Reis')
-  tick(screen, 'Hähnchen')
-  assert.equal(takes(screen), 'kochen + braten')
-
+  // Neither ingredient is waiting any more, so the new step takes both ends at once,
+  // which is how two strands are joined.
   process(screen)
-  fill({ Instruction: 'anrichten' })
-  submit()
+  assert.deepEqual(ticked(screen).sort(), ['braten', 'kochen'])
+  nameStep(screen, 'anrichten')
 
   assert.deepEqual(faults(screen), [])
   assert.equal(one(screen, byText('Save'), 'Save').disabled, false)
@@ -212,80 +309,138 @@ const PANCAKES = `# Pfannkuchen
     - Milch: 500 ml
 `
 
-test('tapping an ingredient opens it, and every field of the row opens the same one', () => {
+test('a row is one line of the card, and the form writes all four of its fields', () => {
   const { screen } = open(PANCAKES)
-  const row = all(screen).filter((node) => byClass('pickable')(node) && node.tag === 'div')
+  const row = openRow(screen, 'Mehl')
 
-  const mehl = row.filter((node) => node.textContent.includes('Mehl'))
-  assert.equal(mehl.length, 1)
+  // The amount, the unit and the name are three cells of one line, not three things, so
+  // the form holds the line and `Apply` writes the whole of it.
+  assert.equal(row.kind, 'Ingredient')
+  assert.equal(row.name.value, 'Mehl')
+  assert.equal(row.amount.value, '250')
+  assert.equal(row.unit.value, 'g')
 
-  // The amount, the unit and the name are three cells of one line, so all three lead
-  // to the ingredient rather than to a cell of their own.
-  tap(one(screen, (node) => byClass('amount')(node) && node.textContent === '250', 'amount'))
-  const form = fill({})
-  assert.equal(field(form, 'Name').value, 'Mehl')
-  assert.equal(field(form, 'Unit').value, 'g')
+  fill({ amount: '300', aside: 'Type 550' })
 
-  field(form, 'Amount').value = '300'
-  field(form, 'Note').value = 'Type 550'
-  submit()
-
-  const named = all(screen).filter(byClass('noun')).map((node) => node.textContent)
-  assert.deepEqual(named, ['Mehl', 'Milch'])
-  assert.ok(all(screen).some((node) => byClass('amount')(node) && node.textContent === '300'))
-  assert.ok(all(screen).some((node) => byClass('aside')(node) && node.textContent === 'Type 550'))
+  assert.deepEqual(named(screen), ['Mehl', 'Milch'])
+  const after = openRow(screen, 'Mehl')
+  assert.equal(after.amount.value, '300')
+  assert.equal(after.aside.value, 'Type 550')
 })
 
-test('a step being edited sees its own inputs, and never the strand it sits in', () => {
+test('nothing in the table is a field, so nothing in it can change shape', () => {
   const { screen } = open(PANCAKES)
 
-  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'verrühren', 'verb'))
-  assert.deepEqual(choices().map((choice) => choice.text), ['250 g Mehl', '500 ml Milch'])
+  const before = holdsOf(screen).length
+  openStep(screen, 'verrühren')
 
-  // braten holds verrühren, so offering it here would make a loop. It is not on the list.
-  assert.ok(!choices().some((choice) => choice.text.includes('braten')))
+  // The form is a layer over the page. The table under it has the same rows, the same
+  // cells and not one field: only its colours differ.
+  assert.equal(holdsOf(screen).length, before)
+  assert.equal(all(onlyTable(screen)).filter(byClass('field')).length, 0)
+  assert.equal(all(onlyTable(screen)).filter((node) => node.tag === 'input').length, 0)
+  assert.equal(all(onlyTable(screen)).filter((node) => node.tag === 'textarea').length, 0)
+})
 
-  // Dropping an input hands it back to the waiting list rather than deleting it.
-  choices()[1].box.checked = false
-  fill({ Instruction: 'verrühren' })
-  submit()
+test('a step is written in the form, and the table says so until Apply', () => {
+  const { screen } = open(PANCAKES)
+  const step = openStep(screen, 'verrühren')
+  assert.equal(step.kind, 'Step')
+  assert.equal(step.place, 'column 01')
+  assert.equal(step.verb.value, 'verrühren')
 
-  // Milch is still a row of the same table; it has simply lost what was to its right.
+  // Nothing has moved yet: the table still says what it said.
+  assert.deepEqual(shown(screen), ['braten', 'verrühren'])
+
+  fill({ verb: 'vermengen' })
+  assert.deepEqual(shown(screen), ['braten', 'vermengen'])
+  assert.equal(formOpen(), null)
+})
+
+test('opening a step ticks what goes into it, and nothing moves until Apply', () => {
+  const { screen } = open(PANCAKES)
+
+  const step = openStep(screen, 'verrühren')
+  assert.deepEqual(ticked(), ['250 g Mehl', '500 ml Milch'])
+
+  // Unticking changes the box and nothing else: the row stays where it is drawn.
+  tick('500 ml Milch')
+  assert.deepEqual(ticked(), ['250 g Mehl'])
+  assert.deepEqual(named(screen), ['Mehl', 'Milch'])
+  assert.deepEqual(faults(screen), [])
+
+  // Applying is when it happens. Milch is still a row of the same table; it has simply
+  // lost what was to its right.
+  step.apply()
   onlyTable(screen)
   assert.deepEqual(named(screen), ['Mehl', 'Milch'])
   assert.deepEqual(faults(screen), ['500 ml Milch goes into no step'])
 })
 
+test('a box stands for an input, so what is inside another step has none', () => {
+  const { screen } = open(WITH_BUTTER)
+
+  // verrühren takes Mehl and Milch. Butter is inside schmelzen, which is inside braten,
+  // which holds verrühren - it is not something verrühren could take, and unticking one
+  // row of a strand is not a move the format has, so it is offered no box at all.
+  openStep(screen, 'verrühren')
+  assert.deepEqual(ticked(), ['250 g Mehl', '500 ml Milch'])
+  assert.deepEqual(offered(), ['250 g Mehl', '500 ml Milch'])
+})
+
+test('the form says what kind of thing it holds and where it stands', () => {
+  const { screen } = open(PANCAKES)
+
+  // The kind and the column, and not the name: the name is in a field two lines below,
+  // and a heading that repeats the field under it is one more thing to keep in step.
+  const step = openStep(screen, 'braten')
+  assert.equal(step.kind, 'Step')
+  assert.equal(step.place, 'column 02')
+  assert.equal(plain(one(step.box, byClass('at'), 'heading')).includes('braten'), false)
+
+  const row = openRow(screen, 'Mehl')
+  assert.equal(row.kind, 'Ingredient')
+  // A row stands in no column of its own: it is the line the columns are measured from.
+  assert.equal(row.place, '')
+  // And it takes nothing, so it is offered no list.
+  assert.equal(all(row.box).filter(byClass('choice')).length, 0)
+})
+
+test('opening a second form closes the first', () => {
+  const { screen } = open(PANCAKES)
+  const step = openStep(screen, 'braten')
+  const row = openRow(screen, 'Mehl')
+
+  assert.equal(step.box.open, false)
+  assert.equal(row.box.open, true)
+  assert.equal(descendants(body).filter((node) => node.tag === 'dialog' && node.open).length, 1)
+})
+
 test('deleting a step frees what it held instead of taking the strand with it', () => {
   const { screen } = open(PANCAKES)
 
-  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
-  tap(one(sheet(), byText('Delete'), 'Delete'))
+  openStep(screen, 'braten').erase()
 
   assert.deepEqual(shown(screen), ['verrühren'])
   assert.deepEqual(faults(screen), [])
+  assert.equal(formOpen(), null)
 })
 
-test('a note on a step is drawn under its verb and edits in place', () => {
+test('a note on a step is a field of the form, under the verb', () => {
   const { screen } = open(PANCAKES)
-  assert.ok(all(screen).some((node) => byClass('note')(node) && plain(node) === '2 min je Seite'))
+  const step = openStep(screen, 'braten')
+  assert.equal(step.aside.value, '2 min je Seite')
 
-  tap(one(screen, byClass('note'), 'note'))
-  const form = fill({})
-  assert.equal(field(form, 'Instruction').value, 'braten')
-  assert.equal(field(form, 'Note').value, '2 min je Seite')
+  fill({ aside: '3 min je Seite' })
+  assert.equal(openStep(screen, 'braten').aside.value, '3 min je Seite')
 })
 
 test('punctuation the file would read as structure is refused while it is typed', async () => {
   const { screen, saved } = open('# Neu\n')
 
-  click(screen, '+ Ingredient')
-  fill({ Name: 'Salz: grob', Amount: '1', Unit: 'TL' })
-  submit()
-  tick(screen, 'Salz: grob')
+  enter(screen, { name: 'Salz: grob', amount: '1', unit: 'TL' })
   process(screen)
-  fill({ Instruction: 'würzen' })
-  submit()
+  nameStep(screen, 'würzen')
 
   // `- Salz: grob: 1 TL` splits at the first colon, so this card would come back as
   // salt in an amount of "grob" - and come back as the same text, so no round trip
@@ -294,10 +449,10 @@ test('punctuation the file would read as structure is refused while it is typed'
   const save = one(screen, byText('Save'), 'Save')
   assert.equal(save.disabled, true)
 
-  // The fault leads to the ingredient it is about, where it can be fixed.
+  // The fault leads to the row it is about: it opens the form on that one row.
   tap(one(screen, byClass('fault'), 'fault'))
-  fill({ Name: 'Salz', Amount: 'grob', Unit: '' })
-  submit()
+  assert.equal(held().kind, 'Ingredient')
+  fill({ name: 'Salz', amount: 'grob', unit: '' })
 
   assert.deepEqual(faults(screen), [])
   await one(screen, byText('Save'), 'Save').onclick()
@@ -306,57 +461,115 @@ test('punctuation the file would read as structure is refused while it is typed'
 
 test('brackets in a name are refused too, and the note is offered instead', () => {
   const { screen } = open('# Neu\n')
-  click(screen, '+ Ingredient')
-  fill({ Name: 'Mehl (Type 550)' })
-  submit()
+  enter(screen, { name: 'Mehl (Type 550)' })
   assert.ok(
     faults(screen).includes('Brackets cannot be part of a name. Put it in the note instead'),
   )
 })
 
-test('the card sheet writes the title, the yield and the preparations', () => {
+test('the specification writes the yield, the notes and the preparations', () => {
   const { screen } = open('# Neu\n')
 
-  click(screen, '+ Ingredient')
-  fill({ Name: 'Teig' })
-  submit()
-  tick(screen, 'Teig')
+  enter(screen, { name: 'Teig' })
   process(screen)
-  fill({ Instruction: 'backen' })
-  submit()
+  nameStep(screen, 'backen')
 
-  click(screen, 'Card')
-  fill({ Title: 'Brot', Makes: '1 Laib', Preparations: 'Ofen vorheizen (240 °C)' })
-  submit()
+  type(screen, 'Yield', '1 Laib')
+  type(screen, 'Before', 'Ofen vorheizen (240 °C)')
 
-  // A preparation for the whole card is the band across the top of the table itself.
+  // A preparation for the whole recipe stands over the ingredient block, which is what
+  // comes before every column there is.
   const band = one(onlyTable(screen), byClass('preparation'), 'preparation')
   assert.equal(plain(band), 'Ofen vorheizen240 °C')
+  assert.ok(band.classList.contains('whole'))
   assert.deepEqual(faults(screen), [])
 })
 
-test('a card with no title cannot be saved, and the fault says which', () => {
-  const { screen } = open('# x\n')
-  click(screen, 'Card')
-  fill({ Title: '  ' })
-  submit()
-  assert.ok(all(screen).some((node) => node.textContent.includes('The card needs a title')))
+test("a step's preparation is drawn over its column, not inside its cell", () => {
+  const { screen } = open('# Neu\n')
+  enter(screen, { name: 'Teig' })
+  process(screen)
+  nameStep(screen, 'backen', { before: 'Ofen vorheizen (240 °C)' })
+
+  // In the band, over the column `backen` is standing in - and nothing in the cell.
+  const band = one(onlyTable(screen), byClass('preparation'), 'preparation')
+  assert.equal(plain(band), 'Ofen vorheizen240 °C')
+  assert.equal(band.classList.contains('whole'), false)
+  assert.equal(all(cellNamed(screen, 'backen')).filter(byClass('preparation')).length, 0)
+
+  // And it is written in the step's own form, because that is what it belongs to.
+  assert.deepEqual(openStep(screen, 'backen').before.map((one) => one.value), ['Ofen vorheizen (240 °C)', ''])
 })
 
-test('the sheet is taken off the page when it closes', () => {
+test('a duration in a verb is tagged, so the eye can find it in the words', () => {
+  const { screen } = open(`# A
+
+- backen 250 °C 15 min, fallend 190 °C (gesamt 70-80 min)
+  - Mehl: 250 g
+`)
+
+  // Only the verb. A note holds asides and second opinions - `gesamt 70-80 min` is the
+  // same bake said again - and tagging those would mark the same time twice.
+  const cell = cellNamed(screen, 'backen 250 °C 15 min, fallend 190 °C')
+  const verb = one(cell, byClass('verb'), 'verb')
+  assert.deepEqual(all(verb).filter(byClass('time')).map(plain), ['15 min'])
+  assert.deepEqual(all(cell).filter(byClass('note')).flatMap((n) => all(n).filter(byClass('time'))), [])
+})
+
+test('the card says only what a person wrote about it, never a sum', () => {
+  const { screen } = open(PANCAKES)
+
+  // How long it takes, what it weighs, how many rows it has - all true, none of it
+  // wanted. A cook reads the table; a count of its rows is a fact about the drawing.
+  for (const sum of ['Time', 'Weight', 'Liquid', 'Ingredients', 'Steps'])
+    assert.equal(said(screen, sum), null, sum)
+
+  // What is left is the yield, the notes and the recipe's own preparations, which is
+  // everything that can only be typed here.
+  assert.notEqual(said(screen, 'Yield'), null)
+  assert.notEqual(said(screen, 'Note'), null)
+})
+
+test('a name is trimmed as it is written, so Save is not refused over a space', () => {
+  const { screen } = open('# x\n')
+  const name = one(screen, (node) => node.tag === 'input' && byClass('title')(node), 'name field')
+  name.value = 'Brot '
+  name.onchange()
+
+  const after = one(screen, (node) => node.tag === 'input' && byClass('title')(node), 'name field')
+  assert.equal(after.value, 'Brot')
+  assert.deepEqual(faults(screen), [])
+})
+
+test('the name is a field of the editor, and an empty one is a fault', () => {
+  const { screen } = open('# x\n')
+  const name = one(screen, (node) => node.tag === 'input' && byClass('title')(node), 'name field')
+  assert.equal(name.value, 'x')
+
+  name.value = '  '
+  name.onchange?.()
+  assert.ok(all(screen).some((node) => node.textContent.includes('The recipe needs a name')))
+})
+
+test('the form is the one dialog, and it is up only when it was asked for', () => {
   const { screen } = open('# Neu\n')
-  click(screen, '+ Ingredient')
-  assert.equal(descendants(body).filter((node) => node.tag === 'dialog').length, 1)
-  sheet().close()
-  assert.equal(descendants(body).filter((node) => node.tag === 'dialog').length, 0)
+  enter(screen, { name: 'Teig' })
+  assert.equal(formOpen(), null)
+
+  process(screen)
+  nameStep(screen, 'kneten')
+  assert.equal(formOpen(), null)
+
+  const step = openStep(screen, 'kneten')
+  assert.equal(formOpen(), step.box)
+  step.leave()
+  assert.equal(formOpen(), null)
 })
 
 test('a save that arrives is said, and so is one that does not', async () => {
   const { screen, saved } = open(PANCAKES)
   const edit = () => {
-    tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
-    fill({ Instruction: 'anbraten' })
-    submit()
+    rename(screen, 'braten', 'anbraten')
   }
 
   // Nothing has changed yet, so there is nothing to save.
@@ -373,9 +586,7 @@ test('a save that arrives is said, and so is one that does not', async () => {
 
 test('a write the server refuses leaves the draft alone and says why', async () => {
   const { screen, saved } = open(PANCAKES, 'Not saved. No connection.')
-  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
-  fill({ Instruction: 'anbraten' })
-  submit()
+  rename(screen, 'braten', 'anbraten')
 
   await one(screen, byText('Save'), 'Save').onclick()
   assert.deepEqual(saved, [])
@@ -397,89 +608,10 @@ const WITH_BUTTER = `# Pfannkuchen
     - Butter: 30 g
 `
 
-test('taking one row out of a step is said before it happens, and then done', () => {
-  const { screen } = open(WITH_BUTTER)
 
-  tick(screen, 'Mehl')
-  assert.equal(takes(screen), '250 g Mehl')
-  // The bar names what it would disturb, since that is what was not pointed at.
-  assert.ok(
-    all(screen).some((node) => node.textContent.includes('250 g Mehl comes out of verrühren')),
-  )
 
-  process(screen)
-  // The sheet says it again, next to what goes in, before it is committed.
-  assert.ok(all(sheet()).some((node) => node.textContent.includes('comes out of verrühren')))
-  fill({ Instruction: 'sieben' })
-  submit()
 
-  assert.deepEqual(shown(screen).sort(), ['braten', 'schmelzen', 'sieben', 'verrühren'])
-  assert.deepEqual(faults(screen), [
-    'braten and sieben never meet. Add a step that takes them all',
-  ])
-})
 
-test('a step left empty by the move is named, and goes with it', () => {
-  const { screen } = open(WITH_BUTTER)
-
-  // Butter is all that schmelzen holds, so ticking its row reads as schmelzen itself,
-  // and taking schmelzen whole is what keeps it from being emptied.
-  tick(screen, 'Butter')
-  assert.equal(takes(screen), 'schmelzen')
-  assert.ok(
-    all(screen).some((node) => node.textContent.includes('schmelzen comes out of braten')),
-  )
-  assert.ok(!all(screen).some((node) => node.textContent.includes('left empty')))
-
-  process(screen)
-  fill({ Instruction: 'bräunen' })
-  submit()
-
-  assert.deepEqual(shown(screen).sort(), ['braten', 'bräunen', 'schmelzen', 'verrühren'])
-})
-
-test('naming the last ingredient of a step warns that the step goes too', () => {
-  const { screen } = open(WITH_BUTTER)
-
-  // Mehl and Butter together: Mehl comes out of verrühren, and Butter is all that
-  // schmelzen holds, so schmelzen is left with nothing.
-  tick(screen, 'Mehl')
-  tick(screen, 'Butter')
-  assert.equal(takes(screen), '250 g Mehl + schmelzen')
-
-  process(screen)
-  fill({ Instruction: 'mischen' })
-  submit()
-  assert.deepEqual(shown(screen).sort(), ['braten', 'mischen', 'schmelzen', 'verrühren'])
-})
-
-test('the heading takes the whole strand, and lets it go again', () => {
-  const { screen } = open(WITH_BUTTER)
-  const heading = () =>
-    all(all(screen).filter(byClass('grid')).at(-1)).filter(byClass('heading'))[0]
-
-  tap(heading(), { ctrlKey: true })
-  assert.equal(takes(screen), 'braten')
-
-  tap(heading(), { ctrlKey: true })
-  assert.equal(all(screen).filter(byClass('takes')).length, 0)
-})
-
-test('shift extends from the last row touched', () => {
-  const { screen } = open(`# A
-
-- rühren
-  - Mehl: 1 g
-  - Milch: 2 g
-  - Salz: 3 g
-  - Zucker: 4 g
-`)
-
-  tick(screen, 'Mehl')
-  tick(screen, 'Salz', true)
-  // Mehl, Milch and Salz, but not Zucker.
-  assert.equal(takes(screen), '1 g Mehl + 2 g Milch + 3 g Salz')
-})
 
 test('the add-ingredient row sits under the last ingredient of the one table', () => {
   const { screen } = open('# Neu\n')
@@ -487,8 +619,7 @@ test('the add-ingredient row sits under the last ingredient of the one table', (
   assert.ok(add.classList.contains('add'))
 
   tap(add)
-  fill({ Name: 'Mehl' })
-  submit()
+  fill({ name: 'Mehl' })
   assert.deepEqual(named(screen), ['Mehl'])
   // Still one table, and still exactly one of each way to add.
   assert.equal(all(onlyTable(screen)).filter(byText('+ Ingredient')).length, 1)
@@ -500,58 +631,90 @@ test('a card is one table at every stage of being written', () => {
   onlyTable(screen)
 
   for (const name of ['Reis', 'Hähnchen']) {
-    tap(one(onlyTable(screen), byText('+ Ingredient'), 'add row'))
-    fill({ Name: name })
-    submit()
+    enter(screen, { name })
     onlyTable(screen)
   }
 
-  // Two strands that have not met is the case that used to draw two tables.
-  for (const [name, verb] of [['Reis', 'kochen'], ['Hähnchen', 'braten']]) {
-    tick(screen, name)
-    process(screen)
-    fill({ Instruction: verb })
-    submit()
-    onlyTable(screen)
-  }
+  // Two strands that have not met is the case that used to draw two tables. The first
+  // step takes both waiting ingredients, so one is untnicked to leave the other loose.
+  process(screen)
+  tick('Hähnchen')
+  nameStep(screen, 'kochen')
+  onlyTable(screen)
+
+  process(screen)
+  nameStep(screen, 'braten')
+  onlyTable(screen)
   assert.deepEqual(faults(screen), [
     'kochen and braten never meet. Add a step that takes them all',
   ])
   assert.deepEqual(named(screen), ['Reis', 'Hähnchen'])
 })
 
-test('an existing step still edits its inputs as a list', () => {
+test('a ticked strand is shaded whole, steps between it and the rows included', () => {
   const { screen } = open(WITH_BUTTER)
-  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
-  assert.deepEqual(choices().map((choice) => choice.text), ['verrühren', 'schmelzen'])
+  openStep(screen, 'braten')
+
+  // braten takes verrühren and schmelzen. Both are shaded, and so is every row under
+  // them: what is coming in is the strand, not the boxes that name it.
+  const shadedSteps = stepCells(screen)
+    .filter(byClass('chosen'))
+    .map((cell) => says(cell, 'verb'))
+  assert.deepEqual(shadedSteps.sort(), ['schmelzen', 'verrühren'])
+  assert.equal(holdsOf(screen).filter(byClass('chosen')).length, named(screen).length)
+
+  // The step being written is not shaded: the shading says what is coming in.
+  assert.ok(!byClass('chosen')(cellNamed(screen, 'braten')))
 })
 
-test('a step can be added before anything is ticked, and the table says so', () => {
+test('a step being edited starts from what it takes, not from what it contains', () => {
+  const { screen } = open(WITH_BUTTER)
+  openStep(screen, 'braten')
+  // braten takes two strands, not three ingredients, so there are two boxes.
+  assert.deepEqual(ticked().sort(), ['schmelzen', 'verrühren'])
+})
+
+test('a step input says how much it brings; an ingredient brings one row and says nothing', () => {
+  const { screen } = open(WITH_BUTTER)
+  openStep(screen, 'braten')
+
+  // `verrühren` holds two ingredients and `schmelzen` one, and neither can be seen from
+  // its name. A list that also said `1 row` beside every ingredient would be a column of
+  // the word row, so only the counts worth reading are printed.
+  const beside = (what) =>
+    all(held().box)
+      .filter(byClass('choice'))
+      .filter((line) => plain(one(line, byClass('what'), 'what')) === what)
+      .flatMap((line) => all(line).filter(byClass('aside')).map(plain))
+  assert.deepEqual(beside('verrühren'), ['2 ingredients'])
+  assert.deepEqual(beside('schmelzen'), [])
+
+  openStep(screen, 'verrühren')
+  assert.deepEqual(beside('250 g Mehl'), [])
+})
+
+test('+ Step guesses what goes in, and says so with the boxes', () => {
   const { screen } = open(WITH_BUTTER)
 
-  // The affordance is there at rest: nothing has been ticked, and nothing needs to be.
-  const add = one(onlyTable(screen), byText('+ Step'), '+ Step')
-  assert.equal(all(screen).filter(byClass('takes')).length, 0)
+  // Nothing is waiting, so the guess is the end of the strand, and the new step is
+  // unnamed with the form on it.
+  process(screen)
+  assert.deepEqual(ticked(), ['braten'])
+  assert.equal(held().verb.value, '')
 
-  tap(add)
-  // With nothing ticked it asks with the list, so the button never does nothing.
-  assert.deepEqual(choices().map((choice) => choice.text), ['braten'])
-  sheet().close()
+  nameStep(screen, 'anrichten')
+  assert.deepEqual(shown(screen).sort(), ['anrichten', 'braten', 'schmelzen', 'verrühren'])
+})
 
-  // With rows ticked it takes them instead, and does not ask twice.
-  tick(screen, 'Butter')
-  tap(one(onlyTable(screen), byText('+ Step'), '+ Step'))
-  assert.deepEqual(choices(), [])
-  assert.ok(all(sheet()).some((node) => byClass('taken')(node) && node.textContent === 'schmelzen'))
+test('a recipe with nothing in it is told to start with an ingredient', () => {
+  const { screen } = open('# Neu\n')
+  process(screen)
+  assert.ok(all(screen).some((node) => node.textContent.includes('Add an ingredient first')))
 })
 
 test('an edit made while a save is in flight is not counted as saved', async () => {
   const { screen, saved, hold, let_go } = open(PANCAKES)
-  const edit = (from, to) => {
-    tap(one(screen, (node) => byClass('verb')(node) && node.textContent === from, from))
-    fill({ Instruction: to })
-    submit()
-  }
+  const edit = (from, to) => rename(screen, from, to)
 
   edit('braten', 'anbraten')
   hold()
@@ -575,9 +738,9 @@ test('the table keeps its place across a repaint', () => {
   const scroller = () => one(screen, byClass('scroll'), 'scroll')
 
   scroller().scrollLeft = 240
-  // Ticking repaints the whole table; a wide card must not jump back to its first
-  // column while the cook is working across it.
-  tick(screen, 'Mehl')
+  // Opening a cell repaints the whole table; a wide recipe must not jump back to its
+  // first column while the cook is working across it.
+  openStep(screen, 'verrühren')
   assert.equal(scroller().scrollLeft, 240)
 })
 
@@ -600,8 +763,8 @@ test('the table has square edges: the add row and the step column reach them', (
 
   // The add row starts at the very left, across the checkbox column, or it leaves a notch.
   assert.equal(add.column, 1)
-  // The step column runs from the header to the same last row as the add row.
-  assert.equal(step.row, 1)
+  // The step column runs from under the header to the same last row as the add row.
+  assert.equal(step.row, 2)
   assert.equal(step.row + step.rows - 1, add.row)
   // And the rest of the add row is drawn, so the bottom edge runs the whole width.
   const along = all(grid)
@@ -627,36 +790,35 @@ test('deleting says what else it would take, and does nothing if refused', () =>
   asked = []
   globalThis.confirm.answer = false
 
-  tap(one(screen, (node) => byClass('noun')(node) && node.textContent === 'Mehl', 'Mehl').parent)
-  tap(one(sheet(), byText('Delete'), 'Delete'))
+  openRow(screen, 'Mehl').erase()
 
   // Mehl is all verrühren holds and verrühren is all anrichten holds, so deleting one
-  // ingredient would take the whole card. It says so, and it asks first.
+  // ingredient would take the whole recipe. It says so, and it asks first.
   assert.equal(asked.length, 1)
   assert.match(asked[0], /verrühren, anrichten/)
   assert.deepEqual(shown(screen).sort(), ['anrichten', 'verrühren'])
 
+  // A refusal changes nothing, the form included: it is still open on the same row.
+  assert.equal(held().kind, 'Ingredient')
+
   // Answering yes goes through with it.
   globalThis.confirm.answer = true
-  tap(one(screen, (node) => byClass('noun')(node) && node.textContent === 'Mehl', 'Mehl').parent)
-  tap(one(sheet(), byText('Delete'), 'Delete'))
+  held().erase()
   assert.deepEqual(shown(screen), [])
+  assert.equal(formOpen(), null)
 })
 
 test('deleting something that empties nothing does not ask', () => {
   const { screen } = open(WITH_BUTTER)
   asked = []
-  tap(one(screen, (node) => byClass('noun')(node) && node.textContent === 'Mehl', 'Mehl').parent)
-  tap(one(sheet(), byText('Delete'), 'Delete'))
+  openRow(screen, 'Mehl').erase()
   assert.deepEqual(asked, [])
   assert.deepEqual(shown(screen).sort(), ['braten', 'schmelzen', 'verrühren'])
 })
 
 test('a save that throws does not wedge the editor', async () => {
   const { screen } = open(PANCAKES, null, true)
-  tap(one(screen, (node) => byClass('verb')(node) && node.textContent === 'braten', 'braten'))
-  fill({ Instruction: 'anbraten' })
-  submit()
+  rename(screen, 'braten', 'anbraten')
 
   await one(screen, byText('Save'), 'Save').onclick()
 
