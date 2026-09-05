@@ -1,4 +1,3 @@
-import { DURATION } from './facts.js'
 import { buildGrid } from './grid.js'
 import { formatAmount, scaleAmount } from './amount.js'
 
@@ -9,6 +8,16 @@ import { formatAmount, scaleAmount } from './amount.js'
  */
 const NAME_COLUMN = 3
 const UNIT = /(\d)\s+(?=[^\s\d]{1,3}(?:[\s,]|$))/g
+
+/**
+ * A duration inside a verb: `15 min`, `1,5 h`, `70-80 min`.
+ *
+ * It lived in a module of sums that worked out what a whole recipe takes and weighs.
+ * Nothing asks a card those questions any more, so the sums are gone and this is what
+ * was left of them - a pattern for finding the one thing in a verb a cook looks for
+ * while the pan is already hot.
+ */
+const DURATION = /(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*(\d+(?:[.,]\d+)?))?\s*(min|h)\b/g
 
 /** A card as a table. Column 0 of the grid is the three ingredient columns. */
 export function renderCard(card, scale = 1, edit = null) {
@@ -314,9 +323,9 @@ function bind(text) {
  * A line of a step, with its durations marked.
  *
  * How long a step takes is the one thing in a verb a cook looks for while the pan is
- * already hot, and it is buried in the middle of the words. Marking it is not
- * decoration: it is the same pattern the specification sums, so the tags on the table
- * are exactly what the `Time` row adds up, and you can see where the total came from.
+ * already hot, and it is buried in the middle of the words. Only the verb is marked: a
+ * note holds asides like "rotate every 20 min" and second opinions like "gesamt
+ * 70-80 min", and tagging those would mark the same bake twice.
  */
 function marked(className, text) {
   const box = element('div', className)

@@ -176,8 +176,9 @@ one - it is a cell of the table, marked by the wash and nothing else.
 - Notes sit under their verb, centred, grey, balanced across lines.
 - **A duration in a verb is tagged**, on the pale blue tint. How long a step takes
   is the one thing a cook looks for while the pan is already hot, and it is buried
-  in the middle of the words. It is the same pattern the specification sums, so
-  the tags on the table are exactly what the `Time` row adds up.
+  in the middle of the words. Only the verb: a note holds asides like *rotate
+  every 20 min* and second opinions like *gesamt 70-80 min*, and marking those
+  would tag the same bake twice.
 - Nothing wraps in the ingredient column; the table scrolls sideways instead.
 - The head of the table is white and closed by a line of ink. Weight separates
   it from the body, not a fill.

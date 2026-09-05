@@ -163,16 +163,19 @@ gives up the type. The two are exclusive, so fitting turns the places and the
 snapping off - there is nowhere left to scroll to - and the button is not offered
 at all on a recipe that already fits.
 
-The **specification** is what the app knows about the recipe that the recipe does
-not say in one place: how long it takes end to end, what the dough weighs, what
-it yields, its notes. The time is scattered across a dozen step verbs and the
-weight is a sum nobody wants to do at the counter, so `app/facts.js` does both.
-Only a step's verb is read for a duration - a note holds asides like "rotate
-every 20 min" and second opinions like "gesamt 70-80 min", and counting those
-either doubles a step or invents work that is not a step - and a range is taken
-at its upper bound. A row with no answer for this recipe is left out rather than
-filled with a dash: ribs are measured in racks and cups, and a weight of nothing
-is noise.
+Under the table are the **notes**: what a person wrote about the recipe that is
+not in the table. Read they are text, written they are fields, and two more kinds
+appear while writing - the yield and the recipe's own preparations - because that
+is the only place either can be typed.
+
+It once held sums as well, worked out by an `app/facts.js`: how long the recipe
+takes end to end, what the dough weighs, how many rows and steps it has. They
+were correct and nobody wanted them - a cook reads the table, and a count of the
+rows in it is a fact about the drawing rather than about the food - so they went,
+and the module with them. What survived is one regular expression, in `render.js`
+where its only reader is: a duration inside a verb, which is the one thing in a
+verb a cook looks for while the pan is already hot, and it is tagged so the eye
+can find it in the words.
 
 There is one view, because there is one card. `STYLE.md` already says what to do
 about a table wider than the screen, and that rule is the interface: **a card
@@ -490,7 +493,7 @@ work.
   element present and every column the wrong width. Two of these side by side
   is what caught it.
 
-- **Twenty-one checks in a real browser, from `node tools/check.mjs`.** Same
+- **Thirty-nine checks in a real browser, from `node tools/check.mjs`.** Same
   machinery as the picture - own server, headless Chrome - but it drives the
   editor and reports `PASS`/`FAIL` per line, and exits non-zero.
 

@@ -13,7 +13,6 @@ const SHELL = [
   '/edit.js',
   '/editor.js',
   '/form.js',
-  '/facts.js',
   '/page.js',
   '/read.js',
   '/overview.js',

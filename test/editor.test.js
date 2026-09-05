@@ -501,6 +501,21 @@ test("a step's preparation is drawn over its column, not inside its cell", () =>
   assert.deepEqual(openStep(screen, 'backen').before.map((one) => one.value), ['Ofen vorheizen (240 °C)', ''])
 })
 
+test('a duration in a verb is tagged, so the eye can find it in the words', () => {
+  const { screen } = open(`# A
+
+- backen 250 °C 15 min, fallend 190 °C (gesamt 70-80 min)
+  - Mehl: 250 g
+`)
+
+  // Only the verb. A note holds asides and second opinions - `gesamt 70-80 min` is the
+  // same bake said again - and tagging those would mark the same time twice.
+  const cell = cellNamed(screen, 'backen 250 °C 15 min, fallend 190 °C')
+  const verb = one(cell, byClass('verb'), 'verb')
+  assert.deepEqual(all(verb).filter(byClass('time')).map(plain), ['15 min'])
+  assert.deepEqual(all(cell).filter(byClass('note')).flatMap((n) => all(n).filter(byClass('time'))), [])
+})
+
 test('the card says only what a person wrote about it, never a sum', () => {
   const { screen } = open(PANCAKES)
 
