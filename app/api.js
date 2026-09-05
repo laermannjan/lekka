@@ -5,6 +5,35 @@ export class ApiError extends Error {
   }
 }
 
+/** What this instance is, and who the browser is on it. Answers on every mode. */
+export async function me() {
+  const response = await fetch('/api/me')
+  if (response.status === 404) return { mode: 'public', empty: false, person: null, session: null }
+  if (!response.ok) throw new ApiError(response.status, await response.text())
+  return response.json()
+}
+
+export async function signIn(name, password) {
+  return send('POST', '/api/sessions', { body: JSON.stringify({ name, password }) })
+}
+
+export async function signOut() {
+  return send('DELETE', '/api/sessions')
+}
+
+/** The first person on an instance, admitted by the link the operator read in the logs. */
+export async function firstPerson(name, password, token) {
+  return send('POST', '/api/people', { body: JSON.stringify({ name, password, token }) })
+}
+
+export async function sessions() {
+  return send('GET', '/api/sessions')
+}
+
+export async function revokeSession(id) {
+  return send('DELETE', `/api/sessions/${id}`)
+}
+
 export async function createCard(text) {
   return send('POST', '/api/cards', { body: text })
 }
@@ -53,6 +82,10 @@ async function call(method, path, { key, body, version } = {}) {
     headers: {
       ...(key ? { authorization: `Bearer ${key}` } : {}),
       ...(version ? { 'if-match': version } : {}),
+      // A cookie is sent whether or not the page meant to ask, so a write says out loud
+      // that it came from here. No cross-site form can set a header, and the preflight
+      // this forces is one a stranger's page cannot satisfy.
+      ...(method === 'GET' ? {} : { 'x-lekka': '1' }),
     },
   })
   if (!response.ok) throw new ApiError(response.status, await response.text())

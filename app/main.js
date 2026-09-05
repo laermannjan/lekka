@@ -5,6 +5,7 @@ import * as api from './api.js'
 import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
 import { section, specification } from './page.js'
+import { devices as renderDevices, firstPerson as firstPersonForm, signIn as signInForm } from './door.js'
 import { cache, cached, collection, forget, known, rows, setRows, useCollection } from './library.js'
 import { svg } from './qr.js'
 import { address, arrive } from './link.js'
@@ -21,11 +22,35 @@ const acts = document.getElementById('acts')
 const screen = document.getElementById('screen')
 const where = document.getElementById('where')
 
-start()
+boot()
 register()
+
+/**
+ * One question before the first screen: is there a door, and are we through it. It is
+ * asked once, and a server too old or too busy to answer is treated as having none -
+ * the first real request then says what is wrong, which it would have anyway.
+ */
+async function boot() {
+  instance = await api.me().catch(() => instance)
+  return start()
+}
+
+/**
+ * What this instance is and who we are on it. Asked once on load; `public` answers that
+ * there is no door, and every screen below then behaves exactly as it always has.
+ */
+let instance = { mode: 'public', empty: false, person: null, session: null }
 
 async function start() {
   const here = arrive()
+
+  if (instance.mode !== 'public' && !instance.person) {
+    // The address is left alone, so whatever link brought you here opens the moment you
+    // are through the door.
+    if (instance.empty) return showFirstPerson(joining())
+    return showSignIn()
+  }
+
   if (here.kind === 'card') return showCard(here.id, here.key)
   if (here.kind === 'collection') return showCollection(here.id, here.key)
 
@@ -33,11 +58,113 @@ async function start() {
   // mean it: without this, opening it lands on the overview under a foot saying `/new`.
   if (here.path === '/new') return showWriting()
 
+  if (here.path === '/devices') return showDevices()
+
   return showOverview()
 }
 
-async function showOverview() {
+/** The operator's one-time link, carried in the fragment so it reaches no log. */
+function joining() {
+  if (location.pathname !== '/join') return null
+  return location.hash.length > 1 ? location.hash.slice(1) : null
+}
+
+function showSignIn(message = null) {
   page('/')
+  show(
+    message ? band(message, 'warning') : null,
+    section('Sign in'),
+    signInForm({
+      onSignIn: async (name, password) => {
+        try {
+          await api.signIn(name, password)
+        } catch (error) {
+          return showSignIn(
+            error instanceof api.ApiError && error.status === 401
+              ? 'That name and password do not match.'
+              : reason(error),
+          )
+        }
+        instance = await api.me()
+        return start()
+      },
+    }),
+  )
+}
+
+function showFirstPerson(token) {
+  page(location.pathname)
+  if (!token)
+    return show(
+      section('Sign in'),
+      band('Nobody has signed in here yet. The link that makes the first person is in the server’s log.', 'warning'),
+    )
+
+  show(
+    section('First person'),
+    firstPersonForm({
+      token,
+      onCreate: async (name, password) => {
+        try {
+          await api.firstPerson(name, password, token)
+        } catch (error) {
+          showFirstPerson(token)
+          return notice(reason(error))
+        }
+        instance = await api.me()
+        history.replaceState(null, '', '/')
+        return start()
+      },
+    }),
+  )
+}
+
+async function showDevices() {
+  page('/devices', recipesAction())
+  const list = await attempt(() => api.sessions(), 'The list did not load.')
+  if (list === FAILED) return
+
+  show(
+    section('Devices'),
+    renderDevices(list, instance.session, {
+      onRevoke: async (id) => {
+        if (await attempt(() => api.revokeSession(id), 'It was not revoked.') === FAILED) return
+        showDevices()
+      },
+      onSignOut: async () => {
+        await api.signOut().catch(() => {})
+        instance = { ...instance, person: null, session: null }
+        await purge()
+        history.replaceState(null, '', '/')
+        showSignIn('Signed out.')
+      },
+    }),
+  )
+}
+
+/**
+ * What this browser keeps of somebody else's recipes, dropped. The app shell is left in
+ * place so lekka still opens without a network; only what was read through the door goes.
+ * It cannot reach a copy already saved elsewhere on the machine, and the screens say so.
+ */
+async function purge() {
+  for (const key of Object.keys(localStorage)) if (key.startsWith('lekka:')) localStorage.removeItem(key)
+  if (!globalThis.caches) return
+  try {
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name)
+      for (const request of await cache.keys()) {
+        const { pathname } = new URL(request.url)
+        if (pathname.startsWith('/api/') || pathname.startsWith('/r/')) await cache.delete(request)
+      }
+    }
+  } catch {
+    // A browser that will not open its caches has nothing for us to clear.
+  }
+}
+
+async function showOverview() {
+  page('/', whoAction())
   const held = collection()
   if (!held) return show(section('Recipes'), welcome())
 
@@ -61,6 +188,32 @@ async function showOverview() {
     }),
     ...heldCollections(held),
   )
+}
+
+/**
+ * Your own name in the masthead, and the way to the browsers signed in as you. Absent on
+ * a public instance, where there is nobody to be.
+ */
+function whoAction() {
+  if (!instance.person) return null
+  const button = element('button', 'quiet', instance.person.name)
+  // `replaceState`, as everywhere else here: the app has no `popstate` handler, so a
+  // pushed entry would let Back change the address and leave this screen standing.
+  button.onclick = () => {
+    history.replaceState(null, '', '/devices')
+    showDevices()
+  }
+  return button
+}
+
+/** The way off the devices screen, since the address it sits at is not a recipe. */
+function recipesAction() {
+  const button = element('button', 'quiet', 'Recipes')
+  button.onclick = () => {
+    history.replaceState(null, '', '/')
+    showOverview()
+  }
+  return button
 }
 
 /** Said only when there is more than one: the masthead already stamps the one in use. */
@@ -95,10 +248,23 @@ async function showCollection(id, key) {
       renderOverview(await describe(list)),
     )
 
-  useCollection({ id, key })
-  setRows(id, list)
-  history.replaceState(null, '', '/')
-  return showOverview()
+  // Receiving is never destructive. A write link used to become the collection this
+  // browser holds the moment it was opened, which quietly threw away whatever it held
+  // before. The link is shown for what it is, and keeping it is a thing you ask for.
+  const keep = element('button', 'go', 'Keep this collection')
+  keep.onclick = () => {
+    useCollection({ id, key })
+    setRows(id, list)
+    history.replaceState(null, '', '/')
+    showOverview()
+  }
+
+  return show(
+    band('A collection you were sent, with the right to change it. Keep it to work on it here.'),
+    section('Recipes'),
+    renderOverview(await describe(list)),
+    element('div', 'bar after', undefined, [keep]),
+  )
 }
 
 async function showCard(id, key, state = {}) {
@@ -554,6 +720,15 @@ async function attempt(work, message) {
   try {
     return await work()
   } catch (error) {
+    // Being told to sign in is not a failed write, it is the session having ended
+    // somewhere else - on another browser's Revoke, or on a restart. Say so once, and
+    // keep nothing that was read through the door.
+    if (error instanceof api.ApiError && error.status === 401) {
+      instance = { ...instance, person: null, session: null }
+      await purge()
+      showSignIn('You were signed out.')
+      return FAILED
+    }
     notice(`${message} ${reason(error)}`)
     return FAILED
   }

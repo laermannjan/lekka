@@ -607,6 +607,7 @@ button.quiet.warn:hover {
  * The text sits low and left of centre, where a typewriter would have put it.
  */
 input[type='text'],
+input[type='password'],
 textarea {
   appearance: none;
   background: var(--paper);
@@ -622,7 +623,8 @@ textarea {
   width: 100%;
 }
 
-input[type='text'] {
+input[type='text'],
+input[type='password'] {
   height: 1.75rem;
 }
 
@@ -634,6 +636,7 @@ textarea {
 /* `outline: 0` above is the resting state. A field still has to say when the
    keyboard is in it. */
 input[type='text']:focus,
+input[type='password']:focus,
 textarea:focus {
   outline: 2px solid var(--link);
   outline-offset: -1px;
