@@ -98,6 +98,9 @@ function held() {
     apply: () => click(box, 'Apply'),
     leave: () => click(box, 'Close'),
     erase: () => click(box, 'Delete'),
+    // Escape and the backdrop reach the dialog as `cancel`. Neither exists in the stub,
+    // so the listener the form registered is called the way the browser would call it.
+    escape: () => box.listeners.get('cancel')({ preventDefault: () => {} }),
   }
 }
 
@@ -297,6 +300,101 @@ test('two strands that never meet are refused until a step joins them', () => {
 
   assert.deepEqual(faults(screen), [])
   assert.equal(one(screen, byText('Save'), 'Save').disabled, false)
+})
+
+/*
+ * Leaving the form without applying. `+ Ingredient` and `+ Step` open the form on a node
+ * the draft does not have yet, so every way out that is not `Apply` has to leave the
+ * recipe exactly as it was found - and leave `Save` alone, since nothing was changed.
+ */
+
+const saveOf = (screen) => one(screen, byText('Save'), 'Save')
+
+for (const [way, leave] of [
+  ['Escape', (form) => form.escape()],
+  ['Close', (form) => form.leave()],
+  ['Delete', (form) => form.erase()],
+]) {
+  test(`a new ingredient left by ${way} adds no row`, () => {
+    const { screen } = open(PANCAKES)
+    const before = named(screen)
+
+    click(screen, '+ Ingredient')
+    leave(held())
+
+    assert.equal(formOpen(), null)
+    assert.deepEqual(named(screen), before)
+    assert.deepEqual(faults(screen), [])
+    // Nothing was written, so there is nothing to save and nothing to lose by leaving.
+    assert.equal(saveOf(screen).disabled, true)
+    assert.equal(one(screen, byText('Done'), 'Done').tag, 'button')
+  })
+
+  test(`a new step left by ${way} adds no column and frees what it took`, () => {
+    const { screen } = open(PANCAKES)
+    const before = shown(screen)
+
+    process(screen)
+    leave(held())
+
+    assert.equal(formOpen(), null)
+    assert.deepEqual(shown(screen), before)
+    // braten went into the step that never happened; it is a strand again, and the end
+    // of the only one there is, so the card is whole.
+    assert.deepEqual(faults(screen), [])
+    assert.equal(saveOf(screen).disabled, true)
+  })
+}
+
+test('a card whose new step was abandoned is stored as the card it was', async () => {
+  const { screen, saved } = open(PANCAKES)
+
+  process(screen)
+  held().escape()
+
+  // The tree is not only drawn the same, it is the same: a new step lifts its inputs out
+  // of wherever they sit, and nothing may have been lifted out of this one.
+  openRow(screen, 'Mehl').apply()
+  await one(screen, byText('Save'), 'Save').onclick()
+  assert.deepEqual(saved, [PANCAKES])
+})
+
+test('a new row abandoned and then entered again is one row, not two', () => {
+  const { screen } = open('# Neu\n')
+
+  click(screen, '+ Ingredient')
+  held().escape()
+  enter(screen, { amount: '250', unit: 'g', name: 'Mehl' })
+
+  assert.deepEqual(named(screen), ['Mehl'])
+})
+
+test('a new step abandoned and then made again takes the same inputs', () => {
+  const { screen } = open('# Neu\n')
+  enter(screen, { amount: '250', unit: 'g', name: 'Mehl' })
+  enter(screen, { amount: '500', unit: 'ml', name: 'Milch' })
+
+  process(screen)
+  assert.deepEqual(ticked(), ['250 g Mehl', '500 ml Milch'])
+  held().escape()
+
+  // Both rows are loose again, so the guess is the same guess.
+  assert.deepEqual(named(screen), ['Mehl', 'Milch'])
+  process(screen)
+  assert.deepEqual(ticked(), ['250 g Mehl', '500 ml Milch'])
+  nameStep(screen, 'verrühren')
+
+  assert.deepEqual(shown(screen), ['verrühren'])
+  assert.deepEqual(faults(screen), [])
+})
+
+test('a row already in the card is still deleted by Delete', () => {
+  const { screen } = open(PANCAKES)
+
+  openRow(screen, 'Mehl').erase()
+
+  assert.deepEqual(named(screen), ['Milch'])
+  assert.equal(saveOf(screen).disabled, false)
 })
 
 /* Editing what is already there: the tap leads back to the node the cell was drawn from. */

@@ -48,6 +48,24 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   let form = null
 
   /**
+   * A row or a step that does not exist yet.
+   *
+   * `+ Ingredient` and `+ Step` used to write the new node into the draft and then open
+   * the form on it, so leaving by Escape - which applies nothing - left an empty row or
+   * an empty column standing, and the recipe dirty. The draft the add would make is held
+   * here instead. The screen is painted from it, so the table looks exactly as it did and
+   * the form can still say which column the step stands in, but `current` does not move
+   * until `Apply`. Closing forgets it.
+   *
+   * Building it disturbs nothing that already exists: adding a row appends, and a new
+   * step only ever takes roots, which have no parent to be lifted out of.
+   */
+  let pending = null
+
+  /** The draft the screen is drawn from: the provisional one while a new node is open. */
+  const shown = () => pending ?? current
+
+  /**
    * What the open step takes, as the nodes themselves - whole strands, not the rows
    * inside them. Nodes are the same objects across a repaint, so this survives one.
    *
@@ -69,6 +87,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   const box = element('div', 'editor')
 
   const change = (next) => {
+    pending = null
     current = next
     dirty = true
     notice = null
@@ -89,7 +108,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   /* ---- the form -------------------------------------------------------- */
 
   /** What the open step may take: its own inputs, plus whatever is still loose. */
-  const offered = () => (here?.kind === 'step' ? candidates(current, here) : [])
+  const offered = () => (here?.kind === 'step' ? candidates(shown(), here) : [])
 
   /**
    * Everything a chosen input brings with it, which is what the table shades: the input
@@ -111,8 +130,10 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * shading on what goes into it. Both are behind the form's own backdrop while it is
    * up, and both are what you come back to when it closes.
    */
-  function open(node) {
+  function open(node, provisional = null) {
+    // `close` clears the provisional draft, so it is set after and never before.
     if (form) close()
+    pending = provisional
     here = node
     taken = new Set(node.kind === 'step' ? inputs(node) : [])
     paint()
@@ -137,7 +158,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   /** Where a step stands, for the form's heading. A row stands in no column. */
   function place(node) {
     if (node.kind !== 'step') return ''
-    const grid = buildForest(current.strands, current.preparations)
+    const grid = buildForest(shown().strands, shown().preparations)
     const cell = grid.cells.find((one) => one.node === node)
     return cell ? `column ${String(cell.column).padStart(2, '0')}` : ''
   }
@@ -147,6 +168,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     form?.remove?.()
     form = null
     here = null
+    pending = null
     taken = new Set()
     paint()
   }
@@ -158,10 +180,11 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * input it may take, so what comes back is the whole of it.
    */
   function apply(node, said) {
+    const on = shown()
     const next =
       node.kind === 'ingredient'
-        ? editIngredient(current, node, said.fields)
-        : editStep(current, node, { ...said.fields, inputs: said.inputs })
+        ? editIngredient(on, node, said.fields)
+        : editStep(on, node, { ...said.fields, inputs: said.inputs })
     close()
     change(next)
   }
@@ -172,6 +195,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * would disturb before it does it; deleting has to as well, because there is no undo.
    */
   function drop(node) {
+    if (pending) return close()
     const swept = sweptBy(current, node).filter((one) => one !== node)
     if (swept.length > 0) {
       const names = [...new Set(swept.map(label))].join(', ')
@@ -187,7 +211,8 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   /* ---- the screen ------------------------------------------------------- */
 
   function paint() {
-    const faults = validate(current)
+    const on = shown()
+    const faults = validate(on)
     const across = scroller?.scrollLeft ?? 0
     /*
      * Everything that comes and goes is drawn below the row of buttons. A warning that
@@ -196,12 +221,12 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
      */
     box.replaceChildren(
       ...[
-        nameSection(current.title, rename),
+        nameSection(on.title, rename),
         table(),
         actions(faults),
         report(faults),
         hint(faults),
-        specification(current, written()),
+        specification(on, written()),
       ].filter(Boolean),
     )
     // Only once it is on the page does it have anything to scroll.
@@ -271,18 +296,17 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     const before = new Set(current.strands)
     const next = addStep(current, { verb: '', aside: '', preparations: [], inputs: wanted })
     const made = next.strands.find((strand) => !before.has(strand))
-    change(next)
-    open(made)
+    open(made, next)
   }
 
   /**
    * A row, empty, with the form open on it. There is no form to fill in first: the row
-   * is made and then named, and a blank one is simply a fault until it is not.
+   * is named in the one the tap opens, and a blank one is simply a fault until it is
+   * not. It is `pending` until `Apply`, so a row nobody named is a row nobody added.
    */
   function addRow() {
     const next = addIngredient(current, {})
-    change(next)
-    open(next.strands.at(-1))
+    open(next.strands.at(-1), next)
   }
 
   /**
@@ -333,7 +357,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * exactly what it is.
    */
   function table() {
-    const grid = buildForest(current.strands, current.preparations)
+    const grid = buildForest(shown().strands, shown().preparations)
     const holder = element('div', 'scroll')
     scroller = holder
     // Asked once for the whole drawing, not once per node: it walks the forest, and a
@@ -352,7 +376,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   }
 
   function hint(faults) {
-    if (current.strands.length > 0) return null
+    if (shown().strands.length > 0) return null
     return element(
       'div',
       'band',

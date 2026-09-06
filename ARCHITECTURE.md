@@ -379,6 +379,13 @@ way to decide anything.
 every ingredient still waiting, or - when none is waiting - the ends of the
 strands, which is how two of them are joined.
 
+Adding obeys the same rule, which it used to break. `+ Ingredient` and `+ Step`
+build the draft the add would make and hand it to the form as `pending` rather
+than writing it in: the screen is painted from it, so the table looks exactly as
+it would have, but `current` does not move and the recipe is not dirty until
+`Apply`. Escape, `Close` and `Delete` all forget it, and an empty row or an empty
+column is no longer what leaving a form you never filled in leaves behind.
+
 One thing this costs: a strand already inside a step cannot be handed to another
 one, because it is neither a root nor an input of the step being written, so it is
 offered no box. Deleting the step that holds it frees it first. `upheaval` still
