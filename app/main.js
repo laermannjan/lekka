@@ -488,7 +488,7 @@ function showWriting() {
   // history to answer it would be worse than one that leaves the page.
   history.replaceState(null, '', '/new')
   page('/new')
-  showEditor(null, null, {
+  showEditor(null, {
     title: '',
     yields: null,
     notes: [],
