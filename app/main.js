@@ -4,7 +4,7 @@ import { renderOverview } from './overview.js'
 import * as api from './api.js'
 import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
-import { section, specification } from './page.js'
+import { section, specification, hold } from './page.js'
 import {
   devices as renderDevices,
   household as renderHousehold,
@@ -24,6 +24,8 @@ const SCALES = [
 const acts = document.getElementById('acts')
 const screen = document.getElementById('screen')
 const where = document.getElementById('where')
+const door = document.getElementById('door')
+const scope = document.getElementById('scope')
 
 boot()
 register()
@@ -43,6 +45,16 @@ async function boot() {
  * there is no door, and every screen below then behaves as it always has.
  */
 let instance = { mode: 'NONE', empty: false, person: null, session: null }
+
+/**
+ * What we hold on the recipe now open, as the read said: `owner`, `edit` or `read`.
+ *
+ * Kept here rather than handed from screen to screen because it belongs to the recipe
+ * and not to any one view of it - `Edit` opens the editor on the card just read, Cancel
+ * comes back to it, and the standing is the same the whole way through. Only the foot
+ * reads it, and only while the address is a recipe's.
+ */
+let holding = null
 
 async function start() {
   const here = arrive()
@@ -266,12 +278,14 @@ async function showCard(id, state = {}) {
   const { scale = 1, at = 0, fit = false } = state
   const here = { scale, at, fit }
 
-  const text = await load(id)
-  if (text === null) return fail('No recipe under this link.')
+  holding = null
+  const held = await load(id)
+  if (held === null) return fail('No recipe under this link.')
+  holding = held.scope
 
   let card
   try {
-    card = parseCard(text)
+    card = parseCard(held.text)
   } catch (error) {
     if (!(error instanceof ParseError)) throw error
     return fail(`Line ${error.line}: ${error.message}`)
@@ -458,9 +472,10 @@ async function load(id) {
 async function describe(list) {
   return Promise.all(
     list.map(async (row) => {
-      const text = await load(row.id)
+      // The library row already says what is held on it, so only the text is wanted here.
+      const held = await load(row.id)
       try {
-        return { ...row, card: text === null ? null : parseCard(text) }
+        return { ...row, card: held === null ? null : parseCard(held.text) }
       } catch {
         return { ...row, card: null }
       }
@@ -487,6 +502,8 @@ function showWriting() {
   // nothing else in this app pushes, and a Back that walked into a draft with no
   // history to answer it would be worse than one that leaves the page.
   history.replaceState(null, '', '/new')
+  // A recipe you are making is a recipe you will own, in every mode there is.
+  holding = 'owner'
   page('/new')
   showEditor(null, {
     title: '',
@@ -590,10 +607,21 @@ function notice(message) {
   screen.prepend(band(message, 'warning'))
 }
 
-/** What the masthead and the foot say, which is the same on every screen but one thing. */
+/**
+ * The address, whatever the masthead is offering, and what the foot says about both.
+ *
+ * The foot carries the settings rather than the screen: which access control this
+ * instance keeps, and - on a recipe - what the reader holds on it. The address decides
+ * whether the second is drawn at all, because it is the address that says whether there
+ * is a recipe to hold anything on.
+ */
 function page(path, ...actions) {
   acts.replaceChildren(...actions.filter(Boolean))
   where.textContent = path
+  door.textContent = `ACCESS_CONTROL: ${instance.mode}`
+  const held = path.startsWith('/r/') || path === '/new' ? holding : null
+  scope.hidden = held === null
+  if (held !== null) scope.textContent = hold(held)
 }
 
 function fail(message) {

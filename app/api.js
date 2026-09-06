@@ -63,8 +63,16 @@ export async function createCard(text) {
   return send('POST', '/api/cards', { body: text })
 }
 
+/**
+ * A recipe, and what the reader holds on it: `owner`, `edit` or `read`.
+ *
+ * The standing rides on the read rather than being asked for, because asking would be a
+ * second request for every card opened. Where the server is too old to say, reading it
+ * at all is taken as owning it, which is what every instance without grants means.
+ */
 export async function readCard(id) {
-  return send('GET', `/api/cards/${id}`, { text: true })
+  const response = await call('GET', `/api/cards/${id}`)
+  return { text: await response.text(), scope: response.headers.get('x-lekka-scope') ?? 'owner' }
 }
 
 export async function writeCard(id, text) {

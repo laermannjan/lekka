@@ -64,8 +64,8 @@
   --edge-card: #b09a2e;
   --tint-time: #dceaf8;
   --edge-time: #6f9cc8;
-  --tint-set: #cfe0f5;
-  --edge-set: #5a86ba;
+  --tint-scope: #cfe0f5;
+  --edge-scope: #5a86ba;
   --tint-key: #f3d7ea;
   --edge-key: #b268a1;
   --tint-build: #e8e6dd;
@@ -282,9 +282,17 @@ a.wordmark:hover {
   border-color: var(--edge-card);
 }
 
-.tag.set {
-  background: var(--tint-set);
-  border-color: var(--edge-set);
+/*
+ * What the reader holds on a recipe: OWNER, COLLABORATOR or READ-ONLY. In the foot for
+ * the one they are standing in, and in the overview for every one in the library.
+ *
+ * Pale blue, and the only tinted thing in the foot, because it is the one fact down
+ * there that changes from recipe to recipe - the access control beside it and the build
+ * after it are the same on every screen.
+ */
+.tag.scope {
+  background: var(--tint-scope);
+  border-color: var(--edge-scope);
 }
 
 .tag.key {
@@ -645,7 +653,7 @@ textarea:focus {
  */
 .records {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) max-content;
+  grid-template-columns: minmax(160px, 1fr) max-content max-content;
 }
 
 .records > * {
@@ -662,7 +670,8 @@ textarea:focus {
   min-height: 0;
 }
 
-.records > *:nth-child(2n) {
+/* The last cell of a row closes on the table's own edge, so it needs no rule of its own. */
+.records > *:nth-child(3n) {
   border-right: 0;
 }
 

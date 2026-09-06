@@ -198,7 +198,70 @@ test('GRANT gives each recipe an owner, and each person a library of what they h
   )
 })
 
-test('a person sees their own browsers, revokes one, and cannot touch another’s', async (t) => {
+/*
+ * What a read says about the reader. The app draws it in the foot, so a recipe shared for
+ * reading says so before Save is pressed on it - and asking separately would be a second
+ * request for every card opened.
+ */
+
+const heldOn = async (call, id, as) =>
+  (await call(`/api/cards/${id}`, as === undefined ? {} : { as })).headers.get('x-lekka-scope')
+
+for (const mode of ['NONE', 'LOGIN']) {
+  test(`under ${mode} a reader owns whatever they can read`, async (t) => {
+    const { call, close } = await serve(mode)
+    t.after(close)
+    if (mode === 'LOGIN') await signUp(call)
+
+    const { id } = await (await call('/api/cards', { method: 'POST', body: CARD })).json()
+    assert.equal(await heldOn(call, id), 'owner', 'there is no such thing here as a lesser hold')
+  })
+}
+
+test('under GRANT a read says which of the three holds the reader has', async (t) => {
+  const { call, grants, people, close } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const his = cookieOf(await signIn(call))
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD, as: his })).json()
+  assert.equal(await heldOn(call, id, his), 'owner', 'the person who made it')
+
+  people.add('Rita', 'a different passphrase')
+  const hers = cookieOf(await signIn(call, 'Rita', 'a different passphrase'))
+  const rita = (await (await call('/api/me', { as: hers })).json()).person.id
+
+  grants.give(id, { person: rita, scope: 'read', by: 'jan' })
+  assert.equal(await heldOn(call, id, hers), 'read', 'somebody it was shown to')
+
+  grants.give(id, { person: rita, scope: 'edit', by: 'jan' })
+  assert.equal(await heldOn(call, id, hers), 'edit', 'somebody it was handed to')
+
+  // The owner's own answer does not move because somebody else was given something.
+  assert.equal(await heldOn(call, id, his), 'owner')
+})
+
+test('a grant that has run out is not a hold, and is not read as one', async (t) => {
+  const { call, grants, people, close } = await serve('GRANT')
+  t.after(close)
+
+  await signUp(call, 'Jan')
+  const his = cookieOf(await signIn(call))
+  const { id } = await (await call('/api/cards', { method: 'POST', body: CARD, as: his })).json()
+
+  people.add('Rita', 'a different passphrase')
+  const hers = cookieOf(await signIn(call, 'Rita', 'a different passphrase'))
+  const rita = (await (await call('/api/me', { as: hers })).json()).person.id
+
+  const gone = new Date(Date.now() - 1000).toISOString()
+  grants.give(id, { person: rita, scope: 'edit', by: 'jan', expires: gone })
+
+  assert.equal(grants.scopeOf(id, { person: rita }), null, 'nothing live is held')
+  // And the route says so the only way it says anything to a stranger.
+  assert.equal((await call(`/api/cards/${id}`, { as: hers })).status, 404)
+})
+
+test('a person sees their own browsers, revokes one, and cannot touch another\u2019s', async (t) => {
   const { call, cookie, close } = await serve('LOGIN')
   t.after(close)
 

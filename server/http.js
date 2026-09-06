@@ -411,7 +411,9 @@ async function cardRoute(store, options, request, response, id, session) {
     const text = await store.read(id)
     if (text === null) throw missing()
     await store.touch(id)
-    return send(response, 200, 'text/plain; charset=utf-8', text)
+    // What the reader holds, said on the read itself. The app draws it in the foot, and
+    // a second request per card just to find out would be a request per card.
+    return send(response, 200, 'text/plain; charset=utf-8', text, { 'x-lekka-scope': standing(options, id, person) })
   }
 
   if (!allowed('edit')) throw missing()
@@ -423,6 +425,19 @@ async function cardRoute(store, options, request, response, id, session) {
 
   await store.write(id, card(await body(request, options)).text)
   return send(response, 204)
+}
+
+/**
+ * What somebody who may read this card holds on it.
+ *
+ * Only `GRANT` has such a thing as one recipe being more yours than another. Under `NONE`
+ * and `LOGIN` everybody who is through the door - and under `NONE` there is no door -
+ * reads, writes and deletes everything, which is what owning it amounts to. The library
+ * already says so by sending those rows with no scope at all.
+ */
+function standing(options, id, person) {
+  if (options.mode !== 'GRANT') return 'owner'
+  return options.grants.scopeOf(id, { person }) ?? 'read'
 }
 
 async function create(store, response, { text, label }, owner = null) {

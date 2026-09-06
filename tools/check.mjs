@@ -395,6 +395,25 @@ addEventListener('load', async () => {
     acts().map((one) => one.textContent).join(' | '))
 
   /*
+   * The foot carries the settings: which access control this instance keeps, and what
+   * the reader holds on the recipe in front of them. This instance keeps none, so
+   * everything is everyone's and the hold says so.
+   */
+  const tag = (id) => {
+    const node = document.getElementById(id)
+    return node.hidden ? null : node.textContent
+  }
+  const painted = (id) => getComputedStyle(document.getElementById(id)).backgroundColor
+  check('the foot names the access control', tag('door') === 'ACCESS_CONTROL: NONE',
+    String(tag('door')))
+  check('and what the reader holds on this recipe', tag('scope') === 'owner', String(tag('scope')))
+  // Uppercased by the stylesheet rather than by the app, so the word stays a word.
+  check('drawn as a word, shown as a tag',
+    getComputedStyle(document.getElementById('scope')).textTransform === 'uppercase')
+  check('in the pale blue a hold is drawn in', painted('scope') === 'rgb(207, 224, 245)',
+    painted('scope'))
+
+  /*
    * A card is the same shape written as read - one rule for the columns of both views,
    * \`STYLE.md\`. Reading drew every step column at the full 240px whatever stood in it,
    * so the table was wider than the card needed and the sheet, which is as wide as the
@@ -422,6 +441,10 @@ addEventListener('load', async () => {
     rolled ? 'rolled' : 'read ' + readTracks + ' / written ' + written)
   check('so the sheet does not narrow on the way in', sheet() >= readSheet,
     readSheet + ' -> ' + sheet())
+
+  // The recipe is the same recipe, so what is held on it is the same hold.
+  check('and the foot still says what is held on it', tag('scope') === 'owner',
+    String(tag('scope')))
   check('and the masthead is empty', acts().length === 0,
     acts().map((one) => one.textContent).join(' | ') || '(empty)')
 

@@ -46,6 +46,15 @@ grant { id, card, subject, scope, issued_by, created, expires? }
        scope:   owner | edit | read
 ```
 
+A read says what the reader holds, in an `X-Lekka-Scope` header on the recipe
+itself: `owner`, `edit` or `read`. The app draws it in the foot, so a recipe shared
+for reading says so before `Save` is pressed on it. It rides on the read rather
+than being asked for, because asking would be a second request for every recipe
+opened - the same reason `Share` finds out whether a recipe is yours by opening
+the panel rather than by checking before it draws the button. Under `NONE` and
+`LOGIN` the answer is always `owner`: everybody through the door - and under
+`NONE` there is no door - does everything, which is what owning it amounts to.
+
 **Ownership is a grant, not a column.** A card has one `owner` grant or none,
 which a partial unique index enforces, and `owner` carries `edit` carries `read`.
 One mechanism answers everything, rather than a column for the owner and a table
