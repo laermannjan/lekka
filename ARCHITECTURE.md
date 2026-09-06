@@ -46,6 +46,15 @@ grant { id, card, subject, scope, issued_by, created, expires? }
        scope:   owner | edit | read
 ```
 
+A read says what the reader holds, in an `X-Lekka-Scope` header on the recipe
+itself: `owner`, `edit` or `read`. The app draws it in the foot, so a recipe shared
+for reading says so before `Save` is pressed on it. It rides on the read rather
+than being asked for, because asking would be a second request for every recipe
+opened - the same reason `Share` finds out whether a recipe is yours by opening
+the panel rather than by checking before it draws the button. Under `NONE` and
+`LOGIN` the answer is always `owner`: everybody through the door - and under
+`NONE` there is no door - does everything, which is what owning it amounts to.
+
 **Ownership is a grant, not a column.** A card has one `owner` grant or none,
 which a partial unique index enforces, and `owner` carries `edit` carries `read`.
 One mechanism answers everything, rather than a column for the owner and a table
@@ -378,6 +387,13 @@ way to decide anything.
 `+ Step` makes an unnamed step, opens the form on it, and guesses what it takes:
 every ingredient still waiting, or - when none is waiting - the ends of the
 strands, which is how two of them are joined.
+
+Adding obeys the same rule, which it used to break. `+ Ingredient` and `+ Step`
+build the draft the add would make and hand it to the form as `pending` rather
+than writing it in: the screen is painted from it, so the table looks exactly as
+it would have, but `current` does not move and the recipe is not dirty until
+`Apply`. Escape, `Close` and `Delete` all forget it, and an empty row or an empty
+column is no longer what leaving a form you never filled in leaves behind.
 
 One thing this costs: a strand already inside a step cannot be handed to another
 one, because it is neither a root nor an input of the step being written, so it is

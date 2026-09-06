@@ -158,6 +158,18 @@ The same treatment marks a **duration** in a verb, on the pale blue: one value
 lifted out of a line of words, which is what a tag is for. A preparation is not
 one - it is a cell of the table, marked by the wash and nothing else.
 
+The foot carries three: the access control this instance keeps, written
+`ACCESS_CONTROL: GRANT` because the foot has no column heading over it to say what
+the value is; what the reader holds on the recipe in front of them - `OWNER`,
+`COLLABORATOR` or `READ-ONLY`; and the build. Only the hold is tinted, on the pale
+blue, because it is the one of the three that changes from one recipe to the next.
+The hold is drawn only where there is a recipe to hold anything on, so the overview
+and the sign-in show two tags rather than three.
+
+The **hold** is a tag wherever it appears: in the foot for the recipe you are
+standing in, and in the overview for every recipe in the library. There it carries
+the value alone, because the column heading over it already says what it is.
+
 ## Inside the table
 
 - Ingredients left aligned, steps **centred**. Centring is what makes a merge
@@ -194,7 +206,8 @@ one - it is a cell of the table, marked by the wash and nothing else.
 - The recipe's left edge is 3 px of accent. It is the one place a colour names
   what a box is rather than what state it is in.
 
-Column widths: amount 58 px, unit 54 px, a step column between 120 and 240 px.
+Column widths: each of the three ingredient columns takes exactly what its own
+content needs, and a step column is as wide as what stands in it, up to 240 px.
 Rows are at least 21 px with 2 px of vertical padding.
 
 **A column is as wide as what stands in it, up to 240 px**, and a name column as
@@ -253,9 +266,12 @@ heading is one line high whether it is read or written.
 
 ## The other screens
 
-**Overview.** A table of three columns: `Recipe`, `Delete`, `Remove`. The last
-row is where the table grows - `Import` in gold, `Create` in green - on the shade
-colour, the way `+ Ingredient` sits at the foot of the editor's table.
+**Overview.** A table of three columns: `Recipe`, `Hold`, `Delete`. `Hold` says
+what you are on that recipe and `Delete` what you may do to it, so a row you only
+hold for reading carries the tag and an empty cell rather than words explaining a
+button that is not there. The last row is where the table grows - `Import` in gold,
+`Create` in green - on the shade colour, the way `+ Ingredient` sits at the foot of
+the editor's table.
 
 **Notes.** A label and value grid, one pair to a line, holding what a person
 wrote that is not in the table. Read, the rows are text; written, they are

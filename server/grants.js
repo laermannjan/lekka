@@ -68,6 +68,20 @@ export function openGrants(db) {
       return true
     },
 
+    /**
+     * What one person holds on one card, as the word the row keeps: `owner`, `edit` or
+     * `read`, and null where they hold nothing live.
+     *
+     * `may` answers whether a thing may be done and is what the routes ask. This answers
+     * what standing the asker has, which is what a reader has to be told about itself -
+     * a recipe shared for reading should say so before Save is pressed on it.
+     */
+    scopeOf(card, { person = null } = {}) {
+      if (!person) return null
+      const found = forSubject.get(card, 'person', person)
+      return live(found, new Date().toISOString()) ? found.scope : null
+    },
+
     /** Every grant on a card, for the panel that says who holds what. */
     on(card) {
       return onCard.all(card)
