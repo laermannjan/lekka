@@ -194,7 +194,8 @@ one - it is a cell of the table, marked by the wash and nothing else.
 - The recipe's left edge is 3 px of accent. It is the one place a colour names
   what a box is rather than what state it is in.
 
-Column widths: amount 58 px, unit 54 px, a step column between 120 and 240 px.
+Column widths: each of the three ingredient columns takes exactly what its own
+content needs, and a step column is as wide as what stands in it, up to 240 px.
 Rows are at least 21 px with 2 px of vertical padding.
 
 **A column is as wide as what stands in it, up to 240 px**, and a name column as

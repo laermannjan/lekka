@@ -394,9 +394,34 @@ addEventListener('load', async () => {
   check('reading, the masthead holds the scale and the fit', acts().length > 0,
     acts().map((one) => one.textContent).join(' | '))
 
+  /*
+   * A card is the same shape written as read - one rule for the columns of both views,
+   * \`STYLE.md\`. Reading drew every step column at the full 240px whatever stood in it,
+   * so the table was wider than the card needed and the sheet, which is as wide as the
+   * card needs, was wider with it. Pressing \`Edit\` then pulled the whole frame in.
+   *
+   * The tracks are what says so. The width only follows from them, and at a window this
+   * size the sheet is on its 1080 floor in both views and would agree either way.
+   */
+  const tracksOf = () => getComputedStyle(document.querySelector('.grid')).gridTemplateColumns
+  const sheet = () => Math.round(document.querySelector('.page').getBoundingClientRect().width)
+  // A card too wide to be drawn whole is rolled instead, and rolling has tracks of its
+  // own: the ingredient block is pinned at a set width and a tail is added to scroll into.
+  const rolled = document.querySelector('.read').classList.contains('reading')
+  const readTracks = tracksOf()
+  const readSheet = sheet()
+
   named('Edit').click()
   await after(500)
   check('writing, the editor is on the screen', editing())
+
+  // The editor's table is the reading table with \`+ Step\` behind it, so its tracks are
+  // the reading tracks and one more.
+  const written = tracksOf().split(' ').slice(0, -1).join(' ')
+  check('a card is the same shape written as read', rolled || written === readTracks,
+    rolled ? 'rolled' : 'read ' + readTracks + ' / written ' + written)
+  check('so the sheet does not narrow on the way in', sheet() >= readSheet,
+    readSheet + ' -> ' + sheet())
   check('and the masthead is empty', acts().length === 0,
     acts().map((one) => one.textContent).join(' | ') || '(empty)')
 

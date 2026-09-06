@@ -809,8 +809,18 @@ textarea:focus {
   font-variant-numeric: tabular-nums;
   grid-auto-columns: minmax(44px, auto);
   grid-auto-rows: minmax(21px, auto);
+  /*
+   * A step column is as wide as what stands in it, up to 240px - the rule `STYLE.md`
+   * states for both views, and the one `.reading .grid` and `.grid.choosing` already
+   * keep. Held between 120 and 240 instead, and with no `max-content` to leave the
+   * tracks nothing to share out, every column took the whole 240 whatever stood in it:
+   * a recipe that fits was drawn wider than it is, and the sheet - which is as wide as
+   * the card needs - was drawn wider with it. Opening the editor, whose columns *were*
+   * sized by the rule, then pulled the frame in by however much the padding came to.
+   */
   grid-template-columns:
-    max-content max-content max-content repeat(var(--columns), minmax(120px, 240px));
+    max-content max-content max-content repeat(var(--columns), fit-content(240px));
+  width: max-content;
 }
 
 /*
