@@ -736,6 +736,303 @@ dialog.slide .menu .danger {
   border-top: 1px solid var(--separator);
 }
 
+/* ---- cooking ----------------------------------------------------------------- */
+
+/* Into cook mode, filled as far as the cooking has got. */
+.cta {
+  align-items: center;
+  background: color-mix(in srgb, var(--tint) 55%, black);
+  border-radius: 16px;
+  color: #ffffff;
+  display: flex;
+  font-size: 18px;
+  font-weight: 600;
+  gap: 10px;
+  height: 56px;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.cta .fill {
+  background: var(--tint);
+  inset: 0 auto 0 0;
+  position: absolute;
+}
+
+.cta > :not(.fill) {
+  position: relative;
+}
+
+/* Cook mode is dark whatever the phone is set to: a kitchen is no place for a white
+   screen, and it is the one screen read from across the room. */
+body.cook {
+  --ground: #161414;
+  --group: rgb(255 255 255 / 7%);
+  --raised: rgb(255 255 255 / 12%);
+  --label: #f5f5f7;
+  --secondary: rgb(245 245 247 / 65%);
+  --separator: rgb(255 255 255 / 10%);
+  --tint-text: #4da3ff;
+  --glass: rgb(255 255 255 / 12%);
+  --glass-edge: rgb(255 255 255 / 16%);
+  --glass-shadow: none;
+  background: linear-gradient(180deg, #4e3424 0%, #2a1d16 42%, #161414 100%) fixed;
+  color-scheme: dark;
+  min-height: 100dvh;
+}
+
+.cook-card {
+  background: var(--group);
+  border: 1px solid var(--separator);
+  border-radius: 18px;
+  box-shadow: 0 18px 40px rgb(0 0 0 / 35%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 340px;
+  padding: 22px 20px 18px;
+}
+
+.cook-card h1 {
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.cook-card .aside {
+  color: var(--secondary);
+  font-size: 20px;
+  line-height: 27px;
+}
+
+.use {
+  align-items: baseline;
+  border-top: 1px solid var(--separator);
+  display: flex;
+  font-size: 20px;
+  gap: 12px;
+  line-height: 26px;
+  padding: 7px 0;
+}
+
+.use .name {
+  flex: 1;
+}
+
+.use .amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.timer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.timer .row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.timer .clock {
+  font-size: 52px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+/* Run out: amber, like the light on a cooker. */
+.clock.over,
+.clock-small.over {
+  color: #ffb340;
+}
+
+.track {
+  background: rgb(127 127 127 / 28%);
+  border-radius: 3px;
+  display: block;
+  height: 6px;
+  overflow: hidden;
+}
+
+.track .fill {
+  background: var(--tint);
+  display: block;
+  height: 100%;
+}
+
+.then {
+  border-top: 1px solid var(--separator);
+  color: var(--secondary);
+  font-size: 16px;
+  line-height: 22px;
+  margin-top: auto;
+  padding-top: 10px;
+}
+
+/* The card at the top and the controls at the bottom, where a thumb is. */
+body.cook #screen {
+  min-height: 100dvh;
+  padding-bottom: var(--bottom);
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.progress .words {
+  display: flex;
+  font-size: 15px;
+  font-weight: 600;
+  justify-content: space-between;
+}
+
+.controls {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.controls .round {
+  height: 64px;
+  width: 64px;
+}
+
+.controls .primary {
+  background: #f5f5f7;
+  border-radius: 32px;
+  color: #161414;
+  flex: 1;
+  font-size: 18px;
+  font-weight: 700;
+  height: 64px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tools {
+  display: flex;
+  justify-content: space-around;
+}
+
+.tool {
+  align-items: center;
+  color: var(--secondary);
+  display: flex;
+  flex-direction: column;
+  font-size: 15px;
+  gap: 4px;
+  min-height: 44px;
+  min-width: 110px;
+}
+
+.tool svg {
+  color: var(--label);
+}
+
+/* Over every other screen while something is cooking. */
+.mini {
+  align-items: center;
+  border-radius: 31px;
+  color: var(--label);
+  display: flex;
+  gap: 12px;
+  height: 62px;
+  padding: 0 16px 0 9px;
+}
+
+.mini .text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mini .main,
+.mini .sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini .main {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.mini .sub {
+  color: var(--secondary);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.round-picture {
+  border-radius: 50%;
+  font-size: 20px;
+  height: 44px;
+  width: 44px;
+}
+
+.ring {
+  color: var(--label);
+  display: inline-flex;
+}
+
+.clock-small {
+  font-variant-numeric: tabular-nums;
+}
+
+dialog.slide .menu .label {
+  color: var(--secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 14px 16px 4px;
+  text-transform: uppercase;
+}
+
+dialog.slide .menu .use {
+  font-size: 17px;
+  padding: 9px 16px;
+}
+
+.timer-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.timer-row .text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+dialog.slide .menu .timer-row button {
+  background: var(--group);
+  border-radius: 20px;
+  font-weight: 600;
+  min-height: 40px;
+  padding: 0 14px;
+  width: auto;
+}
+
 /* ---- what is still drawn as the datasheet ----------------------------------- */
 
 /* Dialogs the datasheet opens live in here, so its rules reach them; the box itself
