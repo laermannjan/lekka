@@ -135,3 +135,75 @@ function* formatNode(node, level) {
 function withAside(text, aside) {
   return aside === null || aside === undefined ? text : `${text} (${aside})`
 }
+
+/**
+ * A recipe as JSON (`recipe.schema.json`) to .lekka text. The JSON is the card itself: a
+ * step is `{step, aside, children}`, an ingredient `{ingredient, aside, amount}`, a
+ * preparation `{preparation, aside}`. Where it came from and what else it is called have
+ * fields of their own, and become notes until the format has a line for them.
+ *
+ * What the schema asks and the text cannot hold is refused here: brackets, which the text
+ * would read as an aside, a colon in a name, which it would read as the amount, and a step
+ * with nothing under it, which it would read as an ingredient. The rest is left to the
+ * text it becomes, which is parsed like any other.
+ */
+export function formatJson(json) {
+  if (!isObject(json)) throw new ParseError('A recipe is an object', 1)
+  if (!isObject(json.root)) throw new ParseError('A recipe needs a root step', 1)
+  const source = words(json.source)
+  const aliases = list(json.aliases).map(words).filter(Boolean)
+  return formatCard({
+    title: plain(json.title, 'title'),
+    yields: plain(json.yields, 'yields') || null,
+    notes: [
+      ...list(json.notes).map(words),
+      ...(source ? [`source: ${source}`] : []),
+      ...(aliases.length > 0 ? [`aliases: ${aliases.join(', ')}`] : []),
+    ],
+    preparations: list(json.preparations).map((entry) => {
+      const node = nodeFromJson(entry)
+      if (node.kind !== 'preparation') throw new ParseError('Only preparations come before everything', 1)
+      return node
+    }),
+    root: nodeFromJson(json.root),
+  })
+}
+
+function nodeFromJson(json) {
+  if (!isObject(json)) throw new ParseError('A step, an ingredient or a preparation is an object', 1)
+  const aside = plain(json.aside, 'aside') || null
+  if ('step' in json) {
+    const verb = plain(json.step, 'step')
+    if (list(json.children).length === 0) throw new ParseError(`A step needs an ingredient: ${verb}`, 1)
+    return { kind: 'step', verb, aside, children: list(json.children).map(nodeFromJson) }
+  }
+  if ('ingredient' in json) {
+    const name = plain(json.ingredient, 'ingredient')
+    if (name.includes(':')) throw new ParseError(`An ingredient's name holds no colon: ${name}`, 1)
+    // An assistant asked for `"250 g"` will sometimes split it anyway.
+    const amount = [json.amount, json.unit].map(words).filter(Boolean).join(' ')
+    return { kind: 'ingredient', name, aside, amount: parseAmount(amount) }
+  }
+  if ('preparation' in json) return { kind: 'preparation', text: plain(json.preparation, 'preparation'), aside }
+  throw new ParseError('Each entry is a step, an ingredient or a preparation', 1)
+}
+
+/** One line of text, whatever arrived: a line break inside a value would start a new one. */
+function words(value) {
+  return value === null || value === undefined ? '' : String(value).replace(/\s+/g, ' ').trim()
+}
+
+/** Words that will stand where the text reads brackets as an aside. */
+function plain(value, what) {
+  const text = words(value)
+  if (/[()]/.test(text)) throw new ParseError(`The ${what} holds no brackets: ${text}`, 1)
+  return text
+}
+
+function list(value) {
+  return Array.isArray(value) ? value : []
+}
+
+function isObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}

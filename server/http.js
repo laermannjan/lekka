@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { readFile, readdir } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 
-import { parseCard, ParseError } from '../app/card.js'
+import { formatJson, parseCard, ParseError } from '../app/card.js'
 import { clear, cookie, COOKIE, encrypted, forged, guarded, keep, may, mayCreate } from './access.js'
 import { limiter, source } from './limit.js'
 
@@ -13,6 +13,7 @@ const SESSION = /^\/api\/sessions\/([a-z0-9]{1,64})$/
 const INVITE = /^\/api\/invites\/([a-z0-9]{1,64})$/
 const PERSON = /^\/api\/people\/([a-z0-9]{1,64})$/
 const ID = /^[a-z0-9-]{1,64}$/
+const FENCED = /^\s*```[^\n]*\n([\s\S]*?\n)```\s*$/
 
 /** The address a shared recipe is read at, in either shape the app has ever written. */
 const READ = /^\/r\/([a-z0-9-]{1,64})(?:\/|$)/
@@ -47,6 +48,7 @@ export function handler(
     grants = null,
     mode = 'NONE',
     bootstrap = null,
+    guide = null,
     createToken = null,
     maxBytes = 65536,
     createsPerHour = 0,
@@ -59,7 +61,7 @@ export function handler(
     tries: limiter({ every: MINUTE, most: triesPerMinute }),
     trustProxy,
   }
-  const options = { app, people, invites, grants, mode, bootstrap, createToken, maxBytes, limits }
+  const options = { app, people, invites, grants, mode, bootstrap, guide, createToken, maxBytes, limits }
 
   return async (request, response) => {
     try {
@@ -96,10 +98,16 @@ async function route(store, options, request, response) {
   const path = decode(new URL(request.url, 'http://lekka').pathname)
   const key = bearer(request)
 
-  /* Both answer before anything asks who you are: one is how a supervisor learns the
-   * process is up, the other is app code the browser needs to fetch the login screen. */
+  /* These answer before anything asks who you are: one is how a supervisor learns the
+   * process is up, one is app code the browser needs to fetch the login screen, and the
+   * guide is GUIDE.md and the schema, as the repository publishes them, for whoever is
+   * about to write a recipe. */
   if (path === '/healthz') return send(response, 200, 'text/plain', 'ok')
   if (path === '/sw.js') return worker(options.app, response)
+  if (path === '/api/guide') {
+    if (!options.guide) throw missing()
+    return send(response, 200, 'text/plain; charset=utf-8', options.guide)
+  }
 
   if (forged(request)) throw new Refusal(403, 'cross-site request refused')
   const session = options.people?.session(cookie(request, COOKIE)) ?? null
@@ -444,11 +452,19 @@ async function create(store, response, { text, label }, owner = null) {
   return json(response, 201, await store.create(text, label, owner))
 }
 
-/** A card is stored only if it parses; validation is parsing. */
-function card(text) {
+/**
+ * A card is stored only if it parses; validation is parsing. It arrives as .lekka text, or
+ * as JSON from an assistant, which is written out as text first. An assistant asked for
+ * nothing but the card still tends to put it in a code fence, so a body that is one fence
+ * and nothing else is taken for what is inside it.
+ */
+function card(body) {
+  let text = FENCED.exec(body)?.[1] ?? body
   try {
+    if (text.trimStart().startsWith('{')) text = formatJson(JSON.parse(text))
     return { text, label: parseCard(text).title }
   } catch (error) {
+    if (error instanceof SyntaxError) throw new Refusal(400, `not JSON: ${error.message}`)
     if (!(error instanceof ParseError)) throw error
     throw new Refusal(400, `line ${error.line}: ${error.message}`)
   }

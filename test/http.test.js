@@ -83,6 +83,48 @@ test('a card is stored only if it parses', async (t) => {
   assert.match(await refused.text(), /^line 1: /)
 })
 
+test('a card in a code fence is stored without the fence', async (t) => {
+  const { call, close } = await serve()
+  t.after(close)
+
+  const made = await call('/api/cards', { method: 'POST', body: '```text\n' + CARD + '```\n' })
+  assert.equal(made.status, 201)
+  const { id } = await made.json()
+  assert.equal(await (await call(`/api/cards/${id}`)).text(), CARD)
+})
+
+test('a card may arrive as JSON, and is stored as text', async (t) => {
+  const { call, close } = await serve()
+  t.after(close)
+
+  const json = { title: 'Dinkelquarkbrot', yields: '1 Kastenbrot', root: { step: 'backen', children: [{ ingredient: 'Mehl', amount: '300 g' }] } }
+  const made = await call('/api/cards', { method: 'POST', body: JSON.stringify(json) })
+  assert.equal(made.status, 201)
+  const { id } = await made.json()
+  assert.equal(await (await call(`/api/cards/${id}`)).text(), CARD)
+
+  const broken = await call('/api/cards', { method: 'POST', body: '{"title": ' })
+  assert.equal(broken.status, 400)
+  assert.match(await broken.text(), /^not JSON: /)
+
+  const empty = await call('/api/cards', { method: 'POST', body: '{"title": "A", "root": {"step": "backen"}}' })
+  assert.equal(empty.status, 400)
+  assert.match(await empty.text(), /A step needs an ingredient/)
+})
+
+test('the guide is served to anyone, and only when there is one', async (t) => {
+  const { call, close } = await serve({ guide: '# The .lekka card format' })
+  t.after(close)
+
+  const guide = await call('/api/guide')
+  assert.equal(guide.status, 200)
+  assert.equal(await guide.text(), '# The .lekka card format')
+
+  const without = await serve()
+  t.after(without.close)
+  assert.equal((await without.call('/api/guide')).status, 404)
+})
+
 
 
 

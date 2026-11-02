@@ -3,7 +3,7 @@ FROM node:24-alpine
 RUN apk add --no-cache su-exec
 
 WORKDIR /srv
-COPY package.json ./
+COPY package.json GUIDE.md recipe.schema.json ./
 COPY app ./app
 COPY server ./server
 COPY entrypoint.sh ./

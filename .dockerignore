@@ -6,3 +6,4 @@ test
 tools
 rezepte
 *.md
+!GUIDE.md

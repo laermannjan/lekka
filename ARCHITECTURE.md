@@ -7,9 +7,10 @@ Enough to rebuild it. What the other documents cover:
 | `FORMAT.md` | the card file |
 | `LAYOUT.md` | how a card becomes a table |
 | `STYLE.md` | colours, type, placement |
-| `CONVERTING.md` | turning an ordinary recipe into a card |
+| `GUIDE.md` | writing a recipe, for a person or a model |
+| `recipe.schema.json` | a recipe as JSON, which is how one arrives from outside |
 
-All four stay exactly as they are.
+All five stay exactly as they are.
 
 ## What it is
 

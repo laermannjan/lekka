@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -51,6 +52,11 @@ if (people?.empty()) {
   console.log(`lekka has no people yet. Open /join#${bootstrap} to make the first one.`)
 }
 
+/* What whoever writes a recipe reads first: how, then the schema it must meet. Read once,
+ * since both change with a release and not while one runs. */
+const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8')
+const guide = `${await read('GUIDE.md')}\n## recipe.schema.json\n\n\`\`\`json\n${await read('recipe.schema.json')}\`\`\`\n`
+
 const days = number(process.env.TTL_DAYS, 0)
 if (days > 0) {
   const sweep = () => store.sweep(days)
@@ -68,6 +74,7 @@ const server = createServer(
     grants,
     mode,
     bootstrap,
+    guide,
     createToken: process.env.CREATE_TOKEN || null,
     maxBytes: number(process.env.MAX_CARD_BYTES, 65536),
     createsPerHour: number(process.env.MAX_CREATES_PER_HOUR, 0),
