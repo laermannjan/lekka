@@ -110,3 +110,13 @@ test('a time inside the words stays in them, and is still a time', () => {
   assert.equal(step.time.from, 120)
   assert.equal(step.timeShown, false)
 })
+
+test('a timer counts down in hours, minutes and seconds, and then says so', async () => {
+  const { countdown } = await import('../app/cook.js')
+  assert.equal(countdown(3 * 3600), '3:00:00')
+  assert.equal(countdown(2 * 3600 + 41 * 60 + 7), '2:41:07')
+  assert.equal(countdown(299.2), '05:00')
+  assert.equal(countdown(0.4), '00:01')
+  assert.equal(countdown(0), 'Done')
+  assert.equal(countdown(-30), 'Done')
+})
