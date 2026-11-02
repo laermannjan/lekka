@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { mkdir, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 
 import { openDb } from '../server/db.js'
 import { openGrants } from '../server/grants.js'
@@ -185,6 +186,14 @@ test('the page holds no inline script, because the policy would refuse it', asyn
   )
   assert.deepEqual(inline, [])
   assert.match(html, /<script[^>]+src="\/main\.js"/)
+})
+
+test('the app starts only once everything it starts with is declared', () => {
+  const main = readFileSync(new URL('../app/main.js', import.meta.url), 'utf8')
+  const start = main.search(/^boot\(\)$/m)
+  const declared = [...main.matchAll(/^(?:let|const) (\w+)/gm)]
+  assert.ok(start > 0)
+  for (const binding of declared) assert.ok(binding.index < start, `${binding[1]} is declared after boot()`)
 })
 
 test('every answer carries the headers that stop a link leaking', async (t) => {
