@@ -23,7 +23,7 @@ export function openStore(directory, db, grants) {
   const put = one('update cards set updated = ?, touched = ? where id = ?')
   const drop = one('delete from cards where id = ?')
   const stamp = one('update cards set touched = ? where id = ?')
-  const listed = one('select id, updated from cards order by updated desc')
+  const listed = one('select id, created, updated from cards order by updated desc')
   const held = one('select id from cards')
   const older = one('select id from cards where touched < ?')
 

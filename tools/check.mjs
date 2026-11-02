@@ -83,6 +83,9 @@ const said = []
 const check = (name, ok, detail = '') =>
   said.push(\`\${ok ? 'PASS' : 'FAIL'} \${name}\${detail ? \` :: \${detail}\` : ''}\`)
 
+// The editor is still drawn as the datasheet, whose rules reach only what is inside one.
+document.getElementById('screen').classList.add('datasheet')
+
 // A loose ingredient, so an open step has something offered that it does not yet take.
 const editor = buildEditor({
   draft: addIngredient(toDraft(parseCard(TEXT)), { name: 'Zucker', amount: '2', unit: 'EL' }),
@@ -164,10 +167,12 @@ const shadedRow = editor.querySelector('.grid > .hold.chosen')
 check('a chosen row is amber over its cells', painted(shadedRow.firstElementChild) === AMBER,
   painted(shadedRow.firstElementChild))
 
+// Through nested rules too: the datasheet's are all nested under \`.datasheet\`.
+const every = (list) => [...list].flatMap((one) => [one, ...(one.cssRules ? every(one.cssRules) : [])])
 const rule = (wanted) =>
   [...document.styleSheets]
-    .flatMap((one) => [...one.cssRules])
-    .some((one) => one.selectorText?.split(',').some((part) => part.trim() === wanted))
+    .flatMap((one) => every(one.cssRules))
+    .some((one) => one.selectorText?.split(',').some((part) => part.trim().replace(/^&\\s*/, '') === wanted))
 check('and stays amber under the pointer', rule('.step.chosen.lit') && rule('.free.chosen.lit'))
 button('Close').click()
 check('closing takes the shading away', shadedRows() === 0, String(shadedRows()))
@@ -366,16 +371,9 @@ const said = []
 const check = (name, ok, detail = '') =>
   said.push(\`\${ok ? 'PASS' : 'FAIL'} \${name}\${detail ? \` :: \${detail}\` : ''}\`)
 
-const acts = () => [...document.getElementById('acts').children]
-const editing = () => Boolean(document.querySelector('.editor'))
-const named = (text) => [...document.querySelectorAll('button')].find((one) => one.textContent === text)
-
-let asked = false
-window.confirm = () => {
-  asked = true
-  return true
-}
-
+const editing = () => Boolean(document.querySelector('.datasheet .editor'))
+const named = (text) => [...document.querySelectorAll('button')].find((one) => one.textContent.trim() === text)
+const labelled = (text) => document.querySelector(\`button[aria-label="\${text}"]\`)
 const after = (wait) => new Promise((go) => setTimeout(go, wait))
 
 addEventListener('load', async () => {
@@ -386,74 +384,32 @@ addEventListener('load', async () => {
   check('an older link is read for its id and rewritten to it',
     location.pathname.startsWith('/r/') && !location.pathname.slice(3).includes('/') && location.hash === '',
     location.pathname + ' + ' + (location.hash || '(no fragment)'))
-  check('and the foot says the same thing the address does',
-    document.getElementById('where').textContent === location.pathname,
-    document.getElementById('where').textContent)
-  check('and the recipe is open for writing', Boolean(named('Edit')))
 
-  check('reading, the masthead holds the scale and the fit', acts().length > 0,
-    acts().map((one) => one.textContent).join(' | '))
+  const title = document.querySelector('.recipe-title')?.textContent
+  check('the recipe is open, under its name', title === 'Pfannkuchen', String(title))
+  const steps = [...document.querySelectorAll('ol.group > li .main')].map((one) => one.textContent)
+  check('its steps in the order they are done', steps.join(' | ') === 'Pfanne vorheizen | Verrühren | Schmelzen | Braten 2 min je Seite',
+    steps.join(' | '))
 
-  /*
-   * The foot carries the settings: which access control this instance keeps, and what
-   * the reader holds on the recipe in front of them. This instance keeps none, so
-   * everything is everyone's and the hold says so.
-   */
-  const tag = (id) => {
-    const node = document.getElementById(id)
-    return node.hidden ? null : node.textContent
-  }
-  const painted = (id) => getComputedStyle(document.getElementById(id)).backgroundColor
-  check('the foot names the access control', tag('door') === 'ACCESS_CONTROL: NONE',
-    String(tag('door')))
-  check('and what the reader holds on this recipe', tag('scope') === 'owner', String(tag('scope')))
-  // Uppercased by the stylesheet rather than by the app, so the word stays a word.
-  check('drawn as a word, shown as a tag',
-    getComputedStyle(document.getElementById('scope')).textTransform === 'uppercase')
-  check('in the pale blue a hold is drawn in', painted('scope') === 'rgb(207, 224, 245)',
-    painted('scope'))
+  // The table is the datasheet's, inside a box of its own, so its rules reach it.
+  named('Table').click()
+  await after(400)
+  const grid = document.querySelector('.datasheet.table .grid')
+  check('the table is drawn as the datasheet draws it',
+    Boolean(grid) && getComputedStyle(grid).display === 'grid',
+    grid ? getComputedStyle(grid).display : 'no table')
 
-  /*
-   * A card is the same shape written as read - one rule for the columns of both views,
-   * \`STYLE.md\`. Reading drew every step column at the full 240px whatever stood in it,
-   * so the table was wider than the card needed and the sheet, which is as wide as the
-   * card needs, was wider with it. Pressing \`Edit\` then pulled the whole frame in.
-   *
-   * The tracks are what says so. The width only follows from them, and at a window this
-   * size the sheet is on its 1080 floor in both views and would agree either way.
-   */
-  const tracksOf = () => getComputedStyle(document.querySelector('.grid')).gridTemplateColumns
-  const sheet = () => Math.round(document.querySelector('.page').getBoundingClientRect().width)
-  // A card too wide to be drawn whole is rolled instead, and rolling has tracks of its
-  // own: the ingredient block is pinned at a set width and a tail is added to scroll into.
-  const rolled = document.querySelector('.read').classList.contains('reading')
-  const readTracks = tracksOf()
-  const readSheet = sheet()
-
+  labelled('Edit, share or delete').click()
+  await after(300)
+  check('the menu offers to edit it', Boolean(named('Edit')))
   named('Edit').click()
   await after(500)
   check('writing, the editor is on the screen', editing())
-
-  // The editor's table is the reading table with \`+ Step\` behind it, so its tracks are
-  // the reading tracks and one more.
-  const written = tracksOf().split(' ').slice(0, -1).join(' ')
-  check('a card is the same shape written as read', rolled || written === readTracks,
-    rolled ? 'rolled' : 'read ' + readTracks + ' / written ' + written)
-  check('so the sheet does not narrow on the way in', sheet() >= readSheet,
-    readSheet + ' -> ' + sheet())
-
-  // The recipe is the same recipe, so what is held on it is the same hold.
-  check('and the foot still says what is held on it', tag('scope') === 'owner',
-    String(tag('scope')))
-  check('and the masthead is empty', acts().length === 0,
-    acts().map((one) => one.textContent).join(' | ') || '(empty)')
-
-  // Whatever is left up there must not be able to leave the editor behind the back of
-  // the guard that asks before a draft is thrown away.
-  for (const one of acts()) one.querySelector('button')?.click()
-  await after(500)
-  check('and nothing up there can leave without asking', editing() || asked,
-    'editing ' + editing() + ', asked ' + asked)
+  check('and the menu has gone', !document.querySelector('dialog[open]'))
+  const cells = document.querySelector('.datasheet .editor .grid')
+  check('and the editor is drawn as the datasheet draws it',
+    Boolean(cells) && getComputedStyle(cells).display === 'grid',
+    cells ? getComputedStyle(cells).display : 'no grid')
 
   const out = document.createElement('pre')
   out.id = 'checks'

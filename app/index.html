@@ -2,32 +2,23 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     %HEAD%
-    <meta name="theme-color" content="#14140F" />
+    <meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon.svg" />
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/sheet.css" />
   </head>
   <body>
-    <div class="page">
-      <div class="masthead">
-        <span class="held">
-          <a class="wordmark" href="/">lekka</a>
-        </span>
-        <span class="acts" id="acts"></span>
-      </div>
-      <div id="screen"></div>
-      <div class="foot">
-        <span class="said" id="where"></span>
-        <span class="state">
-          <span class="tag door" id="door"></span>
-          <span class="tag scope" id="scope" hidden></span>
-          <span class="tag build">%VERSION%</span>
-        </span>
-      </div>
-    </div>
+    <main id="screen"></main>
+    <p class="build">%VERSION%</p>
+    <div class="dock" id="dock"></div>
+    <div class="datasheet layer" id="layer"></div>
     <script type="module" src="/main.js"></script>
   </body>
 </html>

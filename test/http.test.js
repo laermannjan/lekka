@@ -54,8 +54,10 @@ test('a card is created, read and written by anyone, since nothing here is owned
   assert.equal(written.status, 204)
   assert.equal(await (await call(`/api/cards/${id}`)).text(), '# B\n')
 
-  const listed = await call('/api/cards')
-  assert.deepEqual((await listed.json()).map((row) => row.id), [id], 'and the library is all of them')
+  const listed = await (await call('/api/cards')).json()
+  assert.deepEqual(listed.map((row) => row.id), [id], 'and the library is all of them')
+  assert.equal(listed[0].text, '# B\n', 'each with its text, so it can be searched')
+  assert.match(listed[0].created, /^\d{4}-\d\d-\d\dT/, 'and when it was added')
 })
 
 test('a card that is not there answers the same to every method', async (t) => {
