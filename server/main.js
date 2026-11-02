@@ -52,13 +52,10 @@ if (people?.empty()) {
   console.log(`lekka has no people yet. Open /join#${bootstrap} to make the first one.`)
 }
 
-/* What an assistant reads before it writes a card: the format, then how to convert into
- * it. Read once, since they change with a release and not while one runs. */
-const guide = (
-  await Promise.all(
-    ['FORMAT.md', 'CONVERTING.md'].map((name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8')),
-  )
-).join('\n\n')
+/* What whoever writes a recipe reads first: how, then the schema it must meet. Read once,
+ * since both change with a release and not while one runs. */
+const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8')
+const guide = `${await read('GUIDE.md')}\n## recipe.schema.json\n\n\`\`\`json\n${await read('recipe.schema.json')}\`\`\`\n`
 
 const days = number(process.env.TTL_DAYS, 0)
 if (days > 0) {

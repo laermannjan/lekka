@@ -91,7 +91,8 @@ is no amount.
    before it is the remark.
 2. After the colon: a leading number or range is the amount, the rest is the
    unit. No leading number means the whole of it is the amount, as words.
-3. Numbers may be `2`, `2,5`, `½`, `1½`. Ranges are `40-60`.
+3. Numbers are `2`, `2,5` or `2.5`. Ranges are `40-60`. A fraction like `½` is
+   read as words, so it does not scale.
 4. Anything not matching a `#`, `>`, `*` or `-` line is an error, as is a second
    title, a second outermost line, or indentation that skips a level.
 5. A preparation has nothing indented under it, and a step has at least one

@@ -127,17 +127,38 @@ test('the sample cards round-trip', () => {
   }
 })
 
-test('the JSON in the guide is the card in the guide', () => {
-  const guide = readFileSync(new URL('../CONVERTING.md', import.meta.url), 'utf8')
-  const text = /## Worked example[\s\S]*?Card:\s*```\n([\s\S]*?)```/.exec(guide)[1]
-  const json = /```json\n([\s\S]*?)```/.exec(guide)[1]
+test('the example in the guide is the card it means, and uses only what the schema has', () => {
+  const guide = readFileSync(new URL('../GUIDE.md', import.meta.url), 'utf8')
+  const schema = JSON.parse(readFileSync(new URL('../recipe.schema.json', import.meta.url), 'utf8'))
+  const example = JSON.parse(/```json\n([\s\S]*?)```/.exec(guide)[1])
 
-  const fromText = parseCard(text)
-  const fromJson = parseCard(formatJson(JSON.parse(json)))
-  assert.equal(fromJson.title, fromText.title)
-  assert.equal(fromJson.yields, fromText.yields)
-  assert.deepEqual(fromJson.root, fromText.root)
-  assert.deepEqual(fromJson.notes, ['source: https://example.com/kastenbrot', 'aliases: Brot, Weißbrot, Hefebrot'])
+  assert.equal(
+    formatJson(example),
+    `# Sandwich loaf (1 loaf)
+> source: https://example.com/sandwich-loaf
+> aliases: white bread, tin loaf, yeast bread
+
+- bake 220 °C 40 min
+  - put in tin
+    * grease loaf tin
+    - rise 1 h (covered)
+      - knead 10 min
+        - mix
+          - flour: 500 g
+          - salt: 10 g
+          - dry yeast: 7 g
+        - water (lukewarm): 350 ml
+`,
+  )
+
+  const known = (keys, entry) => Object.keys(entry).every((key) => keys.includes(key))
+  const defs = schema.$defs
+  const entry = (node) =>
+    ['step', 'ingredient', 'preparation'].some(
+      (kind) => kind in node && known(Object.keys(defs[kind].properties), node),
+    ) && (node.children ?? []).every(entry)
+  assert.ok(known(Object.keys(schema.properties), example))
+  assert.ok(entry(example.root))
 })
 
 test('JSON is forgiven what an assistant gets wrong in form, not in substance', () => {
@@ -154,6 +175,17 @@ test('JSON is forgiven what an assistant gets wrong in form, not in substance', 
   assert.equal(text, '# Pfannkuchen\n\n- verrühren\n  - Mehl: 250 g\n  - Milch (kalt oder warm): 0,5 l\n')
 
   assert.throws(() => formatJson([]), ParseError)
+  assert.throws(() => formatJson({ title: 'A' }), /root step/)
   assert.throws(() => formatJson({ title: 'A', root: { pour: 'x' } }), ParseError)
+
+  // What the text would quietly read as something else.
+  const bake = (children) => ({ title: 'A', root: { step: 'bake', children } })
+  assert.throws(() => formatJson(bake([{ ingredient: 'flour (550)', amount: '1 kg' }])), /no brackets/)
+  assert.throws(() => formatJson(bake([{ ingredient: 'flour', aside: 'type (550)' }])), /no brackets/)
+  assert.throws(() => formatJson(bake([{ ingredient: 'flour: 550' }])), /no colon/)
+  assert.throws(
+    () => formatJson({ ...bake([{ ingredient: 'flour' }]), preparations: [{ ingredient: 'salt' }] }),
+    /Only preparations/,
+  )
   assert.throws(() => formatJson({ title: 'A', root: { step: 'nichts', children: [] } }), ParseError)
 })

@@ -100,8 +100,8 @@ async function route(store, options, request, response) {
 
   /* These answer before anything asks who you are: one is how a supervisor learns the
    * process is up, one is app code the browser needs to fetch the login screen, and the
-   * guide is the format and how to convert into it - the same two documents the
-   * repository publishes - fetched by the shortcut to put in front of the assistant. */
+   * guide is GUIDE.md and the schema, as the repository publishes them, for whoever is
+   * about to write a recipe. */
   if (path === '/healthz') return send(response, 200, 'text/plain', 'ok')
   if (path === '/sw.js') return worker(options.app, response)
   if (path === '/api/guide') {

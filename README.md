@@ -27,7 +27,8 @@ columns are time.
 
 The documents that define it: [FORMAT.md](FORMAT.md) for the file,
 [LAYOUT.md](LAYOUT.md) for the table, [STYLE.md](STYLE.md) for how it looks,
-[CONVERTING.md](CONVERTING.md) for turning an ordinary recipe into a card, and
+[GUIDE.md](GUIDE.md) and [recipe.schema.json](recipe.schema.json) for writing a recipe
+from anything, by hand or by a model, and
 [ARCHITECTURE.md](ARCHITECTURE.md) for how the software works.
 
 ## Running it
@@ -129,8 +130,8 @@ printf 'PUID=%s\nPGID=%s\n' "$(id -u)" "$(id -g)" > deploy/.env
 
 A shortcut in the iPhone share sheet turns a recipe page, a link, a PDF or some text
 into a card. It reads the recipe into text, fetches lekka's guide from `/api/guide` -
-FORMAT.md and CONVERTING.md - and hands both to Apple's model, which answers with the
-card as JSON. `POST /api/cards` takes that JSON as readily as .lekka text, writes it out
+GUIDE.md with the schema - and hands both to Apple's model, which answers with the
+recipe as JSON. `POST /api/cards` takes that JSON as readily as .lekka text, writes it out
 as text, and holds it to the same rules. Built by hand in Shortcuts, with your lekka's
 address where it says `<lekka>`:
 
@@ -141,9 +142,9 @@ address where it says `<lekka>`:
    **Get Contents of URL** of that item, **Get Text from Input** of the contents.
    **Otherwise:** **Get Text from Input** of *Shortcut Input*.
 4. **Get Contents of URL** `https://<lekka>/api/guide`.
-5. **Use Model**, the Pro model. Request: the guide from step 4, a line `---`, then
-   *If Result*. Output: **Dictionary**. Anything you want of every recipe goes in the
-   request too, before the `---`: a language, metric units.
+5. **Use Model**, the Pro model. Request: the guide from step 4, a line `---`, the line
+   `Write this as a lekka recipe:`, then *If Result*. Output: **Dictionary**. Anything
+   you want of every recipe goes on that line too: a language, metric units.
 6. **Get Contents of URL** `https://<lekka>/api/cards`, method **POST**, request body
    **File** set to the model's *Response*.
 7. **Get Dictionary Value** for `id`, then **Open URLs**
