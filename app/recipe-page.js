@@ -10,9 +10,10 @@ const FACTORS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4]
  * A recipe as it is read before cooking: what it is, how long it takes, how much of it,
  * then what goes in and what to do - or the same flow as a table.
  *
- * `state` is `{ factor, table }` and lives with the caller, so the screen can be drawn
- * again without losing either. `on` holds what the screen cannot do itself: `back`,
- * `more` (edit, share, delete), and `redraw`.
+ * `state` is `{ factor, table, cooking }` and lives with the caller, so the screen can be
+ * drawn again without losing any of it; `cooking` is the session when this recipe is the
+ * one being cooked. `on` holds what the screen cannot do itself: `back`, `more` (edit,
+ * share, delete), `cook`, and `redraw`.
  */
 export function renderRecipe(card, state, on) {
   const steps = stepsOf(card)
@@ -46,10 +47,27 @@ export function renderRecipe(card, state, on) {
     ]),
     element('div', '', undefined, [element('h1', 'recipe-title', card.title), metaLine]),
     about.notes.length ? element('div', 'group', undefined, about.notes.map(noteRow)) : null,
+    cookButton(steps, state, on),
     amounts(card, state, on),
     toggle,
     ...(state.table ? [table(card, state)] : list(steps, state, on, card)),
   ]
+}
+
+/** Into cook mode; once in it, back to the step you left, with how far along shown. */
+function cookButton(steps, state, on) {
+  const session = state.cooking
+  const at = session ? Math.min(session.at, steps.length) : 0
+  const fill = element('span', 'fill')
+  fill.style.width = session ? `${Math.round(((at - 1) / steps.length) * 100)}%` : '0%'
+  const button = element('button', 'cta', undefined, [
+    fill,
+    icon('play', 20),
+    element('span', '', session ? `Continue cooking · Step ${at}` : 'Start cooking'),
+  ])
+  button.type = 'button'
+  button.onclick = () => on.cook(state)
+  return button
 }
 
 function choice(text, pressed, run) {

@@ -13,6 +13,7 @@ import { shareSheet } from './share.js'
 import { address, arrive } from './link.js'
 import { renderLibrary, renderResults } from './library.js'
 import { renderRecipe } from './recipe-page.js'
+import { begin, cooking, keep, miniBar, renderCook, stayAwake, stop, tick } from './cook.js'
 import { element, icon, roundButton, slide } from './ui.js'
 
 const screen = document.getElementById('screen')
@@ -54,6 +55,7 @@ async function start() {
   }
 
   if (here.kind === 'card') return showRecipe(here.id)
+  if (here.path.startsWith('/cook/')) return showCook(decodeURIComponent(here.path.slice('/cook/'.length)))
   if (here.path === '/new') return showWriting()
   if (here.path === '/devices') return showDevices()
   if (here.path === '/search') return showSearch()
@@ -234,20 +236,95 @@ async function showRecipe(id) {
     if (!(error instanceof ParseError)) throw error
     return fail(`Line ${error.line}: ${error.message}`)
   }
+  opened = { id, card }
+  setDock()
 
   const draw = (state) => {
+    // Changing how much while cooking it changes how much is being cooked.
+    const session = cooking()
+    if (session?.id === id && session.factor !== state.factor) keep({ ...session, factor: state.factor })
     show(
-      ...renderRecipe(card, state, {
+      ...renderRecipe(card, { ...state, cooking: session?.id === id ? cooking() : null }, {
         back: () => {
           history.replaceState(null, '', '/')
           showLibrary()
         },
         more: () => recipeMenu(id, card),
+        cook: (now) => startCooking(id, card, now.factor),
         redraw: draw,
       }),
     )
   }
-  draw({ factor: 1, table: false })
+  const session = cooking()
+  draw({ factor: session?.id === id ? session.factor : 1, table: false })
+}
+
+/* ---- cooking ------------------------------------------------------------------ */
+
+/** Into cook mode: where it was left, or from the start. One recipe is cooked at a time. */
+function startCooking(id, card, factor) {
+  const session = cooking()
+  if (session && session.id !== id) {
+    const running = Object.keys(session.timers).length
+    const ask = running
+      ? `You are cooking ${session.title}, with ${running === 1 ? 'a timer' : `${running} timers`} running. Stop it and cook ${card.title}?`
+      : `You are cooking ${session.title}. Stop it and cook ${card.title}?`
+    if (!confirm(ask)) return
+  }
+  if (session?.id !== id) begin(id, card, factor)
+  showCook(id)
+}
+
+async function showCook(id) {
+  const session = cooking()
+  if (!session || session.id !== id) return showRecipe(id)
+  go(`/cook/${encodeURIComponent(id)}`, { cook: true })
+
+  const card = await cardOf(id)
+  if (!card) return fail('No recipe under this link.')
+
+  const draw = (now) => {
+    keep(now)
+    show(
+      ...renderCook(card, now, {
+        minimise: () => showRecipe(id),
+        end: () => {
+          const timers = Object.keys(cooking()?.timers ?? {}).length
+          if (timers && !confirm(timers === 1 ? 'Stop cooking? Its timer stops too.' : `Stop cooking? Its ${timers} timers stop too.`))
+            return
+          stop()
+          showRecipe(id)
+        },
+        redraw: draw,
+      }),
+    )
+  }
+  draw(session)
+  stayAwake(true)
+}
+
+/** A recipe read and parsed, from the library when it is in hand and from the server when not. */
+async function cardOf(id) {
+  let text = library?.find((entry) => entry.id === id)?.text ?? null
+  if (text === null) text = (await api.readCard(id).catch(() => null))?.text ?? null
+  if (text === null) return null
+  try {
+    return (opened = { id, card: parseCard(text) }).card
+  } catch {
+    return null
+  }
+}
+
+/** The recipe last opened on its own, so the cook bar can name its step without the library. */
+let opened = null
+
+/** The bar over every other screen while something is cooking. */
+function cookBar() {
+  const session = cooking()
+  if (!session) return null
+  const card =
+    library?.find((entry) => entry.id === session.id)?.card ?? (opened?.id === session.id ? opened.card : null)
+  return miniBar(session, card, () => showCook(session.id))
 }
 
 function recipeMenu(id, card) {
@@ -576,17 +653,27 @@ function band(message, kind = '') {
   return element('div', `band ${kind}`.trim(), message)
 }
 
-/** A new screen: nothing floating over it yet, scrolled to its top. */
-function go(path, { home = false } = {}) {
-  setDock()
+/**
+ * A new screen: scrolled to its top, with nothing floating over it but the cook bar -
+ * which floats over every screen while something is cooking, except the cook screen.
+ */
+function go(path, { home = false, cook = false } = {}) {
+  onCookScreen = cook
   document.body.classList.toggle('home', home)
+  document.body.classList.toggle('cook', cook)
+  if (!cook) stayAwake(false)
+  setDock()
   window.scrollTo(0, 0)
   if (path !== location.pathname) history.replaceState(null, '', path)
 }
 
+let onCookScreen = false
+
 function setDock(...rows) {
-  dock.replaceChildren(...rows.filter(Boolean))
+  const bar = onCookScreen ? null : cookBar()
+  dock.replaceChildren(...[bar, ...rows].filter(Boolean))
   document.body.classList.toggle('docked', dock.childElementCount > 0)
+  document.body.classList.toggle('cooking', Boolean(bar))
 }
 
 function fail(message) {
@@ -618,3 +705,9 @@ function register() {
  * stopped there and drew nothing - on every iPhone, while Chrome drew the page. */
 boot()
 register()
+setInterval(tick, 1000)
+// A phone that slept gave the screen back; while cooking, it stays on again.
+document.addEventListener('visibilitychange', () => {
+  if (onCookScreen) stayAwake(true)
+  tick()
+})

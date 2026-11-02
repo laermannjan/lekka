@@ -20,6 +20,7 @@ const SHELL = [
   '/handoff.js',
   '/read.js',
   '/library.js',
+  '/cook.js',
   '/recipe.js',
   '/recipe-page.js',
   '/search.js',

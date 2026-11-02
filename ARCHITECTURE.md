@@ -205,6 +205,21 @@ you have: one amount decides the factor for every other, and the sheet shows wha
 makes of the rest first. `Table` shows the same recipe as the datasheet's table,
 described below. Edit, Share and Delete are behind `…`.
 
+**Cooking at `/cook/…`.** One step at a time, large, with what goes into it - scaled
+as the recipe was when cooking began - its time as a timer, and what comes next. One
+button carries it on: `Start timer` on a step with a time, `Next` otherwise, `Done` at
+the end. The screen stays on while it is up, and it is dark whatever the phone is set
+to. What is being cooked is kept on the device (`app/cook.js`): which recipe, which
+step, how much, and when each timer ends - the moment it ends, not a count, so a timer
+is right again the moment the phone wakes. A timer that runs out rings, and again each
+minute for five minutes. While something is cooking, a bar over every other screen says
+what and how far, with the timer that ends first, and leads back in. One recipe is
+cooked at a time; starting another asks first.
+
+A phone that is locked, or a page it has put to sleep, rings nothing: the alarm is the
+page's own sound, and only a push from the server could wake it. The screen kept on is
+what stands in for that while cooking.
+
 **Writing at `/new`.** The editor on an empty draft, with the name field waiting.
 Nothing is sent until the first save: a recipe nobody finished writing never
 reaches the server at all.
