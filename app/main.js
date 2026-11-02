@@ -27,9 +27,6 @@ const where = document.getElementById('where')
 const door = document.getElementById('door')
 const scope = document.getElementById('scope')
 
-boot()
-register()
-
 /**
  * One question before the first screen: is there a door, and are we through it. It is
  * asked once, and a server too old or too busy to answer is treated as having none -
@@ -670,3 +667,9 @@ function element(tag, className = '', text, children = []) {
   node.append(...children.filter(Boolean))
   return node
 }
+
+/* Last, once every binding above exists. WebKit checks a `let` when an assignment names
+ * it, not when the value arrives after an `await`, so `boot()` called above `let instance`
+ * stopped there and drew nothing - on every iPhone, while Chrome drew the page. */
+boot()
+register()
