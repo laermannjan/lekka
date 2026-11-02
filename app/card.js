@@ -135,3 +135,50 @@ function* formatNode(node, level) {
 function withAside(text, aside) {
   return aside === null || aside === undefined ? text : `${text} (${aside})`
 }
+
+/**
+ * A card written as JSON, which is how an assistant answers, to .lekka text. The JSON is
+ * the card itself: a step is `{step, aside, children}`, an ingredient `{ingredient, aside,
+ * amount}`, a preparation `{preparation, aside}`. It is not checked here; the text it
+ * becomes is parsed like any other, so it is held to exactly the same rules.
+ */
+export function formatJson(json) {
+  if (!isObject(json)) throw new ParseError('A card in JSON is an object', 1)
+  return formatCard({
+    title: words(json.title),
+    yields: words(json.yields) || null,
+    notes: list(json.notes).map(words),
+    preparations: list(json.preparations).map((text) => ({ text: words(text), aside: null })),
+    root: json.root === undefined || json.root === null ? null : nodeFromJson(json.root),
+  })
+}
+
+function nodeFromJson(json) {
+  if (!isObject(json)) throw new ParseError('A step, an ingredient or a preparation is an object', 1)
+  const aside = words(json.aside) || null
+  if ('step' in json) {
+    // The one rule the text cannot hold it to: a step with nothing under it reads as an ingredient.
+    if (list(json.children).length === 0) throw new ParseError(`A step needs an ingredient: ${words(json.step)}`, 1)
+    return { kind: 'step', verb: words(json.step), aside, children: list(json.children).map(nodeFromJson) }
+  }
+  if ('ingredient' in json) {
+    // An assistant asked for `"250 g"` will sometimes split it anyway.
+    const amount = [json.amount, json.unit].map(words).filter(Boolean).join(' ')
+    return { kind: 'ingredient', name: words(json.ingredient), aside, amount: parseAmount(amount) }
+  }
+  if ('preparation' in json) return { kind: 'preparation', text: words(json.preparation), aside }
+  throw new ParseError('Each entry is a step, an ingredient or a preparation', 1)
+}
+
+/** One line of text, whatever arrived: a line break inside a value would start a new one. */
+function words(value) {
+  return value === null || value === undefined ? '' : String(value).replace(/\s+/g, ' ').trim()
+}
+
+function list(value) {
+  return Array.isArray(value) ? value : []
+}
+
+function isObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}

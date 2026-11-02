@@ -125,6 +125,33 @@ uid 1000, put your own ids in `deploy/.env`:
 printf 'PUID=%s\nPGID=%s\n' "$(id -u)" "$(id -g)" > deploy/.env
 ```
 
+## Adding a recipe from the phone
+
+A shortcut in the iPhone share sheet turns a recipe page, a link, a PDF or some text
+into a card. It reads the recipe into text, fetches lekka's guide from `/api/guide` -
+FORMAT.md and CONVERTING.md - and hands both to Apple's model, which answers with the
+card as JSON. `POST /api/cards` takes that JSON as readily as .lekka text, writes it out
+as text, and holds it to the same rules. Built by hand in Shortcuts, with your lekka's
+address where it says `<lekka>`:
+
+1. Turn on **Show in Share Sheet**; receive **Safari web pages, URLs, Text and PDFs**.
+2. **Get Type** of *Shortcut Input*.
+3. **If** *Type* contains `Safari`, or (**Any**) *Type* contains `URL`:
+   **Get URLs from Input** of *Shortcut Input*, **Get Item from List** (first item),
+   **Get Contents of URL** of that item, **Get Text from Input** of the contents.
+   **Otherwise:** **Get Text from Input** of *Shortcut Input*.
+4. **Get Contents of URL** `https://<lekka>/api/guide`.
+5. **Use Model**, the Pro model. Request: the guide from step 4, a line `---`, then
+   *If Result*. Output: **Dictionary**.
+6. **Get Contents of URL** `https://<lekka>/api/cards`, method **POST**, request body
+   **File** set to the model's *Response*.
+7. **Get Dictionary Value** for `id`, then **Open URLs**
+   `https://<lekka>/r/` followed by that value.
+
+The page is downloaded again by the phone, so a recipe behind a cookie banner may not
+make it through. A shortcut cannot sign in, so this works where `ACCESS_CONTROL` is
+`NONE`; with a `CREATE_TOKEN`, step 6 adds the header `Authorization: Bearer <token>`.
+
 ## Who may open what
 
 One setting decides, and it names the mechanism rather than how secret it feels.

@@ -6,3 +6,5 @@ test
 tools
 rezepte
 *.md
+!FORMAT.md
+!CONVERTING.md

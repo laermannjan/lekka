@@ -111,3 +111,66 @@ afterwards - and that is exactly what the card will show.
 - No step merges nothing and changes nothing.
 - Ingredients that belong together are adjacent.
 - Read innermost to outermost: does it sound like the original recipe?
+
+## Answering in one message
+
+When the recipe arrives in a single message, after a line `---`, and there is
+nobody to ask, answer with the card as JSON and nothing else. The JSON is the
+card: the same tree, with the outermost step as `root` and what flows into a step
+as its `children`. The worked example above is
+
+```json
+{
+  "title": "Kastenbrot",
+  "yields": "1 Laib",
+  "notes": ["Quelle: https://example.com/kastenbrot", "auch: Brot, Weißbrot, Hefebrot"],
+  "preparations": [],
+  "root": {
+    "step": "backen 220 °C 40 min",
+    "children": [
+      {
+        "step": "in Form geben",
+        "children": [
+          { "preparation": "Kastenform einfetten" },
+          {
+            "step": "Stockgare 1 h",
+            "aside": "zugedeckt",
+            "children": [
+              {
+                "step": "kneten 10 min",
+                "children": [
+                  {
+                    "step": "mischen",
+                    "children": [
+                      { "ingredient": "Mehl", "amount": "500 g" },
+                      { "ingredient": "Salz", "amount": "10 g" },
+                      { "ingredient": "Trockenhefe", "amount": "7 g" }
+                    ]
+                  },
+                  { "ingredient": "Wasser", "aside": "lauwarm", "amount": "350 ml" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- An entry is a step (`step`, `children`), an ingredient (`ingredient`, `amount`)
+  or a preparation (`preparation`). Any of them may have an `aside`: what the
+  bracket holds in the text.
+- `amount` is one string, number and unit together, or words: `"250 g"`,
+  `"40-60 g"`, `"2"`, `"nach Geschmack"`. Leave it out if there is none.
+- `preparations` are the ones that come before everything; a preparation needed
+  by one step is among that step's `children`.
+- Keep the recipe's language.
+- If the text says where it came from, add a note `Quelle: ` and the address.
+- Add a note `auch: ` and the other names somebody might search for it under:
+  other languages, the dish it is a kind of, what sets it apart. A vegan
+  cheesecake on cashews is `auch: Käsekuchen, Cheesecake, vegan, Cashew`.
+- The text may be a whole page, structured data, or words read off a photo. Take
+  the recipe and leave the rest.
+- If it asks for a recipe instead of containing one, write one.

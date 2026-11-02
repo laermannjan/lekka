@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 
-import { parseCard, formatCard, ParseError } from '../app/card.js'
+import { parseCard, formatCard, formatJson, ParseError } from '../app/card.js'
 import { parseAmount, formatAmount, scaleAmount } from '../app/amount.js'
 
 const PANCAKES = `# Pfannkuchen (12 Stück)
@@ -125,4 +125,35 @@ test('the sample cards round-trip', () => {
     assert.deepEqual(parseCard(formatCard(card)), card, name)
     assert.equal(formatCard(parseCard(formatCard(card))), formatCard(card), name)
   }
+})
+
+test('the JSON in the guide is the card in the guide', () => {
+  const guide = readFileSync(new URL('../CONVERTING.md', import.meta.url), 'utf8')
+  const text = /## Worked example[\s\S]*?Card:\s*```\n([\s\S]*?)```/.exec(guide)[1]
+  const json = /```json\n([\s\S]*?)```/.exec(guide)[1]
+
+  const fromText = parseCard(text)
+  const fromJson = parseCard(formatJson(JSON.parse(json)))
+  assert.equal(fromJson.title, fromText.title)
+  assert.equal(fromJson.yields, fromText.yields)
+  assert.deepEqual(fromJson.root, fromText.root)
+  assert.deepEqual(fromJson.notes, ['Quelle: https://example.com/kastenbrot', 'auch: Brot, Weißbrot, Hefebrot'])
+})
+
+test('JSON is forgiven what an assistant gets wrong in form, not in substance', () => {
+  const text = formatJson({
+    title: 'Pfannkuchen\n',
+    root: {
+      step: 'verrühren',
+      children: [
+        { ingredient: 'Mehl', amount: 250, unit: 'g' },
+        { ingredient: 'Milch', amount: '0,5 l', aside: 'kalt\noder warm' },
+      ],
+    },
+  })
+  assert.equal(text, '# Pfannkuchen\n\n- verrühren\n  - Mehl: 250 g\n  - Milch (kalt oder warm): 0,5 l\n')
+
+  assert.throws(() => formatJson([]), ParseError)
+  assert.throws(() => formatJson({ title: 'A', root: { pour: 'x' } }), ParseError)
+  assert.throws(() => formatJson({ title: 'A', root: { step: 'nichts', children: [] } }), ParseError)
 })

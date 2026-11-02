@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -51,6 +52,14 @@ if (people?.empty()) {
   console.log(`lekka has no people yet. Open /join#${bootstrap} to make the first one.`)
 }
 
+/* What an assistant reads before it writes a card: the format, then how to convert into
+ * it. Read once, since they change with a release and not while one runs. */
+const guide = (
+  await Promise.all(
+    ['FORMAT.md', 'CONVERTING.md'].map((name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8')),
+  )
+).join('\n\n')
+
 const days = number(process.env.TTL_DAYS, 0)
 if (days > 0) {
   const sweep = () => store.sweep(days)
@@ -68,6 +77,7 @@ const server = createServer(
     grants,
     mode,
     bootstrap,
+    guide,
     createToken: process.env.CREATE_TOKEN || null,
     maxBytes: number(process.env.MAX_CARD_BYTES, 65536),
     createsPerHour: number(process.env.MAX_CREATES_PER_HOUR, 0),
