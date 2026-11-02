@@ -137,7 +137,7 @@ test('the JSON in the guide is the card in the guide', () => {
   assert.equal(fromJson.title, fromText.title)
   assert.equal(fromJson.yields, fromText.yields)
   assert.deepEqual(fromJson.root, fromText.root)
-  assert.deepEqual(fromJson.notes, ['Quelle: https://example.com/kastenbrot', 'auch: Brot, Weißbrot, Hefebrot'])
+  assert.deepEqual(fromJson.notes, ['source: https://example.com/kastenbrot', 'aliases: Brot, Weißbrot, Hefebrot'])
 })
 
 test('JSON is forgiven what an assistant gets wrong in form, not in substance', () => {

@@ -139,15 +139,23 @@ function withAside(text, aside) {
 /**
  * A card written as JSON, which is how an assistant answers, to .lekka text. The JSON is
  * the card itself: a step is `{step, aside, children}`, an ingredient `{ingredient, aside,
- * amount}`, a preparation `{preparation, aside}`. It is not checked here; the text it
- * becomes is parsed like any other, so it is held to exactly the same rules.
+ * amount}`, a preparation `{preparation, aside}`. Where it came from and what else it is
+ * called have fields of their own, and become notes until the format has a line for them.
+ * It is not checked here; the text it becomes is parsed like any other, so it is held to
+ * exactly the same rules.
  */
 export function formatJson(json) {
   if (!isObject(json)) throw new ParseError('A card in JSON is an object', 1)
+  const source = words(json.source)
+  const aliases = list(json.aliases).map(words).filter(Boolean)
   return formatCard({
     title: words(json.title),
     yields: words(json.yields) || null,
-    notes: list(json.notes).map(words),
+    notes: [
+      ...list(json.notes).map(words),
+      ...(source ? [`source: ${source}`] : []),
+      ...(aliases.length > 0 ? [`aliases: ${aliases.join(', ')}`] : []),
+    ],
     preparations: list(json.preparations).map((text) => ({ text: words(text), aside: null })),
     root: json.root === undefined || json.root === null ? null : nodeFromJson(json.root),
   })

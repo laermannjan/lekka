@@ -142,7 +142,8 @@ address where it says `<lekka>`:
    **Otherwise:** **Get Text from Input** of *Shortcut Input*.
 4. **Get Contents of URL** `https://<lekka>/api/guide`.
 5. **Use Model**, the Pro model. Request: the guide from step 4, a line `---`, then
-   *If Result*. Output: **Dictionary**.
+   *If Result*. Output: **Dictionary**. Anything you want of every recipe goes in the
+   request too, before the `---`: a language, metric units.
 6. **Get Contents of URL** `https://<lekka>/api/cards`, method **POST**, request body
    **File** set to the model's *Response*.
 7. **Get Dictionary Value** for `id`, then **Open URLs**

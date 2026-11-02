@@ -123,7 +123,9 @@ as its `children`. The worked example above is
 {
   "title": "Kastenbrot",
   "yields": "1 Laib",
-  "notes": ["Quelle: https://example.com/kastenbrot", "auch: Brot, Weißbrot, Hefebrot"],
+  "source": "https://example.com/kastenbrot",
+  "aliases": ["Brot", "Weißbrot", "Hefebrot"],
+  "notes": [],
   "preparations": [],
   "root": {
     "step": "backen 220 °C 40 min",
@@ -166,11 +168,12 @@ as its `children`. The worked example above is
   `"40-60 g"`, `"2"`, `"nach Geschmack"`. Leave it out if there is none.
 - `preparations` are the ones that come before everything; a preparation needed
   by one step is among that step's `children`.
-- Keep the recipe's language.
-- If the text says where it came from, add a note `Quelle: ` and the address.
-- Add a note `auch: ` and the other names somebody might search for it under:
-  other languages, the dish it is a kind of, what sets it apart. A vegan
-  cheesecake on cashews is `auch: Käsekuchen, Cheesecake, vegan, Cashew`.
+- `source` is where the recipe came from, if the text says: its address.
+- `aliases` are the other names somebody might search for it under: other
+  languages, the dish it is a kind of, what sets it apart. A vegan cheesecake on
+  cashews might have `["Käsekuchen", "cheesecake", "vegan", "cashew"]`.
+- `notes` hold anything else worth saying about the recipe as a whole.
+- Keep the recipe's language and units, unless the message asks for others.
 - The text may be a whole page, structured data, or words read off a photo. Take
   the recipe and leave the rest.
 - If it asks for a recipe instead of containing one, write one.
