@@ -1,6 +1,5 @@
-import { formatAmount, scaleAmount } from './amount.js'
 import { stepsOf } from './recipe.js'
-import { element, icon, picture, roundButton, slide } from './ui.js'
+import { arcOffset, element, icon, menuItem, picture, ring, roundButton, slide, uses } from './ui.js'
 
 /**
  * Cooking: one recipe at a time, a step at a time, with its timers.
@@ -42,8 +41,13 @@ export function begin(id, card, factor) {
 }
 
 /**
- * The cook screen. `on` holds what it cannot do itself: `minimise`, `end`, and `redraw`,
- * which is handed the session as it should be next.
+ * The cook screen: what to do now, large enough to read from the stove, and the way on.
+ * The step is the biggest thing on it; the heat and the time it needs stand beside each
+ * other as numbers; what goes in is a column of amounts. Timers left running on other
+ * steps wait above the buttons, and lead back to their step.
+ *
+ * `on` holds what it cannot do itself: `minimise`, `end`, and `redraw`, which is handed
+ * the session as it should be next.
  */
 export function renderCook(card, session, on) {
   const steps = stepsOf(card)
@@ -51,6 +55,7 @@ export function renderCook(card, session, on) {
   const step = steps[at - 1]
   const after = steps[at]
   const timer = session.timers[at] ?? null
+  const { title, heat } = heatOf(step)
 
   const go = (n) => on.redraw({ ...session, at: n })
   const startTimer = () => {
@@ -66,135 +71,115 @@ export function renderCook(card, session, on) {
     on.redraw({ ...session, timers })
   }
 
-  let primary
-  if (step.time && !timer) primary = { text: `Start timer · ${step.time.text}`, run: startTimer }
-  else if (after) primary = { text: `Next · ${after.title}`, run: () => go(at + 1) }
-  else primary = { text: 'Done', run: on.end }
-
-  const main = element('button', 'primary', primary.text)
-  main.type = 'button'
-  main.onclick = primary.run
+  const next = element('button', 'primary', after ? `Next: ${after.title}` : 'Done')
+  next.type = 'button'
+  next.onclick = after ? () => go(at + 1) : on.end
 
   const previous = roundButton('back', 'Previous step', () => go(at - 1))
   previous.disabled = at === 1
 
-  const end = element('button', 'pill glass', 'End')
-  end.type = 'button'
-  end.onclick = on.end
+  const elsewhere = Object.entries(session.timers)
+    .filter(([n]) => Number(n) !== at)
+    .sort(([, a], [, b]) => a.ends - b.ends)
 
-  const running = Object.keys(session.timers).length
   return [
-    element('div', 'bar', undefined, [roundButton('down', 'Back to the recipe', on.minimise), end]),
-    element('section', 'cook-card', undefined, [
-      element('h1', '', step.title),
-      step.aside ? element('p', 'aside', step.aside) : null,
-      step.ingredients.length
-        ? element('div', 'uses', undefined, step.ingredients.map((node) => use(node, session.factor)))
+    element('div', 'bar', undefined, [
+      roundButton('down', 'Back to the recipe', on.minimise),
+      element('span', 'middle', `Step ${at} of ${steps.length}`),
+      roundButton('more', 'All ingredients, or end cooking', () => cookMenu(card, session, on)),
+    ]),
+    element('section', 'now', undefined, [
+      element('div', '', undefined, [element('h1', '', title), step.aside ? element('p', 'aside', step.aside) : null]),
+      heat || step.time
+        ? element('div', 'facts', undefined, [
+            heat ? fact('Heat', heat) : null,
+            step.time ? timerFact(step, timer, timer ? stopTimer : startTimer) : null,
+          ])
         : null,
-      step.time ? timerBlock(step, timer, stopTimer) : null,
-      element('p', 'then', after ? `Then: ${after.title}${after.aside ? `, ${after.aside}` : ''}` : 'Then: done.'),
+      step.ingredients.length ? uses(step.ingredients, session.factor) : null,
     ]),
-    element('div', 'progress', undefined, [
-      element('div', 'words', undefined, [
-        element('span', '', `Step ${at} of ${steps.length}`),
-        element('span', 'quiet', at === steps.length ? 'Last step' : `${steps.length - at} to go`),
-      ]),
-      track((at - 1) / steps.length),
-    ]),
-    element('div', 'controls', undefined, [previous, main]),
-    element('div', 'tools', undefined, [
-      tool('timer', running ? `Timers · ${running}` : 'Timers', () => timersSheet(session, on)),
-      tool('list', 'All ingredients', () => ingredientsSheet(card, session)),
+    element('div', 'foot', undefined, [
+      elsewhere.length
+        ? element('div', 'others', undefined, elsewhere.map(([n, one]) => chip(Number(n), one, () => go(Number(n)))))
+        : null,
+      element('div', 'controls', undefined, [previous, next]),
     ]),
   ]
 }
 
-function use(node, factor) {
-  const name = element('span', 'name', node.name)
-  if (node.aside) name.append(' ', element('span', 'quiet', node.aside))
-  return element('div', 'use', undefined, [name, element('span', 'amount', formatAmount(scaleAmount(node.amount, factor)))])
+/**
+ * `Backen 150 °C` is `Backen`, with 150 °C shown on its own beside the timer. Only a heat
+ * that ends the words: `Ofen auf 150 °C vorheizen` says nothing without it.
+ */
+export function heatOf(step) {
+  const match = /\s+\d+(?:[.,]\d+)?\s*°\s*[CF]$/.exec(step.title)
+  return match ? { title: step.title.slice(0, match.index), heat: step.temperature } : { title: step.title, heat: null }
 }
 
-function timerBlock(step, timer, stopTimer) {
-  const clock = element('span', 'clock', countdown(timer ? (timer.ends - Date.now()) / 1000 : step.time.from))
-  const fill = element('span', 'fill')
-  fill.style.width = '0%'
-  if (timer) {
-    clock.dataset.ends = String(timer.ends)
-    fill.dataset.ends = String(timer.ends)
-    fill.dataset.total = String(timer.total)
-  }
-  const row = element('div', 'row', undefined, [clock])
-  if (timer) {
-    const button = element('button', 'pill glass', 'Stop')
-    button.type = 'button'
-    button.onclick = stopTimer
-    row.append(button)
-  }
-  return element('div', 'timer', undefined, [
-    row,
-    element('span', 'track', undefined, [fill]),
-    element('span', 'quiet', timer ? `of ${step.time.text}` : `${step.time.text}, not started`),
+function fact(label, value) {
+  return element('div', 'fact', undefined, [element('span', 'label', label), element('span', 'value', value)])
+}
+
+/** The tile is the button: a tap anywhere on it starts the timer, and stops it again. */
+function timerFact(step, timer, toggle) {
+  const clock = element('span', 'value clock', countdown(timer ? (timer.ends - Date.now()) / 1000 : step.time.from))
+  if (timer) clock.dataset.ends = String(timer.ends)
+  clock.classList.toggle('over', Boolean(timer) && timer.ends <= Date.now())
+  const ranged = step.time.from !== step.time.to
+  const button = element('button', timer ? 'fact timer running' : 'fact timer', undefined, [
+    element('span', 'head', undefined, [
+      element('span', 'label', ranged ? `Timer · ${step.time.text}` : 'Timer'),
+      element('span', 'go', undefined, [timer ? ring(timer, 34) : null, icon(timer ? 'stop' : 'play', 16)]),
+    ]),
+    clock,
   ])
-}
-
-function track(part) {
-  const fill = element('span', 'fill')
-  fill.style.width = `${Math.round(part * 100)}%`
-  return element('span', 'track', undefined, [fill])
-}
-
-function tool(name, text, run) {
-  const button = element('button', 'tool', undefined, [icon(name, 24), element('span', '', text)])
   button.type = 'button'
-  button.onclick = run
+  button.setAttribute('aria-label', timer ? 'Stop the timer' : `Start a timer for ${step.time.text}`)
+  button.onclick = toggle
   return button
 }
 
-function timersSheet(session, on) {
-  const entries = Object.entries(session.timers).sort(([, a], [, b]) => a.ends - b.ends)
+/** A timer running on another step: its name and what is left, and a tap back to it. */
+function chip(n, timer, open) {
+  const clock = element('span', 'clock-small', countdown((timer.ends - Date.now()) / 1000))
+  clock.dataset.ends = String(timer.ends)
+  clock.classList.toggle('over', timer.ends <= Date.now())
+  const button = element('button', 'chip glass', undefined, [ring(timer, 22), element('span', 'name', timer.title), clock])
+  button.type = 'button'
+  button.setAttribute('aria-label', `${timer.title}, step ${n}: back to it`)
+  button.onclick = open
+  return button
+}
+
+function cookMenu(card, session, on) {
   const sheet = slide(
-    element('h2', '', 'Timers'),
-    entries.length
-      ? element(
-          'div',
-          'menu',
-          undefined,
-          entries.map(([n, timer]) => {
-            const clock = element('span', 'clock-small', countdown((timer.ends - Date.now()) / 1000))
-            clock.dataset.ends = String(timer.ends)
-            const stopIt = element('button', 'second', 'Stop')
-            stopIt.type = 'button'
-            stopIt.onclick = () => {
-              sheet.close()
-              const timers = { ...session.timers }
-              delete timers[n]
-              on.redraw({ ...session, timers })
-            }
-            return element('div', 'timer-row', undefined, [
-              element('span', 'text', undefined, [element('span', 'main', timer.title), element('span', 'quiet', `Step ${n}`)]),
-              clock,
-              stopIt,
-            ])
-          }),
-        )
-      : element('p', 'hint', 'No timer is running. A step with a time starts one.'),
+    element('h2', '', card.title),
+    element('div', 'menu', undefined, [
+      menuItem('list', 'All ingredients', () => {
+        sheet.close()
+        ingredientsSheet(card, session)
+      }),
+      menuItem(
+        'close',
+        'End cooking',
+        () => {
+          sheet.close()
+          on.end()
+        },
+        'danger',
+      ),
+    ]),
   )
 }
 
 function ingredientsSheet(card, session) {
   slide(
     element('h2', '', 'All ingredients'),
-    element(
-      'div',
-      'menu',
-      undefined,
+    uses(
       stepsOf(card)
         .filter((step) => step.ingredients.length)
-        .flatMap((step) => [
-          element('p', 'label', `Step ${step.n} · ${step.title}`),
-          ...step.ingredients.map((node) => use(node, session.factor)),
-        ]),
+        .flatMap((step) => [`${step.n} · ${step.title}`, ...step.ingredients]),
+      session.factor,
     ),
   )
 }
@@ -212,6 +197,7 @@ export function miniBar(session, card, open) {
   if (soonest) {
     const clock = element('span', 'clock-small', countdown((soonest.ends - Date.now()) / 1000))
     clock.dataset.ends = String(soonest.ends)
+    clock.classList.toggle('over', soonest.ends <= Date.now())
     sub.append(' · ', clock)
   }
 
@@ -227,22 +213,6 @@ export function miniBar(session, card, open) {
     open()
   }
   return link
-}
-
-function ring(timer) {
-  const holder = element('span', 'ring')
-  holder.innerHTML =
-    '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="12" fill="none" stroke="currentColor" stroke-opacity="0.18" stroke-width="3.5"/><circle class="arc" cx="15" cy="15" r="12" fill="none" stroke="var(--tint)" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="75.4" transform="rotate(-90 15 15)"/></svg>'
-  const arc = holder.querySelector('.arc')
-  arc.dataset.ends = String(timer.ends)
-  arc.dataset.total = String(timer.total)
-  arc.setAttribute('stroke-dashoffset', String(arcOffset(timer.ends, timer.total)))
-  return holder
-}
-
-function arcOffset(ends, total) {
-  const left = Math.max(0, (ends - Date.now()) / 1000)
-  return (75.4 * (1 - left / total)).toFixed(1)
 }
 
 /** `2:41:07`, `04:59`, and `Done` once it has run out. */
@@ -263,8 +233,7 @@ export function tick() {
   for (const node of document.querySelectorAll('[data-ends]')) {
     const ends = Number(node.dataset.ends)
     const total = Number(node.dataset.total)
-    if (node.classList.contains('fill')) node.style.width = `${Math.min(100, Math.round((1 - Math.max(0, ends - Date.now()) / 1000 / total) * 100))}%`
-    else if (node.classList.contains('arc')) node.setAttribute('stroke-dashoffset', arcOffset(ends, total))
+    if (node.classList.contains('arc')) node.setAttribute('stroke-dashoffset', arcOffset(ends, total))
     else {
       node.textContent = countdown((ends - Date.now()) / 1000)
       node.classList.toggle('over', ends <= Date.now())

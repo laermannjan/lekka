@@ -188,9 +188,8 @@ editor changes a cell on screen and has to write it into the right node.
 recipe's text and when it was added - one request for the list, the search and the
 worker's copy for a kitchen without a signal. What it holds depends on the instance:
 every recipe on the server under `NONE` and `LOGIN`, the ones a grant names you on
-under `GRANT`. The newest few stand on a shelf above the list once there are more
-than fit on it; in a short library the list already shows them all. Search and `+`
-float at the bottom, where a thumb is.
+under `GRANT`. Each by name, with how long it takes and how much it makes. Search and
+`+` float at the bottom, where a thumb is.
 
 **Search at `/search`.** Over the library already read, so it answers as you type and
 works offline. Each recipe answers once, with the best reason it answers - its name,
@@ -198,18 +197,22 @@ another name it goes by, an ingredient, a step - and says the reason when it is 
 name. Letters are compared without case or accents (`app/search.js`).
 
 **A recipe at `/r/…`.** What it is, how many steps and how long, where it came from;
-its own notes; how much, as a count where the yield starts with one and a factor where
-it does not; then the ingredients, grouped by the step they go into, and the steps in
-the order they are done (`app/recipe.js`). An amount can be tapped to scale by what
-you have: one amount decides the factor for every other, and the sheet shows what that
-makes of the rest first. `Table` shows the same recipe as the datasheet's table,
-described below. Edit, Share and Delete are behind `…`.
+its own notes; then the ingredients, amount first and grouped by the step they go
+into, under how much - a count where the yield starts with one and a factor where it
+does not - and the steps in the order they are done (`app/recipe.js`). An amount can
+be tapped to scale by what you have: one amount decides the factor for every other,
+and the sheet shows what that makes of the rest first. `Start cooking` floats at the
+bottom. The table view, Edit, Share and Delete are behind `…`. A recipe's screens are
+lit from above by its own colour, the way a player is by its cover.
 
-**Cooking at `/cook/…`.** One step at a time, large, with what goes into it - scaled
-as the recipe was when cooking began - its time as a timer, and what comes next. One
-button carries it on: `Start timer` on a step with a time, `Next` otherwise, `Done` at
-the end. The screen stays on while it is up, and it is dark whatever the phone is set
-to. What is being cooked is kept on the device (`app/cook.js`): which recipe, which
+**Cooking at `/cook/…`.** One step at a time, read from across the kitchen: its name
+is the largest thing on the screen, its heat and time stand beside each other as
+numbers - the time a tile that starts its timer when tapped - and what goes into it is
+a column of amounts, scaled as the recipe was when cooking began. Timers running on
+other steps wait above the buttons as chips that lead back to their step; one that has
+run out turns amber. `Next`, naming the step it leads to, carries it on, and `Done`
+ends it. All ingredients and ending early are behind `…`. The screen stays on while it
+is up, and it is dark whatever the phone is set to. What is being cooked is kept on the device (`app/cook.js`): which recipe, which
 step, how much, and when each timer ends - the moment it ends, not a count, so a timer
 is right again the moment the phone wakes. A timer that runs out rings, and again each
 minute for five minutes. While something is cooking, a bar over every other screen says

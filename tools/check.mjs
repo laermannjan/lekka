@@ -387,12 +387,16 @@ addEventListener('load', async () => {
 
   const title = document.querySelector('.recipe-title')?.textContent
   check('the recipe is open, under its name', title === 'Pfannkuchen', String(title))
-  const steps = [...document.querySelectorAll('ol.group > li .main')].map((one) => one.textContent)
+  const steps = [...document.querySelectorAll('ol.steps > li .main')].map((one) => one.textContent)
   check('its steps in the order they are done', steps.join(' | ') === 'Pfanne vorheizen | Verrühren | Schmelzen | Braten 2 min je Seite',
     steps.join(' | '))
 
+  check('cooking starts from the bar at the bottom', Boolean(document.querySelector('#dock .start')))
+
   // The table is the datasheet's, inside a box of its own, so its rules reach it.
-  named('Table').click()
+  labelled('Edit, share or delete').click()
+  await after(300)
+  named('Show as a table').click()
   await after(400)
   const grid = document.querySelector('.datasheet.table .grid')
   check('the table is drawn as the datasheet draws it',

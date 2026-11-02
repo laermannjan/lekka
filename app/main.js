@@ -14,7 +14,7 @@ import { address, arrive } from './link.js'
 import { renderLibrary, renderResults } from './library.js'
 import { renderRecipe } from './recipe-page.js'
 import { begin, cooking, keep, miniBar, renderCook, stayAwake, stop, tick } from './cook.js'
-import { element, icon, roundButton, slide } from './ui.js'
+import { colourOf, element, icon, menuItem, roundButton, slide } from './ui.js'
 
 const screen = document.getElementById('screen')
 const dock = document.getElementById('dock')
@@ -124,13 +124,6 @@ function addSheet() {
   )
 }
 
-function menuItem(name, text, run, className = '') {
-  const button = element('button', className, undefined, [icon(name, 20), text])
-  button.type = 'button'
-  button.onclick = run
-  return button
-}
-
 /** A recipe in the card's own text, or as the JSON the guide describes: the server reads both. */
 function pasteSheet() {
   const area = element('textarea', 'paste')
@@ -220,7 +213,7 @@ async function showSearch() {
 
 async function showRecipe(id) {
   history.replaceState(null, '', address(id))
-  go(address(id))
+  go(address(id), { lit: true })
 
   let text = library?.find((entry) => entry.id === id)?.text ?? null
   if (text === null) {
@@ -237,26 +230,34 @@ async function showRecipe(id) {
     return fail(`Line ${error.line}: ${error.message}`)
   }
   opened = { id, card }
-  setDock()
+  document.body.style.setProperty('--glow', colourOf(card.title))
 
   const draw = (state) => {
     // Changing how much while cooking it changes how much is being cooked.
     const session = cooking()
     if (session?.id === id && session.factor !== state.factor) keep({ ...session, factor: state.factor })
     show(
-      ...renderRecipe(card, { ...state, cooking: session?.id === id ? cooking() : null }, {
+      ...renderRecipe(card, state, {
         back: () => {
           history.replaceState(null, '', '/')
           showLibrary()
         },
-        more: () => recipeMenu(id, card),
-        cook: (now) => startCooking(id, card, now.factor),
+        more: () => recipeMenu(id, card, state.table, () => draw({ ...state, table: !state.table })),
         redraw: draw,
       }),
     )
+    // While this one is cooking, the cook bar is the way back in.
+    setDock(session?.id === id ? null : cookButton(() => startCooking(id, card, state.factor)))
   }
   const session = cooking()
   draw({ factor: session?.id === id ? session.factor : 1, table: false })
+}
+
+function cookButton(run) {
+  const button = element('button', 'start', undefined, [icon('play', 18), 'Start cooking'])
+  button.type = 'button'
+  button.onclick = run
+  return button
 }
 
 /* ---- cooking ------------------------------------------------------------------ */
@@ -278,10 +279,11 @@ function startCooking(id, card, factor) {
 async function showCook(id) {
   const session = cooking()
   if (!session || session.id !== id) return showRecipe(id)
-  go(`/cook/${encodeURIComponent(id)}`, { cook: true })
+  go(`/cook/${encodeURIComponent(id)}`, { cook: true, lit: true })
 
   const card = await cardOf(id)
   if (!card) return fail('No recipe under this link.')
+  document.body.style.setProperty('--glow', colourOf(card.title))
 
   const draw = (now) => {
     keep(now)
@@ -327,10 +329,14 @@ function cookBar() {
   return miniBar(session, card, () => showCook(session.id))
 }
 
-function recipeMenu(id, card) {
+function recipeMenu(id, card, table, flip) {
   const sheet = slide(
     element('h2', '', card.title),
     element('div', 'menu', undefined, [
+      menuItem(table ? 'list' : 'table', table ? 'Show as a list' : 'Show as a table', () => {
+        sheet.close()
+        flip()
+      }),
       menuItem('edit', 'Edit', () => {
         sheet.close()
         showEditor(id, toDraft(card))
@@ -657,10 +663,15 @@ function band(message, kind = '') {
  * A new screen: scrolled to its top, with nothing floating over it but the cook bar -
  * which floats over every screen while something is cooking, except the cook screen.
  */
-function go(path, { home = false, cook = false } = {}) {
+/**
+ * Onto another screen. A recipe's screens are `lit` from above by its own colour, the way
+ * a player is by its cover; the caller sets which colour.
+ */
+function go(path, { home = false, cook = false, lit = false } = {}) {
   onCookScreen = cook
   document.body.classList.toggle('home', home)
   document.body.classList.toggle('cook', cook)
+  document.body.classList.toggle('lit', lit)
   if (!cook) stayAwake(false)
   setDock()
   window.scrollTo(0, 0)
