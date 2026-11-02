@@ -1,13 +1,11 @@
+import { stepsOf, totalTime } from './recipe.js'
 import { search } from './search.js'
-import { element, icon, picture } from './ui.js'
-
-/** At most this many in `Recently added`, and only once the whole list is longer. */
-const RECENT = 6
+import { element, picture } from './ui.js'
 
 /**
- * Every recipe, by name. The newest few stand on a shelf above them once there are more
- * than fit on it - in a short library the list already shows all of them, and a shelf
- * would only say the same thing twice.
+ * Every recipe, by name, with how long it takes and how much it makes. A recipe with a
+ * photo shows it; one without shows nothing in its place, since a letter on a colour
+ * only says again what the name already says.
  */
 export function renderLibrary(entries, { open, photo = () => null, corner = null }) {
   const head = corner
@@ -26,25 +24,8 @@ export function renderLibrary(entries, { open, photo = () => null, corner = null
       ]),
     ]
 
-  const parts = [head]
-
-  if (entries.length > RECENT) {
-    const newest = [...entries].sort((a, b) => (b.created ?? '').localeCompare(a.created ?? '')).slice(0, RECENT)
-    parts.push(
-      element('h2', 'heading', 'Recently added'),
-      element(
-        'div',
-        'shelf',
-        undefined,
-        newest.map((entry) => tile(entry, open, photo)),
-      ),
-      element('h2', 'heading', 'All recipes'),
-    )
-  }
-
   const byName = [...entries].sort((a, b) => title(a).localeCompare(title(b), 'de'))
-  parts.push(element('div', 'group', undefined, byName.map((entry) => row(entry, open, photo))))
-  return parts
+  return [head, element('div', 'group', undefined, byName.map((entry) => row(entry, open, photo)))]
 }
 
 /** What answers the query, each recipe once, saying why when its name does not. */
@@ -65,29 +46,24 @@ export function renderResults(entries, query, { open, photo = () => null }) {
   ]
 }
 
-function tile(entry, open, photo) {
-  const link = element('a', 'tile', undefined, [
-    picture(entry.card, '', photo(entry)),
-    element('span', 'main', title(entry)),
-    element('span', 'sub', when(entry.created)),
+function row(entry, open, photo, why = null) {
+  const shown = photo(entry)
+  const link = element('a', shown ? 'item thumbed' : 'item', undefined, [
+    shown ? picture(entry.card, 'thumb', shown) : null,
+    element('span', 'text', undefined, [
+      element('span', 'main', title(entry)),
+      element('span', 'sub', why ?? about(entry.card)),
+    ]),
   ])
   link.href = `/r/${entry.id}`
   link.onclick = follow(() => open(entry.id))
   return link
 }
 
-function row(entry, open, photo, why = null) {
-  const link = element('a', 'item thumbed', undefined, [
-    picture(entry.card, 'thumb', photo(entry)),
-    element('span', 'text', undefined, [
-      element('span', 'main', title(entry)),
-      element('span', 'sub', why ?? entry.card?.yields ?? (entry.card ? '' : 'This recipe does not read.')),
-    ]),
-    element('span', 'chevron', undefined, [icon('chevron', 16)]),
-  ])
-  link.href = `/r/${entry.id}`
-  link.onclick = follow(() => open(entry.id))
-  return link
+/** `15 h 15 min · 10 Portionen`: what decides whether it is the one to cook today. */
+function about(card) {
+  if (!card) return 'This recipe does not read.'
+  return [totalTime(stepsOf(card)), card.yields].filter(Boolean).join(' · ')
 }
 
 function title(entry) {
@@ -101,15 +77,4 @@ function follow(run) {
     event.preventDefault()
     run()
   }
-}
-
-/** `Today`, `Yesterday`, `3 days ago`, then the date. */
-export function when(iso, now = new Date()) {
-  if (!iso) return ''
-  const day = (date) => Math.floor((date.getTime() - date.getTimezoneOffset() * 60000) / 86400000)
-  const days = day(now) - day(new Date(iso))
-  if (days <= 0) return 'Today'
-  if (days === 1) return 'Yesterday'
-  if (days < 7) return `${days} days ago`
-  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }

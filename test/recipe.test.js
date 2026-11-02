@@ -120,3 +120,10 @@ test('a timer counts down in hours, minutes and seconds, and then says so', asyn
   assert.equal(countdown(0), 'Done')
   assert.equal(countdown(-30), 'Done')
 })
+
+test('cooking, a heat that ends a step stands beside it, and one inside it stays', async () => {
+  const { heatOf } = await import('../app/cook.js')
+  const steps = stepsOf(parseCard('# P\n\n- backen 150 °C 3 h\n  - Ofen auf 150°C vorheizen\n    - Teig\n'))
+  assert.deepEqual(heatOf(steps[0]), { title: 'Ofen auf 150°C vorheizen', heat: null })
+  assert.deepEqual(heatOf(steps[1]), { title: 'Backen', heat: '150 °C' })
+})

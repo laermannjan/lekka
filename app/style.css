@@ -27,6 +27,7 @@
   --glass-edge: rgb(255 255 255 / 80%);
   --glass-shadow: 0 10px 30px rgb(0 0 0 / 14%);
   --scrim: rgb(0 0 0 / 40%);
+  --glow-strength: 30%;
 
   --face: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto,
     'Helvetica Neue', sans-serif;
@@ -50,6 +51,7 @@
     --glass-edge: rgb(255 255 255 / 14%);
     --glass-shadow: 0 10px 30px rgb(0 0 0 / 50%);
     --scrim: rgb(0 0 0 / 55%);
+    --glow-strength: 45%;
   }
 }
 
@@ -150,7 +152,7 @@ body:not(.home) .build {
   font-size: 22px;
   font-weight: 700;
   line-height: 1.25;
-  margin-top: 8px;
+  margin-top: 16px;
 }
 
 .quiet {
@@ -352,10 +354,6 @@ body:not(.home) .build {
   font-variant-numeric: tabular-nums;
 }
 
-.chevron {
-  color: var(--secondary);
-}
-
 .hint {
   color: var(--secondary);
   font-size: 14px;
@@ -392,84 +390,71 @@ body:not(.home) .build {
   width: 52px;
 }
 
-.shelf {
-  display: flex;
-  gap: 14px;
-  margin: 0 calc(-1 * var(--gutter));
-  overflow-x: auto;
-  padding: 0 var(--gutter);
-  scrollbar-width: none;
-}
-
-.shelf::-webkit-scrollbar {
-  display: none;
-}
-
-.tile {
-  color: var(--label);
-  display: flex;
-  flex: 0 0 150px;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-.tile .picture {
-  border-radius: 12px;
-  font-size: 56px;
-  height: 150px;
-  width: 150px;
-}
-
-.tile .main {
-  font-size: 16px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tile .sub {
-  color: var(--secondary);
-  font-size: 14px;
-}
-
 /* ---- a recipe -------------------------------------------------------------- */
 
+/* A recipe's screens are lit from above by its own colour, the way a player is by its
+   cover. */
+body.lit {
+  background:
+    radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--glow, #8e3b26) var(--glow-strength), transparent), transparent)
+      top / 100% 520px no-repeat,
+    var(--ground);
+}
+
+.recipe-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
 .recipe-title {
-  font-size: 30px;
+  font-size: 34px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .meta {
   color: var(--secondary);
   font-size: 16px;
   line-height: 22px;
-  margin-top: 4px;
+}
+
+.note {
+  font-size: 16px;
+  line-height: 22px;
+  margin-top: 6px;
+}
+
+.section-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.section-head .heading {
+  margin-top: 0;
 }
 
 .stepper {
   align-items: center;
   background: var(--group);
-  border-radius: 16px;
+  border-radius: 20px;
   display: flex;
-  gap: 8px;
-  min-height: 56px;
-  padding: 0 6px 0 16px;
-}
-
-.stepper .what {
-  flex: 1;
+  height: 40px;
+  padding: 0 2px;
 }
 
 .stepper .count {
-  font-size: 19px;
+  font-size: 16px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  min-width: 48px;
-  text-align: center;
+  padding: 0 4px;
+  white-space: nowrap;
 }
 
 .stepper button {
@@ -477,49 +462,72 @@ body:not(.home) .build {
   border-radius: 50%;
   color: var(--tint-text);
   display: inline-flex;
-  height: 44px;
+  height: 36px;
   justify-content: center;
-  width: 44px;
+  width: 36px;
 }
 
-.segmented {
-  background: var(--group);
-  border-radius: 22px;
-  display: flex;
-  height: 44px;
-  padding: 4px;
-}
-
-.segmented button {
-  border-radius: 18px;
-  flex: 1;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.segmented button[aria-pressed='true'] {
-  background: var(--raised);
-}
-
-.ingredient .end {
-  color: var(--tint-text);
-  font-size: 17px;
-  font-weight: 600;
-  padding: 6px 0 6px 8px;
-}
-
-.ingredient span.end {
-  color: var(--label);
-}
-
-.step {
-  align-items: flex-start;
-}
-
-ol.group {
+/* The method: a column of numbers to find your place by. */
+.steps {
+  column-gap: 14px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   list-style: none;
   margin: 0;
   padding: 0;
+  row-gap: 18px;
+}
+
+.steps > li {
+  align-items: baseline;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.steps .n {
+  color: var(--secondary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-width: 1.2em;
+}
+
+.steps .text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.steps .main {
+  font-weight: 600;
+}
+
+.steps .sub {
+  color: var(--secondary);
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.steps .end {
+  color: var(--secondary);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Into cook mode, from the bottom of the recipe's screen. */
+.start {
+  align-items: center;
+  background: var(--tint);
+  border-radius: 28px;
+  box-shadow: var(--glass-shadow);
+  color: var(--on-tint);
+  display: flex;
+  font-size: 17px;
+  font-weight: 600;
+  gap: 8px;
+  height: 56px;
+  justify-content: center;
 }
 
 textarea.paste {
@@ -548,27 +556,45 @@ textarea.paste {
   width: 44px;
 }
 
-.marker {
-  align-items: center;
-  border: 1.5px solid var(--separator);
-  border-radius: 50%;
-  display: inline-flex;
-  flex: none;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  height: 26px;
-  justify-content: center;
-  margin-top: -2px;
-  width: 26px;
-}
-
-.step .main {
-  font-weight: 500;
-}
-
 .table {
   overflow-x: auto;
+}
+
+/* What goes in: amounts in a column of their own, names lined up beside them. */
+.uses {
+  column-gap: 16px;
+  display: grid;
+  grid-template-columns: fit-content(40%) 1fr;
+  row-gap: 10px;
+}
+
+.uses > .use {
+  align-items: baseline;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.use .amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: left;
+}
+
+button.amount {
+  color: inherit;
+}
+
+.uses > .label {
+  color: var(--secondary);
+  font-size: 15px;
+  font-weight: 600;
+  grid-column: 1 / -1;
+  margin-top: 12px;
+}
+
+.uses > .label:first-child {
+  margin-top: 0;
 }
 
 /* ---- sheets: what slides up from the bottom --------------------------------- */
@@ -582,6 +608,7 @@ dialog.slide {
   margin: 0 auto;
   max-height: 88dvh;
   max-width: 720px;
+  overflow-y: auto;
   padding: 8px 20px calc(var(--bottom) + 8px);
   position: fixed;
   top: auto;
@@ -738,115 +765,130 @@ dialog.slide .menu .danger {
 
 /* ---- cooking ----------------------------------------------------------------- */
 
-/* Into cook mode, filled as far as the cooking has got. */
-.cta {
-  align-items: center;
-  background: color-mix(in srgb, var(--tint) 55%, black);
-  border-radius: 16px;
-  color: #ffffff;
-  display: flex;
-  font-size: 18px;
-  font-weight: 600;
-  gap: 10px;
-  height: 56px;
-  justify-content: center;
-  overflow: hidden;
-  position: relative;
-}
-
-.cta .fill {
-  background: var(--tint);
-  inset: 0 auto 0 0;
-  position: absolute;
-}
-
-.cta > :not(.fill) {
-  position: relative;
-}
-
 /* Cook mode is dark whatever the phone is set to: a kitchen is no place for a white
-   screen, and it is the one screen read from across the room. */
+   screen, and it is the one screen read from across the room. It is lit from above by
+   the recipe's own colour. */
 body.cook {
-  --ground: #161414;
-  --group: rgb(255 255 255 / 7%);
-  --raised: rgb(255 255 255 / 12%);
+  --ground: #121110;
+  --group: rgb(255 255 255 / 8%);
+  --raised: rgb(255 255 255 / 14%);
   --label: #f5f5f7;
-  --secondary: rgb(245 245 247 / 65%);
+  --secondary: rgb(245 245 247 / 62%);
   --separator: rgb(255 255 255 / 10%);
   --tint-text: #4da3ff;
-  --glass: rgb(255 255 255 / 12%);
-  --glass-edge: rgb(255 255 255 / 16%);
+  --glass: rgb(255 255 255 / 10%);
+  --glass-edge: rgb(255 255 255 / 14%);
   --glass-shadow: none;
-  background: linear-gradient(180deg, #4e3424 0%, #2a1d16 42%, #161414 100%) fixed;
+  --glow-strength: 60%;
   color-scheme: dark;
   min-height: 100dvh;
 }
 
-.cook-card {
-  background: var(--group);
-  border: 1px solid var(--separator);
-  border-radius: 18px;
-  box-shadow: 0 18px 40px rgb(0 0 0 / 35%);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-height: 340px;
-  padding: 22px 20px 18px;
+/* A sheet over the cook screen is solid, or the step would show through it. */
+body.cook dialog.slide {
+  background: #1f1d1b;
 }
 
-.cook-card h1 {
-  font-size: 40px;
+/* The step at the top, the way on at the bottom, where a thumb is, and kept there when
+   the step is longer than the screen. */
+body.cook #screen {
+  min-height: 100dvh;
+  padding-bottom: 0;
+}
+
+.now {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding-top: 8px;
+}
+
+.now h1 {
+  font-size: 44px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
   overflow-wrap: anywhere;
 }
 
-.cook-card .aside {
+.now .aside {
   color: var(--secondary);
-  font-size: 20px;
-  line-height: 27px;
+  font-size: 21px;
+  line-height: 28px;
+  margin-top: 10px;
 }
 
-.use {
-  align-items: baseline;
-  border-top: 1px solid var(--separator);
+/* The numbers a step is cooked by, each in a tile of its own. */
+.facts {
   display: flex;
-  font-size: 20px;
-  gap: 12px;
-  line-height: 26px;
-  padding: 7px 0;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.use .name {
-  flex: 1;
-}
-
-.use .amount {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.timer {
+.fact {
+  background: var(--group);
+  border-radius: 22px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 2px;
+  justify-content: center;
+  min-height: 92px;
+  padding: 12px 18px;
 }
 
-.timer .row {
+.fact .label {
+  color: var(--secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  line-height: 30px;
+  text-transform: uppercase;
+}
+
+.fact .value {
+  font-size: 34px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.facts > * {
+  flex: 1 1 0;
+}
+
+.fact.timer {
+  padding-right: 12px;
+  text-align: left;
+}
+
+.fact .head {
   align-items: center;
   display: flex;
-  gap: 12px;
   justify-content: space-between;
+  margin: -2px 0;
 }
 
-.timer .clock {
-  font-size: 52px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.1;
+.go {
+  align-items: center;
+  background: var(--label);
+  border-radius: 50%;
+  color: var(--ground);
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  position: relative;
+  width: 34px;
+}
+
+.running .go {
+  background: none;
+  color: var(--label);
+}
+
+.go .ring {
+  inset: 0;
+  position: absolute;
 }
 
 /* Run out: amber, like the light on a cooker. */
@@ -855,54 +897,65 @@ body.cook {
   color: #ffb340;
 }
 
-.track {
-  background: rgb(127 127 127 / 28%);
-  border-radius: 3px;
-  display: block;
-  height: 6px;
-  overflow: hidden;
+.now .uses {
+  font-size: 22px;
+  line-height: 28px;
+  row-gap: 14px;
 }
 
-.track .fill {
-  background: var(--tint);
-  display: block;
-  height: 100%;
-}
-
-.then {
-  border-top: 1px solid var(--separator);
-  color: var(--secondary);
-  font-size: 16px;
-  line-height: 22px;
-  margin-top: auto;
-  padding-top: 10px;
-}
-
-/* The card at the top and the controls at the bottom, where a thumb is. */
-body.cook #screen {
-  min-height: 100dvh;
-  padding-bottom: var(--bottom);
-}
-
-.progress {
+.foot {
+  background: linear-gradient(to bottom, transparent, var(--ground) 24px);
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: auto;
+  gap: 14px;
+  margin: auto calc(-1 * var(--gutter)) 0;
+  padding: 28px var(--gutter) var(--bottom);
+  position: sticky;
 }
 
-.progress .words {
+.others {
   display: flex;
-  font-size: 15px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  align-items: center;
+  border-radius: 22px;
+  display: inline-flex;
+  font-size: 16px;
+  gap: 8px;
+  height: 44px;
+  max-width: 100%;
+  padding: 0 16px 0 11px;
+}
+
+.chip .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip .clock-small {
   font-weight: 600;
-  justify-content: space-between;
+}
+
+/* A timer that has run out is the brightest thing on the screen until it is seen to. */
+.chip:has(.over) {
+  background: #ffb340;
+  border-color: transparent;
+  color: #121110;
+}
+
+.chip:has(.over) .clock-small {
+  color: inherit;
 }
 
 .controls {
   align-items: center;
   display: flex;
-  gap: 14px;
-  margin-top: 8px;
+  gap: 12px;
 }
 
 .controls .round {
@@ -913,36 +966,16 @@ body.cook #screen {
 .controls .primary {
   background: #f5f5f7;
   border-radius: 32px;
-  color: #161414;
+  color: #121110;
   flex: 1;
   font-size: 18px;
   font-weight: 700;
   height: 64px;
   min-width: 0;
   overflow: hidden;
-  padding: 0 18px;
+  padding: 0 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.tools {
-  display: flex;
-  justify-content: space-around;
-}
-
-.tool {
-  align-items: center;
-  color: var(--secondary);
-  display: flex;
-  flex-direction: column;
-  font-size: 15px;
-  gap: 4px;
-  min-height: 44px;
-  min-width: 110px;
-}
-
-.tool svg {
-  color: var(--label);
 }
 
 /* Over every other screen while something is cooking. */
@@ -993,44 +1026,12 @@ body.cook #screen {
   display: inline-flex;
 }
 
+.mini .ring {
+  color: var(--tint-text);
+}
+
 .clock-small {
   font-variant-numeric: tabular-nums;
-}
-
-dialog.slide .menu .label {
-  color: var(--secondary);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 14px 16px 4px;
-  text-transform: uppercase;
-}
-
-dialog.slide .menu .use {
-  font-size: 17px;
-  padding: 9px 16px;
-}
-
-.timer-row {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  padding: 10px 14px;
-}
-
-.timer-row .text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-}
-
-dialog.slide .menu .timer-row button {
-  background: var(--group);
-  border-radius: 20px;
-  font-weight: 600;
-  min-height: 40px;
-  padding: 0 14px;
-  width: auto;
 }
 
 /* ---- what is still drawn as the datasheet ----------------------------------- */
