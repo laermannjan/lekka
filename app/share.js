@@ -93,7 +93,8 @@ export function shareSheet({ title, me, held: known, onList, onPeople, onGive, o
   )
   box.append(form)
   box.onclose = () => box.remove()
-  document.body.append(box)
+  // Inside the datasheet's own layer, which is where its rules reach.
+  ;(document.getElementById?.('layer') ?? document.body).append(box)
   box.showModal()
   // The holders are already in hand, since asking for them is how we knew to open at all.
   refresh(known ?? null)

@@ -1,10 +1,8 @@
 import { parseCard, ParseError } from './card.js'
-import { renderReading } from './read.js'
-import { renderOverview } from './overview.js'
 import * as api from './api.js'
 import { toDraft } from './edit.js'
 import { buildEditor } from './editor.js'
-import { section, specification, hold } from './page.js'
+import { section } from './page.js'
 import {
   devices as renderDevices,
   household as renderHousehold,
@@ -13,19 +11,12 @@ import {
 } from './door.js'
 import { shareSheet } from './share.js'
 import { address, arrive } from './link.js'
+import { renderLibrary, renderResults } from './library.js'
+import { renderRecipe } from './recipe-page.js'
+import { element, icon, roundButton, slide } from './ui.js'
 
-const SCALES = [
-  [0.5, '½×'],
-  [1, '1×'],
-  [1.5, '1½×'],
-  [2, '2×'],
-]
-
-const acts = document.getElementById('acts')
 const screen = document.getElementById('screen')
-const where = document.getElementById('where')
-const door = document.getElementById('door')
-const scope = document.getElementById('scope')
+const dock = document.getElementById('dock')
 
 /**
  * One question before the first screen: is there a door, and are we through it. It is
@@ -44,14 +35,11 @@ async function boot() {
 let instance = { mode: 'NONE', empty: false, person: null, session: null }
 
 /**
- * What we hold on the recipe now open, as the read said: `owner`, `edit` or `read`.
- *
- * Kept here rather than handed from screen to screen because it belongs to the recipe
- * and not to any one view of it - `Edit` opens the editor on the card just read, Cancel
- * comes back to it, and the standing is the same the whole way through. Only the foot
- * reads it, and only while the address is a recipe's.
+ * The library as last read: every recipe with its text, parsed. Search runs over it and
+ * a recipe opened from it draws at once. It is read again whenever the list is shown and
+ * dropped whenever something is written, so it is never older than the last look.
  */
-let holding = null
+let library = null
 
 async function start() {
   const here = arrive()
@@ -65,15 +53,346 @@ async function start() {
     return showSignIn(instance.empty ? 'first' : null)
   }
 
-  if (here.kind === 'card') return showCard(here.id)
-
-  // The foot says `/new` while a fresh recipe is being written, so the address has to
-  // mean it: without this, opening it lands on the overview under a foot saying `/new`.
+  if (here.kind === 'card') return showRecipe(here.id)
   if (here.path === '/new') return showWriting()
-
   if (here.path === '/devices') return showDevices()
+  if (here.path === '/search') return showSearch()
+  return showLibrary()
+}
 
-  return showOverview()
+/* ---- the library ------------------------------------------------------------ */
+
+async function showLibrary() {
+  go('/', { home: true })
+  try {
+    library = await readLibrary()
+  } catch (error) {
+    if (error instanceof api.ApiError && error.status === 401) return locked()
+    return show(element('h1', 'title', 'Recipes'), notice(`The library did not load. ${reason(error)}`))
+  }
+
+  show(...renderLibrary(library, { open: showRecipe, corner: whoButton() }))
+  setDock(
+    element('div', 'row', undefined, [searchOpener(), roundButton('plus', 'Add a recipe', addSheet)]),
+  )
+}
+
+async function readLibrary() {
+  const rows = await api.cards()
+  return rows.map((row) => {
+    try {
+      return { ...row, card: parseCard(row.text ?? '') }
+    } catch {
+      return { ...row, card: null }
+    }
+  })
+}
+
+/** Your name, and the way to the browsers signed in as you. Only where there is a door. */
+function whoButton() {
+  if (!instance.person) return null
+  return roundButton('person', `${instance.person.name}: devices and sign out`, () => {
+    history.replaceState(null, '', '/devices')
+    showDevices()
+  })
+}
+
+/** Looks like the search field and is a button: tapping it opens search with the keyboard up. */
+function searchOpener() {
+  const opener = element('button', 'searchbox glass', undefined, [icon('search'), 'Search recipes, ingredients'])
+  opener.type = 'button'
+  opener.onclick = () => showSearch()
+  return opener
+}
+
+function addSheet() {
+  const sheet = slide(
+    element('h2', '', 'Add a recipe'),
+    element('div', 'menu', undefined, [
+      menuItem('edit', 'Write one', () => {
+        sheet.close()
+        showWriting()
+      }),
+      menuItem('paste', 'Paste one', () => {
+        sheet.close()
+        pasteSheet()
+      }),
+    ]),
+    element('p', 'hint', 'From the web: share the page to lekka with the Add to lekka shortcut.'),
+  )
+}
+
+function menuItem(name, text, run, className = '') {
+  const button = element('button', className, undefined, [icon(name, 20), text])
+  button.type = 'button'
+  button.onclick = run
+  return button
+}
+
+/** A recipe in the card's own text, or as the JSON the guide describes: the server reads both. */
+function pasteSheet() {
+  const area = element('textarea', 'paste')
+  area.rows = 10
+  area.spellcheck = false
+  area.setAttribute('aria-label', 'Recipe')
+  area.placeholder = '# Pfannkuchen (12 Stück)\n\n- braten (2 min je Seite)\n  - verrühren\n    - Mehl: 250 g'
+  const wrong = element('p', 'hint warning')
+  const take = element('button', 'first', 'Add')
+  take.type = 'submit'
+  const cancel = element('button', 'second', 'Cancel')
+  cancel.type = 'button'
+
+  const form = element('form', '', undefined, [
+    element('h2', '', 'Paste a recipe'),
+    area,
+    wrong,
+    element('div', 'actions', undefined, [cancel, take]),
+  ])
+  const sheet = slide(form)
+  cancel.onclick = () => sheet.close()
+  form.onsubmit = async (event) => {
+    event.preventDefault()
+    if (take.disabled) return
+    take.disabled = true
+    try {
+      const made = await api.createCard(area.value)
+      sheet.close()
+      library = null
+      showRecipe(made.id)
+    } catch (error) {
+      wrong.textContent = error instanceof api.ApiError && error.status === 400 ? error.message : reason(error)
+      take.disabled = false
+    }
+  }
+  area.focus()
+}
+
+/* ---- search ----------------------------------------------------------------- */
+
+async function showSearch() {
+  go('/search')
+  const input = element('input')
+  input.type = 'search'
+  input.placeholder = 'Search recipes, ingredients'
+  input.setAttribute('aria-label', 'Search recipes, ingredients')
+  input.enterKeyHint = 'search'
+  input.autocomplete = 'off'
+
+  const clear = element('button', '', undefined, [icon('clear', 22)])
+  clear.type = 'button'
+  clear.className = 'quiet'
+  clear.setAttribute('aria-label', 'Clear search')
+
+  setDock(
+    element('div', 'row', undefined, [
+      element('label', 'searchbox glass', undefined, [icon('search'), input, clear]),
+      roundButton('close', 'Close search', () => {
+        history.replaceState(null, '', '/')
+        showLibrary()
+      }),
+    ]),
+  )
+  // Before anything is awaited, while this is still the tap that opened search: a phone
+  // raises its keyboard only for a focus the person caused.
+  input.focus()
+
+  const paint = () => {
+    clear.hidden = input.value === ''
+    show(...renderResults(library ?? [], input.value, { open: showRecipe }))
+  }
+  input.oninput = paint
+  clear.onclick = () => {
+    input.value = ''
+    input.focus()
+    paint()
+  }
+  paint()
+
+  if (!library) {
+    library = await readLibrary().catch(() => [])
+    paint()
+  }
+}
+
+/* ---- a recipe ----------------------------------------------------------------- */
+
+async function showRecipe(id) {
+  history.replaceState(null, '', address(id))
+  go(address(id))
+
+  let text = library?.find((entry) => entry.id === id)?.text ?? null
+  if (text === null) {
+    const held = await api.readCard(id).catch(() => null)
+    if (held === null) return fail('No recipe under this link.')
+    text = held.text
+  }
+
+  let card
+  try {
+    card = parseCard(text)
+  } catch (error) {
+    if (!(error instanceof ParseError)) throw error
+    return fail(`Line ${error.line}: ${error.message}`)
+  }
+
+  const draw = (state) => {
+    show(
+      ...renderRecipe(card, state, {
+        back: () => {
+          history.replaceState(null, '', '/')
+          showLibrary()
+        },
+        more: () => recipeMenu(id, card),
+        redraw: draw,
+      }),
+    )
+  }
+  draw({ factor: 1, table: false })
+}
+
+function recipeMenu(id, card) {
+  const sheet = slide(
+    element('h2', '', card.title),
+    element('div', 'menu', undefined, [
+      menuItem('edit', 'Edit', () => {
+        sheet.close()
+        showEditor(id, toDraft(card))
+      }),
+      instance.mode === 'GRANT'
+        ? menuItem('share', 'Share', () => {
+            sheet.close()
+            share(id, card)
+          })
+        : null,
+      menuItem(
+        'trash',
+        'Delete',
+        () => {
+          sheet.close()
+          erase(id, card)
+        },
+        'danger',
+      ),
+    ]),
+  )
+}
+
+/** Deleting drops the recipe itself, for everyone who could open it. */
+async function erase(id, card) {
+  if (!confirm(`Delete ${card.title} for everyone who can open it?`)) return
+  if ((await attempt(() => api.deleteCard(id), 'The recipe was not deleted.')) === FAILED) return
+  library = null
+  history.replaceState(null, '', '/')
+  showLibrary()
+}
+
+/* ---- still drawn as the datasheet ---------------------------------------------- */
+
+/**
+ * A screen not drawn again yet: the same parts as before, in a datasheet box under a bar
+ * with the way back. `back` is the label of where it leads.
+ */
+function legacy(title, back, ...parts) {
+  show(
+    element('div', 'bar', undefined, [
+      back ? roundButton('back', back.label, back.run) : null,
+      element('span', 'middle', title),
+      back ? element('span', 'round') : null,
+    ]),
+    element('div', 'datasheet', undefined, parts),
+  )
+}
+
+/**
+ * The editor holds the draft, so the screen is built once and repaints itself. Coming
+ * back out re-reads the recipe from the server, which is the only copy that counts.
+ *
+ * A recipe being written for the first time has no id yet. It is made on the first save
+ * and not before: a recipe nobody finished writing never reaches the server at all.
+ */
+function showEditor(id, draft) {
+  go(id ? address(id) : '/new')
+  const close = () => {
+    library = null
+    if (id) return showRecipe(id)
+    history.replaceState(null, '', '/')
+    return showLibrary()
+  }
+  legacy(
+    id ? 'Edit' : 'New recipe',
+    null,
+    buildEditor({
+      draft,
+      onClose: close,
+      onSave: async (text) => {
+        if (id) {
+          try {
+            await api.writeCard(id, text)
+          } catch (error) {
+            return `Not saved. ${reason(error)}`
+          }
+          return null
+        }
+
+        let made
+        try {
+          made = await api.createCard(text)
+        } catch (error) {
+          return `Not saved. ${reason(error)}`
+        }
+        id = made.id
+        history.replaceState(null, '', address(id))
+        return null
+      },
+    }),
+  )
+}
+
+function showWriting() {
+  history.replaceState(null, '', '/new')
+  showEditor(null, { title: '', yields: null, notes: [], preparations: [], strands: [] })
+}
+
+function share(id, card) {
+  shareOpen(id, card).catch((error) => notice(`Who holds this did not load. ${reason(error)}`))
+}
+
+/**
+ * Whether this one is yours is the server's to say, so it is asked before anything opens:
+ * a panel that appears and then explains it cannot do anything is worse than no panel.
+ */
+async function shareOpen(id, card) {
+  let held
+  try {
+    held = await api.grantsOn(id)
+  } catch (error) {
+    if (error instanceof api.ApiError && error.status === 404)
+      return notice('This recipe is not yours to share.')
+    throw error
+  }
+  shareSheet({
+    id,
+    title: card.title,
+    me: instance.person?.id ?? null,
+    held,
+    onPeople: () => api.people().catch(() => null),
+    onList: async () => {
+      try {
+        return await api.grantsOn(id)
+      } catch (error) {
+        notice(`Who holds this did not load. ${reason(error)}`)
+        return null
+      }
+    },
+    onGive: async (asked) => {
+      try {
+        return await api.share(id, asked)
+      } catch (error) {
+        return { error: `Not shared. ${reason(error)}` }
+      }
+    },
+    onRevoke: (grant) => attempt(() => api.revokeGrant(grant), 'It was not revoked.'),
+  })
 }
 
 /** A join link's token, carried in the fragment so it reaches no log. */
@@ -83,20 +402,17 @@ function joinLink() {
 }
 
 function showSignIn(message = null) {
-  page('/')
+  go('/')
   const first =
     message === 'first'
-      ? band(
-          'Nobody has signed in here yet. The link that makes the first person is in the server’s log.',
-          'warning',
-        )
+      ? band('Nobody has signed in here yet. The link that makes the first person is in the server’s log.', 'warning')
       : null
-  show(
+  legacy(
+    'lekka',
+    null,
     first ?? (message ? band(message, 'warning') : null),
     section('Sign in'),
-    signInForm({
-      onSignIn: signedIn,
-    }),
+    signInForm({ onSignIn: signedIn }),
   )
 }
 
@@ -105,9 +421,7 @@ async function signedIn(name, password) {
     await api.signIn(name, password)
   } catch (error) {
     return showSignIn(
-      error instanceof api.ApiError && error.status === 401
-        ? 'That name and password do not match.'
-        : reason(error),
+      error instanceof api.ApiError && error.status === 401 ? 'That name and password do not match.' : reason(error),
     )
   }
   instance = await api.me()
@@ -119,16 +433,20 @@ async function signedIn(name, password) {
  * never has to guess and a spent or expired one says so before anybody fills a form in.
  */
 async function showJoining(token) {
-  page('/join')
+  go('/join')
   const invite = await api.invite(token).catch(() => null)
   if (!invite)
-    return show(
+    return legacy(
+      'lekka',
+      null,
       section('Join'),
       band('This link has been used already, or it has expired. Ask for another.', 'warning'),
       signInForm({ onSignIn: signedIn }),
     )
 
-  show(
+  legacy(
+    'lekka',
+    null,
     section('Join'),
     joiningForm({
       invite,
@@ -148,19 +466,25 @@ async function showJoining(token) {
 }
 
 async function showDevices() {
-  page('/devices', recipesAction())
+  go('/devices')
   const list = await attempt(() => api.sessions(), 'The list did not load.')
   if (list === FAILED) return
 
-  const everyone = instance.person?.admin
-    ? await api.people().catch(() => null)
-    : null
+  const everyone = instance.person?.admin ? await api.people().catch(() => null) : null
 
-  show(
+  legacy(
+    instance.person?.name ?? 'Devices',
+    {
+      label: 'Back to recipes',
+      run: () => {
+        history.replaceState(null, '', '/')
+        showLibrary()
+      },
+    },
     section('Devices'),
     renderDevices(list, instance.session, {
       onRevoke: async (id) => {
-        if (await attempt(() => api.revokeSession(id), 'It was not revoked.') === FAILED) return
+        if ((await attempt(() => api.revokeSession(id), 'It was not revoked.')) === FAILED) return
         showDevices()
       },
       onInvite: async () => {
@@ -180,13 +504,10 @@ async function showDevices() {
       ? renderHousehold(everyone, instance.person.id, {
           onRemove: async (person) => {
             if (
-              !confirm(
-                `Remove ${person.name}? They are signed out everywhere, and any recipe they own becomes yours.`,
-              )
+              !confirm(`Remove ${person.name}? They are signed out everywhere, and any recipe they own becomes yours.`)
             )
               return
-            if ((await attempt(() => api.removePerson(person.id), 'They were not removed.')) === FAILED)
-              return
+            if ((await attempt(() => api.removePerson(person.id), 'They were not removed.')) === FAILED) return
             showDevices()
           },
         })
@@ -197,9 +518,9 @@ async function showDevices() {
 /**
  * What this browser keeps of somebody else's recipes, dropped. The app shell is left in
  * place so lekka still opens without a network; only what was read through the door goes.
- * It cannot reach a copy already saved elsewhere on the machine, and the screens say so.
  */
 async function purge() {
+  library = null
   if (!globalThis.caches) return
   try {
     for (const name of await caches.keys()) {
@@ -214,364 +535,14 @@ async function purge() {
   }
 }
 
-/**
- * The session ended somewhere else - another browser's Revoke, or a restart. Say so once,
- * and keep nothing that was read through the door.
- */
+/** The session ended somewhere else - another browser's Revoke, or a restart. */
 async function locked() {
   instance = { ...instance, person: null, session: null }
   await purge()
   showSignIn('You were signed out.')
 }
 
-async function showOverview() {
-  page('/', whoAction())
-
-  let list
-  try {
-    list = await api.cards()
-  } catch (error) {
-    if (error instanceof api.ApiError && error.status === 401) return locked()
-    return show(section('Recipes'), band(`The library did not load. ${reason(error)}`, 'warning'))
-  }
-
-  show(
-    section('Recipes'),
-    renderOverview(await describe(list), {
-      onDelete: (id, card) => erase(id, card),
-      onImport: () => showImport(),
-      onCreate: () => showWriting(),
-    }),
-  )
-}
-
-/**
- * Your own name in the masthead, and the way to the browsers signed in as you. Absent on
- * an instance with no access control, where there is nobody to be.
- */
-function whoAction() {
-  if (!instance.person) return null
-  const button = element('button', 'quiet', instance.person.name)
-  // `replaceState`, as everywhere else here: the app has no `popstate` handler, so a
-  // pushed entry would let Back change the address and leave this screen standing.
-  button.onclick = () => {
-    history.replaceState(null, '', '/devices')
-    showDevices()
-  }
-  return button
-}
-
-/** The way off the devices screen, since the address it sits at is not a recipe. */
-function recipesAction() {
-  const button = element('button', 'quiet', 'Recipes')
-  button.onclick = () => {
-    history.replaceState(null, '', '/')
-    showOverview()
-  }
-  return button
-}
-
-async function showCard(id, state = {}) {
-  const { scale = 1, at = 0, fit = false } = state
-  const here = { scale, at, fit }
-
-  holding = null
-  const held = await load(id)
-  if (held === null) return fail('No recipe under this link.')
-  holding = held.scope
-
-  let card
-  try {
-    card = parseCard(held.text)
-  } catch (error) {
-    if (!(error instanceof ParseError)) throw error
-    return fail(`Line ${error.line}: ${error.message}`)
-  }
-
-  const fitting = fitter(id, here)
-
-  /*
-   * No row of controls above the table, and none below it but the acts.
-   *
-   * The scale and the fit are in the masthead. Neither is about a point in the recipe -
-   * one multiplies every amount on it, the other decides how the page draws the whole
-   * thing - so they belong where the page's own controls are.
-   *
-   * They were a bar between the heading and the table, which was the right instinct in
-   * the wrong place: writing has nothing to put there, so the table rose by the height
-   * of that row the moment `Edit` was pressed - out from under the pointer that pressed
-   * it. The scale then went into the heading cell of the ingredient column, which is
-   * nearer still to what it changes - but that cell is held at the left edge while the
-   * card rolls, so the switch was dragged out over the middle of the table.
-   */
-  page(`/r/${id}`, scales(id, here), fitting.button)
-  show(
-    section(card.title, card.yields),
-    body(card, id, here, fitting.tell),
-    // What changes the recipe itself sits past it, out of the way of reading.
-    after(composer(id, card), sharer(id, card)),
-    specification(card),
-  )
-}
-
-function body(card, id, state, onFits) {
-  // Reading is a scroll, not a redraw: the place is only kept so that changing the scale
-  // comes back to the step the cook was standing on.
-  return renderReading(card, state.scale, state.at, {
-    fit: state.fit,
-    onFits,
-    onAt: (at) => {
-      state.at = at
-    },
-  })
-}
-
-/**
- * The whole table at once, or the size it was written at. A recipe wider than the screen
- * can be read a step at a time or shrunk until it fits, and those are the two answers
- * there are: one keeps the type and gives up seeing it all, the other keeps the card and
- * gives up the type. So it is one button that swaps between them.
- *
- * It says what it will do rather than what is set, the way every switchable control here
- * does, and it is not offered at all on a recipe that already fits - there would be
- * nothing for it to do, and a control that does nothing is worse than no control.
- */
-function fitter(id, state) {
-  const button = element('button', 'quiet', state.fit ? 'Actual size' : 'Fit to screen')
-  button.onclick = () => showCard(id, { ...state, fit: !state.fit })
-  button.hidden = true
-  return {
-    button,
-    // A recipe drawn whole needs no fitting; one already fitted needs the way back.
-    tell: (whole) => {
-      button.hidden = whole && !state.fit
-    },
-  }
-}
-
-/**
- * Offered on every recipe you can see. Whether the write lands is the server's to say,
- * and it says so by refusing - which the editor reports in place. A button hidden on a
- * guess would be worse: under `GRANT` the answer depends on a row this browser cannot read.
- */
-function composer(id, card) {
-  const button = element('button', 'quiet', 'Edit')
-  button.onclick = () => showEditor(id, toDraft(card))
-  return button
-}
-
-/**
- * Offered wherever there is such a thing as owning a recipe. Whether this one is yours is
- * the server's to say, and it says so when the panel asks - hiding the button on a guess
- * would need a second request on every card just to decide whether to draw itself.
- */
-function sharer(id, card) {
-  if (instance.mode !== 'GRANT') return null
-  const button = element('button', 'quiet', 'Share')
-  button.onclick = async () => {
-    /* Whether this one is yours is the server's to say, so it is asked before anything
-     * opens. A panel that appears and then explains it cannot do anything is worse than
-     * no panel: it was showing an empty list of holders behind its own refusal. */
-    let held
-    try {
-      held = await api.grantsOn(id)
-    } catch (error) {
-      return notice(
-        error instanceof api.ApiError && error.status === 404
-          ? 'This recipe is not yours to share.'
-          : `Who holds this did not load. ${reason(error)}`,
-      )
-    }
-
-    shareSheet({
-      id,
-      title: card.title,
-      me: instance.person?.id ?? null,
-      held,
-      onPeople: () => api.people().catch(() => null),
-      onList: async () => {
-        try {
-          return await api.grantsOn(id)
-        } catch (error) {
-          notice(`Who holds this did not load. ${reason(error)}`)
-          return null
-        }
-      },
-      onGive: async (asked) => {
-        try {
-          return await api.share(id, asked)
-        } catch (error) {
-          return { error: `Not shared. ${reason(error)}` }
-        }
-      },
-      onRevoke: (grant) => attempt(() => api.revokeGrant(grant), 'It was not revoked.'),
-    })
-  }
-  return button
-}
-
-/**
- * The editor holds the draft, so the screen is built once and repaints itself. Coming
- * back out re-reads the recipe from the server, which is the only copy that counts.
- *
- * A recipe being written for the first time has no id yet. It is made on the first save
- * and not before: `Create` opens an empty editor with the name waiting, and a recipe
- * nobody finished writing never reaches the server at all.
- */
-function showEditor(id, draft) {
-  /*
-   * The masthead is cleared, because what was on it belongs to the recipe being read.
-   * `show` replaces the screen and not the masthead, so the scale and `Fit to screen`
-   * outlived the view they were put there by - and both answer with `showCard`, which
-   * re-reads the recipe from the server. Pressing one while writing threw the draft away
-   * without so much as asking, which is the one thing `Cancel` exists to prevent.
-   */
-  page(id ? `/r/${id}` : '/new')
-
-  show(
-    buildEditor({
-      draft,
-      onClose: () => (id ? showCard(id) : showOverview()),
-      onSave: async (text) => {
-        if (id) {
-          try {
-            await api.writeCard(id, text)
-          } catch (error) {
-            return `Not saved. ${reason(error)}`
-          }
-          return null
-        }
-
-        let made
-        try {
-          made = await api.createCard(text)
-        } catch (error) {
-          return `Not saved. ${reason(error)}`
-        }
-        id = made.id
-        history.replaceState(null, '', address(id))
-        page(`/r/${id}`)
-        return null
-      },
-    }),
-  )
-}
-
-/**
- * A recipe, or null. There is no copy kept here: the service worker already caches every
- * successful GET and serves it when the network is gone, and a second copy in local
- * storage was the same bytes in a place nothing else could clear.
- */
-async function load(id) {
-  return api.readCard(id).catch(() => null)
-}
-
-async function describe(list) {
-  return Promise.all(
-    list.map(async (row) => {
-      // The library row already says what is held on it, so only the text is wanted here.
-      const held = await load(row.id)
-      try {
-        return { ...row, card: held === null ? null : parseCard(held.text) }
-      } catch {
-        return { ...row, card: null }
-      }
-    }),
-  )
-}
-
-/** Deleting drops the recipe itself, for everyone who could open it. */
-async function erase(id, card) {
-  const name = card ? card.title : id
-  if (!confirm(`Delete ${name} for everyone who can open it?`)) return
-  if ((await attempt(() => api.deleteCard(id), 'The recipe was not deleted.')) === FAILED) return
-  showOverview()
-}
-
-/**
- * A recipe made here, rather than brought in. It starts empty in the editor with its
- * name waiting: a name is one word, and a whole screen to collect one word is a screen
- * the editor can collect it in.
- */
-function showWriting() {
-  // The foot says `/new`, so the address bar has to as well - and a reload has to land
-  // back here, which is what the route in `start` is for. Replaced rather than pushed:
-  // nothing else in this app pushes, and a Back that walked into a draft with no
-  // history to answer it would be worse than one that leaves the page.
-  history.replaceState(null, '', '/new')
-  // A recipe you are making is a recipe you will own, in every mode there is.
-  holding = 'owner'
-  page('/new')
-  showEditor(null, {
-    title: '',
-    yields: null,
-    notes: [],
-    preparations: [],
-    strands: [],
-  })
-}
-
-/**
- * A recipe that exists somewhere already. It is read exactly as a stored one is, so
- * anything the format accepts comes in whole and anything it does not is reported by
- * line, in the place the line is.
- */
-function showImport() {
-  const box = element('dialog', 'compose')
-  const form = element('form', 'body')
-  form.method = 'dialog'
-
-  const heading = element('h2', 'heading', 'Import a recipe')
-  heading.id = 'import-title'
-  box.setAttribute('aria-labelledby', heading.id)
-
-  const area = element('textarea')
-  area.rows = 9
-  area.spellcheck = false
-  area.placeholder = '# Pfannkuchen (12 Stück)\n\n- braten (2 min je Seite)\n  - verrühren\n    - Mehl: 250 g'
-
-  const field = element('label', 'row wide', undefined, [
-    element('span', 'name', 'Text'),
-    area,
-    element('span', 'hint', 'Paste a recipe. Anything the format accepts is read whole.'),
-  ])
-
-  const wrong = element('span', 'hint warn')
-  wrong.hidden = true
-
-  const take = element('button', 'go', 'Import')
-  take.type = 'submit'
-
-  const cancel = element('button', 'quiet', 'Cancel')
-  cancel.type = 'button'
-  cancel.onclick = () => box.close()
-
-  form.onsubmit = async (event) => {
-    event.preventDefault()
-    try {
-      parseCard(area.value)
-    } catch (error) {
-      if (!(error instanceof ParseError)) throw error
-      wrong.textContent = `Line ${error.line}: ${error.message}`
-      wrong.hidden = false
-      return
-    }
-    if (take.disabled) return
-    take.disabled = true
-
-    const made = await attempt(() => api.createCard(area.value), 'The recipe was not created.')
-    if (made === FAILED) return void (take.disabled = false)
-    box.close()
-    showOverview()
-  }
-
-  form.append(heading, field, wrong, element('div', 'actions', undefined, [take, cancel]))
-  box.append(form)
-  box.onclose = () => box.remove()
-  document.body.append(box)
-  box.showModal()
-  area.focus()
-}
+/* ---- the frame ------------------------------------------------------------------ */
 
 const FAILED = Symbol('failed')
 
@@ -580,14 +551,11 @@ async function attempt(work, message) {
   try {
     return await work()
   } catch (error) {
-    // Being told to sign in is not a failed write, it is the session having ended
-    // somewhere else - on another browser's Revoke, or on a restart. Say so once, and
-    // keep nothing that was read through the door.
     if (error instanceof api.ApiError && error.status === 401) {
       await locked()
       return FAILED
     }
-    notice(`${message} ${reason(error)}`)
+    screen.prepend(notice(`${message} ${reason(error)}`))
     return FAILED
   }
 }
@@ -599,55 +567,42 @@ function reason(error) {
   return error.message
 }
 
-/** Above whatever is on the screen, so the text the user typed stays where it is. */
 function notice(message) {
-  screen.prepend(band(message, 'warning'))
+  return element('div', 'notice warning', message)
 }
 
-/**
- * The address, whatever the masthead is offering, and what the foot says about both.
- *
- * The foot carries the settings rather than the screen: which access control this
- * instance keeps, and - on a recipe - what the reader holds on it. The address decides
- * whether the second is drawn at all, because it is the address that says whether there
- * is a recipe to hold anything on.
- */
-function page(path, ...actions) {
-  acts.replaceChildren(...actions.filter(Boolean))
-  where.textContent = path
-  door.textContent = `ACCESS_CONTROL: ${instance.mode}`
-  const held = path.startsWith('/r/') || path === '/new' ? holding : null
-  scope.hidden = held === null
-  if (held !== null) scope.textContent = hold(held)
-}
-
-function fail(message) {
-  page(location.pathname)
-  show(band(message, 'warning'))
-}
-
-function show(...parts) {
-  screen.replaceChildren(...parts.filter(Boolean))
-}
-
+/** The datasheet's own warning, for the screens still drawn with it. */
 function band(message, kind = '') {
   return element('div', `band ${kind}`.trim(), message)
 }
 
-function after(...parts) {
-  const kept = parts.filter(Boolean)
-  return kept.length ? element('div', 'bar after', undefined, kept) : null
+/** A new screen: nothing floating over it yet, scrolled to its top. */
+function go(path, { home = false } = {}) {
+  setDock()
+  document.body.classList.toggle('home', home)
+  window.scrollTo(0, 0)
+  if (path !== location.pathname) history.replaceState(null, '', path)
 }
 
-function scales(id, state) {
-  const group = element('span', 'switch')
-  for (const [factor, text] of SCALES) {
-    const button = element('button', '', text)
-    button.setAttribute('aria-pressed', factor === state.scale)
-    button.onclick = () => showCard(id, { ...state, scale: factor })
-    group.append(button)
-  }
-  return group
+function setDock(...rows) {
+  dock.replaceChildren(...rows.filter(Boolean))
+  document.body.classList.toggle('docked', dock.childElementCount > 0)
+}
+
+function fail(message) {
+  show(
+    element('div', 'bar', undefined, [
+      roundButton('back', 'Back to recipes', () => {
+        history.replaceState(null, '', '/')
+        showLibrary()
+      }),
+    ]),
+    notice(message),
+  )
+}
+
+function show(...parts) {
+  screen.replaceChildren(...parts.filter(Boolean))
 }
 
 /**
@@ -656,16 +611,6 @@ function scales(id, state) {
  */
 function register() {
   navigator.serviceWorker?.register('/sw.js').catch((error) => console.warn('no worker', error))
-}
-
-function element(tag, className = '', text, children = []) {
-  const node = document.createElement(tag)
-  node.className = className
-  if (text !== undefined) node.textContent = text
-  // A part that is not there is left out. Several of the toolbar's controls answer with
-  // nothing on a recipe nobody may change, and `append(null)` writes the word "null".
-  node.append(...children.filter(Boolean))
-  return node
 }
 
 /* Last, once every binding above exists. WebKit checks a `let` when an assignment names

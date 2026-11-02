@@ -2,6 +2,12 @@
 
 Colours, type and placement. What is drawn where is in `LAYOUT.md`.
 
+Since the native look, this describes the datasheet only: the table, the editor and
+the screens for signing in and sharing, which `app/sheet.css` draws under a
+`.datasheet` box. Everything else follows the phone it runs on - the system's face, its
+grouped lists, light and dark, one tint for what can be pressed, glass for what floats -
+as `app/style.css` says at its top.
+
 The page is a datasheet: a white sheet with a hard edge, laid on a grey ground,
 holding tables of numbers. Nothing is coloured to look important, nothing is
 enlarged to look important, and every device on the page means one thing.

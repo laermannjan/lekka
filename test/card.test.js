@@ -67,6 +67,14 @@ test('scaling', () => {
   assert.equal(formatAmount(scaleAmount(parseAmount('2 l'), 3)), '6 l')
   assert.equal(formatAmount(scaleAmount(parseAmount('40-60 g'), 0.5)), '20-30 g')
   assert.equal(formatAmount(scaleAmount(parseAmount('Prise'), 2)), 'Prise')
+  // Scaled by what somebody has, an amount is rounded the way it is measured.
+  const by = 1.8 / 2.3
+  assert.equal(formatAmount(scaleAmount(parseAmount('60 ml'), by)), '47 ml')
+  assert.equal(formatAmount(scaleAmount(parseAmount('1 EL'), by)), '0,8 EL')
+  assert.equal(formatAmount(scaleAmount(parseAmount('3'), by)), '2,5')
+  assert.equal(formatAmount(scaleAmount(parseAmount('1 Prise Salz'), 0.04)), '0,04 Prise Salz')
+  assert.equal(formatAmount(scaleAmount(parseAmount('1'), 0.1)), '0,5')
+  assert.equal(formatAmount(scaleAmount(parseAmount('2,5 kg'), 1)), '2,5 kg')
 })
 
 test('errors carry the line', () => {

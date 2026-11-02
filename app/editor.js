@@ -150,7 +150,8 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       onDrop: () => drop(node),
       onClose: close,
     })
-    document.body.append(form)
+    // Inside the datasheet's own layer, which is where its rules reach.
+    ;(document.getElementById?.('layer') ?? document.body).append(form)
     form.showModal?.()
     form.settle?.()
   }

@@ -184,38 +184,33 @@ editor changes a cell on screen and has to write it into the right node.
 
 ## Screens
 
-**Overview at `/`.** The library, from `GET /api/cards`. What that answers
-depends on the instance: every recipe on the server under `NONE` and `LOGIN`, and
-the ones a grant names you on under `GRANT`. Nothing about it is remembered
-locally - the service worker already caches the response and serves it when the
-network is gone, and a second copy in `localStorage` was the same bytes in a
-place nothing else could clear.
+**Recipes at `/`.** The library, from `GET /api/cards`, which answers with every
+recipe's text and when it was added - one request for the list, the search and the
+worker's copy for a kitchen without a signal. What it holds depends on the instance:
+every recipe on the server under `NONE` and `LOGIN`, the ones a grant names you on
+under `GRANT`. The newest few stand on a shelf above the list once there are more
+than fit on it; in a short library the list already shows them all. Search and `+`
+float at the bottom, where a thumb is.
 
-It is a table of two columns: the name, which links to reading, and `Delete`,
-which drops the recipe for everyone who can open it. There used to be a third,
-`Remove`, which took a recipe out of a collection without destroying it - a
-recipe belongs to whoever made it now rather than to a list, so it had nothing
-left to mean. The last row is where the table grows: `Import` for a recipe that
-exists somewhere already, `Create` for one that does not.
+**Search at `/search`.** Over the library already read, so it answers as you type and
+works offline. Each recipe answers once, with the best reason it answers - its name,
+another name it goes by, an ingredient, a step - and says the reason when it is not the
+name. Letters are compared without case or accents (`app/search.js`).
 
-Your own name is in the masthead where a collection used to be, and opens the list of
-browsers signed in as you. Ending one is the same act wherever it is aimed, so it is
-the same control in the same place on every row: `Sign out` on the browser you are
-holding, `Revoke` on any other. It is also where you hand somebody a way in. It is absent under `NONE`, where there is
-nobody to be.
-
-`app/qr.js` draws a QR code in some four hundred lines with no dependency - the
-app has no build step and a policy that loads nothing from elsewhere, so the
-alternative was a minified blob in `app/` that no one reads. Byte mode, error
-correction M, versions 1 to 10, which is 213 bytes of UTF-8 - longer than that
-is not a link one shares. It draws the invite link, which is the one address worth
-putting in front of a phone camera.
+**A recipe at `/r/…`.** What it is, how many steps and how long, where it came from;
+its own notes; how much, as a count where the yield starts with one and a factor where
+it does not; then the ingredients, grouped by the step they go into, and the steps in
+the order they are done (`app/recipe.js`). An amount can be tapped to scale by what
+you have: one amount decides the factor for every other, and the sheet shows what that
+makes of the rest first. `Table` shows the same recipe as the datasheet's table,
+described below. Edit, Share and Delete are behind `…`.
 
 **Writing at `/new`.** The editor on an empty draft, with the name field waiting.
 Nothing is sent until the first save: a recipe nobody finished writing never
 reaches the server at all.
 
-**Card at `/r/…`.** The name, then the table, and the specification under it.
+**The table.** The name, then the table, and the specification under it. Since the
+native look this is the `Table` view of a recipe, still drawn as the datasheet.
 
 Controls are sorted by what each one touches, which is the rule that says where
 anything goes. The scale (½× 1× 1½× 2×) and `Fit to screen` change how the recipe

@@ -1,0 +1,1614 @@
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('/fonts/jetbrains.woff2') format('woff2-variations');
+}
+
+/* =========================================================================
+ * lekka - the sheet
+ *
+ * The page is a white sheet with a hard edge, laid on a grey ground.
+ *
+ * Depth is an offset block and never a blur. A control casts ink out of the
+ * page; a field is pressed into it with the same shadow turned round, and that
+ * direction is the whole of the difference between a thing you push and a thing
+ * you fill.
+ *
+ * Three rule weights, each meaning something:
+ *
+ *   1 px dashed grey   divides sections of the page
+ *   1 px solid pale    divides cells of a table, rows of a list
+ *   1 px solid ink     draws round anything you can press
+ *
+ * Colour is spent, not spread, and every colour has one job:
+ *
+ *   blue    a link, and the act that commits what you have done
+ *   gold    what is set, and where you are standing
+ *   green   the edge of a recipe, and making one that did not exist
+ *   red     this destroys something, or something went wrong
+ *   black   the pointer is on it, and only while it is
+ *
+ * Nothing is coloured to look important. One face throughout: a recipe is a
+ * table of quantities, so what lines up is what matters. Mono's small capitals
+ * are kept for machine-readable things only - ids, keys, versions.
+ * ========================================================================= */
+
+/*
+ * The datasheet: what lekka looked like before the native look, kept for the screens
+ * that have not been drawn again yet - the table, the editor, signing in and sharing.
+ * Every rule is nested under `.datasheet`, so none of it reaches the new screens; a
+ * screen still drawn this way is put in a `.datasheet` box, and so is any dialog it opens.
+ */
+
+.datasheet {
+  --ink: #14140f;
+  --grey: #6d6d64;
+  --faint: #9c9c93;
+  --rule: #d3d2cb;
+  --dashed: #4a4a43;
+  --edge: #14140f;
+  --paper: #fff;
+  --ground: #e4e3de;
+  --shade: #f4f3ef;
+  --wash: #e8efe9;
+  --accent: #14724b;
+  --accent-pale: #b6cdc0;
+  --amber: #fbeeb5;
+  --amber-edge: #e0a52b;
+  --gold: #f0a81e;
+  --link: #1b3fbf;
+  --link-deep: #142f8f;
+
+  /*
+   * Tag tints, each with a dotted edge of its own hue. Pale enough to sit in a
+   * table all day, separated by hue so that the kind of a thing is legible before
+   * the value is read, and edged in the same hue so the box reads as one thing
+   * rather than as a pale fill inside a black rule.
+   */
+  --tint-card: #fbf3b8;
+  --edge-card: #b09a2e;
+  --tint-time: #dceaf8;
+  --edge-time: #6f9cc8;
+  --tint-scope: #cfe0f5;
+  --edge-scope: #5a86ba;
+  --tint-key: #f3d7ea;
+  --edge-key: #b268a1;
+  --tint-build: #e8e6dd;
+  --edge-build: #9d9a8e;
+  --edge-wash: #78a288;
+  --warning: #a8331d;
+  --warning-ground: #f7e5e1;
+
+  /* Depth is an offset block, never a blur: the drop shadow of a printed card,
+     not the glow of a surface. Controls throw ink, boxes throw grey. */
+  --cast: 3px 3px 0 rgb(20 20 15 / 13%);
+  --press: 2px 2px 0 var(--edge);
+
+  /* One machine face for the whole page. The card is a table of quantities, so
+     the thing that lines up is the thing that matters. */
+  --sans: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  background: var(--paper);
+  border-radius: 16px;
+  color: var(--ink);
+  font: 450 14px/1.35 var(--sans);
+  padding: 12px clamp(11px, 1.6vw, 18px);
+  -webkit-font-smoothing: antialiased;
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+  }
+
+
+  /* ---- section headings --------------------------------------------------- */
+
+  /*
+   * What this page is: a name, the facts about it as chips, then a dashed rule
+   * that closes the heading and opens the block.
+   *
+   * Three sizes now exist where there was one - 18 for the wordmark, 16 for the
+   * name of the thing on the page, 14 for everything else. A card is still read
+   * without a second size inside it; this is the page saying what it is holding,
+   * which is a question the card itself never had to answer.
+   *
+   * The rule is drawn as a gradient rather than `border-style: dashed`, because
+   * the dash a browser picks is 3 px on 3 px and the one this wants is 6 on 5 -
+   * long enough to read as a drawn line and not a row of specks.
+   */
+  .section {
+    margin: 13px 0 8px;
+  }
+
+  /*
+   * The name of the recipe, read and written. One box either way: the same height,
+   * the same baseline, the same left edge - so pressing `Edit` puts a field around
+   * the name it is already on rather than moving it and the table under it.
+   *
+   * The read one carries the field's border in the ground colour instead of ink.
+   * Not to fake a field - it looks like text, which is what it is - but because a
+   * heading that grew by ten pixels the moment you reached for it is a heading
+   * that moved out from under the pointer that reached.
+   */
+  .section .title,
+  .section input.title {
+    display: block;
+    font: 600 16px/1.3 var(--sans);
+    height: 2rem;
+    padding: 7px 2px 5px 7px;
+  }
+
+  .section .title {
+    border: 1px solid transparent;
+  }
+
+  /* What the recipe makes, beside what it is called - which is where the format writes it,
+     and it is the one fact about a recipe you want before you have read any of it. */
+  .section .yields {
+    color: var(--grey);
+    font-weight: 400;
+    margin-left: 9px;
+  }
+
+  /*
+   * Writing a recipe makes its name a field. `Edit` used to open the table and
+   * leave the title alone, so the one word every recipe has could only be changed
+   * through a dialog of its own; now the same button opens both.
+   */
+  .section input.title {
+    width: min(100%, 34ch);
+  }
+
+  .section .chips {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 5px;
+  }
+
+  .section::after {
+    background: repeating-linear-gradient(
+      to right,
+      var(--dashed) 0 6px,
+      transparent 6px 11px
+    );
+    content: '';
+    display: block;
+    height: 1px;
+    margin-top: 8px;
+  }
+
+  /* ---- chips -------------------------------------------------------------- */
+
+  /*
+   * A tag carries an identifier, and carries it whole: the id, the key, the
+   * version. Never a word standing in for the value - a box reading KEY says
+   * nothing that the column heading above it has not already said, and hides the
+   * one thing the row was asked for.
+   *
+   * The tint says what kind of identifier it is. Dotted, because a value that was
+   * generated rather than typed should not be drawn with the same edge as a control.
+   */
+  .tag {
+    background: var(--paper);
+    border: 1px dotted var(--edge);
+    font: 400 11px/1.6 var(--mono);
+    letter-spacing: 0.06em;
+    padding: 0 5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .tag.card {
+    background: var(--tint-card);
+    border-color: var(--edge-card);
+  }
+
+  /*
+   * What the reader holds on a recipe: OWNER, COLLABORATOR or READ-ONLY. In the foot for
+   * the one they are standing in, and in the overview for every one in the library.
+   *
+   * Pale blue, and the only tinted thing in the foot, because it is the one fact down
+   * there that changes from recipe to recipe - the access control beside it and the build
+   * after it are the same on every screen.
+   */
+  .tag.scope {
+    background: var(--tint-scope);
+    border-color: var(--edge-scope);
+  }
+
+  .tag.key {
+    background: var(--tint-key);
+    border-color: var(--edge-key);
+  }
+
+  .tag.build {
+    background: var(--tint-build);
+    border-color: var(--edge-build);
+  }
+
+  .tag.none {
+    border-color: var(--faint);
+    color: var(--faint);
+  }
+
+  /*
+   * A chip is a measured fact rather than an identifier - what a card yields, how
+   * many it holds. Solid edged, because a person wrote it.
+   */
+  .chip {
+    border: 1px solid var(--edge);
+    font: 400 11px/1.5 var(--mono);
+    letter-spacing: 0.04em;
+    padding: 0 5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .chip.key {
+    background: var(--paper);
+    border-style: dotted;
+    letter-spacing: 0.12em;
+  }
+
+  .chip.on {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--paper);
+  }
+
+  .chip.off {
+    background: var(--shade);
+    border-color: var(--rule);
+    color: var(--grey);
+  }
+
+  .badge {
+    border: 1px solid var(--rule);
+    background: var(--shade);
+    color: var(--grey);
+    font: 400 11px/1.5 var(--mono);
+    letter-spacing: 0.04em;
+    padding: 0 5px;
+    text-transform: uppercase;
+  }
+
+  .badge.own {
+    background: var(--amber);
+    border-color: var(--amber-edge);
+    color: var(--ink);
+  }
+
+  /* ---- controls ----------------------------------------------------------- */
+
+  /*
+   * Every control is a box: 1 px of ink, square, filled white. Hover inverts it.
+   * There is no borderless button - a thing you may press says so by being drawn.
+   */
+  button.go,
+  button.quiet,
+  .bar a {
+    background: var(--paper);
+    border: 1px solid var(--edge);
+    box-shadow: var(--press);
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+    padding: 2px 10px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  /* Pressed, a control moves into its own shadow. */
+  button.go:active,
+  button.quiet:active,
+  .bar a:active {
+    box-shadow: none;
+    transform: translate(2px, 2px);
+  }
+
+  button.go:hover:not(:disabled) {
+    background: var(--ink);
+    border-color: var(--edge);
+    color: var(--paper);
+  }
+
+  /* The one action that carries the page is filled blue, and says where it goes. */
+  button.go {
+    background: var(--link);
+    border-color: var(--edge);
+    color: var(--paper);
+  }
+
+  button.go::after {
+    content: '\00a0\2192';
+  }
+
+  /*
+   * The two ways a recipe gets here, told apart by colour before the words are
+   * read: green makes one that did not exist, gold brings in one that did. Blue
+   * stays what it was - the act that commits what you have already done, so the
+   * Import dialog's own button is blue and the row that opened it is not.
+   */
+  button.go.make {
+    background: var(--accent);
+    color: var(--paper);
+  }
+
+  button.go.take {
+    background: var(--gold);
+    color: var(--ink);
+  }
+
+  button.go:disabled,
+  button.quiet:disabled {
+    background: var(--shade);
+    border-color: var(--rule);
+    box-shadow: none;
+    color: var(--faint);
+    cursor: default;
+  }
+
+  /*
+   * Destruction, at the two weights it comes in. `Delete` takes the recipe away from
+   * everyone who can open it and is filled; `Revoke` takes one person's grant and
+   * leaves the recipe standing, so it is the same red said quietly. Both keep the ink
+   * border every pressable thing has.
+   */
+  button.quiet.danger {
+    background: var(--warning);
+    color: var(--paper);
+  }
+
+  button.quiet.warn {
+    color: var(--warning);
+  }
+
+  button.quiet.danger:hover,
+  button.quiet.warn:hover {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  /* Segments share one outline and are cut by single lines; the pressed one is
+     filled with ink, the way a tab on the masthead is. */
+  .switch {
+    border: 1px solid var(--edge);
+    box-shadow: var(--press);
+    display: flex;
+  }
+
+  .switch button {
+    background: var(--paper);
+    border: 0;
+    border-left: 1px solid var(--edge);
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    padding: 2px 9px;
+  }
+
+  .switch button:first-child {
+    border-left: 0;
+  }
+
+  .switch button:hover {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .switch button[aria-pressed='true'] {
+    background: var(--gold);
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  /* ---- bars --------------------------------------------------------------- */
+
+  /*
+   * Two bars, and the card between them. Above it goes what changes how the card
+   * is drawn - the scale, and nothing else, because a setting belongs beside the
+   * thing it sets. Below it goes what changes the card itself: `Edit`, `Source`,
+   * `Close`. Acts that cannot be taken back sit past the thing they act on, where
+   * they are not on the way to reading it.
+   *
+   * Printing is neither. It acts on the page rather than on the card, so it sits
+   * in the masthead with the name.
+   */
+  .bar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+
+  .bar.after {
+    margin: 8px 0 0;
+  }
+
+  .bar > * {
+    white-space: nowrap;
+  }
+
+  /*
+   * The name of a column, wherever one is named. Bold, at the size of everything
+   * else, in the case it was written in. Set small and letter-spaced in capitals
+   * it read as a caption on the table rather than as the head of a column, and
+   * `Ingredient` above a column of ingredients does not need announcing twice -
+   * once by what it says and once by how it is set.
+   */
+  .label {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .bar .spring {
+    flex: 1;
+  }
+
+  /*
+   * Writing a card has no bar of its own at the head. It had one, labelled WRITE,
+   * and the label named the mode you could already see you were in - every cell
+   * under it was outlined and waiting to be tapped. `Save` and `Cancel` go below
+   * the table instead, where `Edit` stood a moment ago, so the button that leaves
+   * writing is in the place the button that entered it was.
+   */
+  /* ---- fields -------------------------------------------------------------- */
+
+  /*
+   * A field is the opposite of a control, and says so with the same device turned
+   * round: a button casts a block of ink out of the page, a field is pressed into
+   * it. Both are drawn with one border and one hard shadow; only the direction
+   * differs, and that direction is the whole of the difference between a thing you
+   * push and a thing you fill.
+   *
+   * The text sits low and left of centre, where a typewriter would have put it.
+   */
+  input[type='text'],
+  input[type='password'],
+  textarea {
+    appearance: none;
+    background: var(--paper);
+    border: 1px solid var(--edge);
+    box-shadow: inset 2px 2px var(--rule);
+    color: var(--ink);
+    display: block;
+    font: inherit;
+    outline: 0;
+    padding: 7px 2px 4px 6px;
+    position: relative;
+    top: -2px;
+    width: 100%;
+  }
+
+  input[type='text'],
+  input[type='password'] {
+    height: 1.75rem;
+  }
+
+  textarea {
+    padding: 6px 8px;
+    top: 0;
+  }
+
+  /* `outline: 0` above is the resting state. A field still has to say when the
+     keyboard is in it. */
+  input[type='text']:focus,
+  input[type='password']:focus,
+  textarea:focus {
+    outline: 2px solid var(--link);
+    outline-offset: -1px;
+  }
+
+  /* ---- bands -------------------------------------------------------------- */
+
+  /*
+   * A message is a callout, and a callout is double framed: a thick edge, a gap,
+   * then a dashed line inside it. Two frames is how a printed page says "read this
+   * one thing first" without a second size or a heavier weight.
+   */
+  .band {
+    background: var(--amber);
+    border: 2px solid var(--amber-edge);
+    box-shadow: var(--cast);
+    margin-bottom: 10px;
+    padding: 7px 11px;
+    position: relative;
+  }
+
+  .band::before {
+    border: 1px dashed var(--amber-edge);
+    content: '';
+    inset: 3px;
+    pointer-events: none;
+    position: absolute;
+  }
+
+  .band.warning {
+    background: var(--warning-ground);
+    border-color: var(--warning);
+    color: var(--warning);
+  }
+
+  .band.warning::before {
+    border-color: var(--warning);
+  }
+
+  .band.before {
+    background: var(--wash);
+    border-color: var(--accent);
+    color: inherit;
+    cursor: pointer;
+    display: block;
+    font: 600 14px/1.35 var(--sans);
+    text-align: left;
+    width: 100%;
+  }
+
+  .band.before::before {
+    border-color: var(--accent);
+  }
+
+  /* ---- lists -------------------------------------------------------------- */
+
+  /* A row that is a form line rather than a record. */
+  .list .row .label {
+    min-width: 60px;
+  }
+
+  /*
+   * The library is a table, not a list. Two columns, because a row has one fact and
+   * one act: what the recipe is called, and destroying it. There used to be a third,
+   * `Remove`, which took a recipe out of a collection without destroying it - a recipe
+   * belongs to whoever made it now rather than to a list, so it had nothing left to mean.
+   *
+   * It once carried the recipe's id, its key and its yield as well. None was worth a
+   * column: the id is in the address bar of the recipe it belongs to, the key is gone,
+   * and a yield is read when you cook, not when you are choosing what to cook.
+   */
+  .records {
+    display: grid;
+    grid-template-columns: minmax(160px, 1fr) max-content max-content;
+  }
+
+  .records > * {
+    align-items: center;
+    border-bottom: 1px solid var(--rule);
+    border-right: 1px solid var(--rule);
+    display: flex;
+    min-height: 30px;
+    padding: 2px 9px;
+  }
+
+  .records > .label {
+    border-bottom: 1px solid var(--edge);
+    min-height: 0;
+  }
+
+  /* The last cell of a row closes on the table's own edge, so it needs no rule of its own. */
+  .records > *:nth-child(3n) {
+    border-right: 0;
+  }
+
+  .records .card {
+    font-weight: 600;
+  }
+
+  /* A recipe you may read and not change: nothing to do to it, so one column of names. */
+  .records.reading {
+    grid-template-columns: 1fr;
+  }
+
+  .records.reading > * {
+    border-right: 0;
+  }
+
+  /* An empty table still says so, rather than drawing nothing. */
+  .records .none {
+    color: var(--faint);
+    font-size: 12px;
+  }
+
+  /*
+   * The last row of the table is where the table grows, the way the last row of the
+   * editor's grid is where a recipe grows. Two ways in, because a recipe either
+   * exists somewhere already or it does not.
+   */
+  .records > .add {
+    background: var(--shade);
+    border-bottom: 0;
+    border-right: 0;
+    gap: 5px;
+    grid-column: 1 / -1;
+    padding: 5px 9px;
+  }
+
+  /* The box the table sits in, and the frame anything sideways-scrolling needs. */
+  .sheetbox {
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--accent);
+    box-shadow: var(--cast);
+  }
+
+  .list {
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--accent);
+    box-shadow: var(--cast);
+  }
+
+  .row {
+    align-items: center;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 5px 9px;
+  }
+
+  .row:last-child {
+    border-bottom: 0;
+  }
+
+  .row:hover {
+    background: var(--shade);
+  }
+
+  .row .name {
+    color: var(--ink);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  /*
+   * Scoped to a row: a link in a bar is a control and is drawn as a box. A link in
+   * running text is blue and underlined, because that is what a link has looked
+   * like on paper and on screen for thirty years and nothing is gained by hiding
+   * it. Green is not spent here - green means filled, live, chosen.
+   */
+  .row a.name,
+  .records a.name {
+    color: var(--link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .row a.name:hover,
+  .records a.name:hover {
+    background: var(--ink);
+    color: var(--paper);
+    text-decoration: none;
+  }
+
+  .row .aside {
+    color: var(--grey);
+    flex: 1;
+  }
+
+  .list .row .line {
+    flex: 1;
+    min-width: 160px;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  /* ---- the table ---------------------------------------------------------- */
+
+  /*
+   * The recipe is a box like every other, so its outer edge is ink and its inside
+   * is pale. The green has gone out of the rules entirely: a grid drawn in the
+   * accent made the whole table a coloured object, and what the accent is for is
+   * saying which one thing is live. It keeps an accent edge down its left side -
+   * the one place a colour names what the box is rather than what state it is in.
+   *
+   * On the editor the box goes round the table and not round the screen: the name
+   * above it and the specification below it are the same recipe, but they are not
+   * the table, and one frame round all three would say they are one drawing.
+   */
+  .read,
+  .editor > .scroll {
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--accent);
+    box-shadow: var(--cast);
+  }
+
+  .scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-color: var(--faint) var(--shade);
+    scrollbar-width: thin;
+  }
+
+  /*
+   * The three ingredient tracks are as wide as what stands in them and no wider.
+   *
+   * They were 58px and 54px, fixed. Fixed is wrong in both directions: `40-60 g` doubled
+   * to `80-120` did not fit 58 and wrapped, which cost the row a whole second line - and a
+   * column of `g` and `ml` had 36px of slack in it, all of it falling between the unit and
+   * the name it belongs to.
+   */
+  .grid {
+    display: grid;
+    font-variant-numeric: tabular-nums;
+    grid-auto-columns: minmax(44px, auto);
+    grid-auto-rows: minmax(21px, auto);
+    /*
+     * A step column is as wide as what stands in it, up to 240px - the rule `STYLE.md`
+     * states for both views, and the one `.reading .grid` and `.grid.choosing` already
+     * keep. Held between 120 and 240 instead, and with no `max-content` to leave the
+     * tracks nothing to share out, every column took the whole 240 whatever stood in it:
+     * a recipe that fits was drawn wider than it is, and the sheet - which is as wide as
+     * the card needs - was drawn wider with it. Opening the editor, whose columns *were*
+     * sized by the rule, then pulled the frame in by however much the padding came to.
+     */
+    grid-template-columns:
+      max-content max-content max-content repeat(var(--columns), fit-content(240px));
+    width: max-content;
+  }
+
+  /*
+   * The editor's table is the reading table with a column at each end: a box to tick a row
+   * with in front, and `+ Step` behind. Neither is ever drawn while reading, which is
+   * where horizontal space is short.
+   */
+  /*
+   * A column is as wide as what stands in it, up to 240px - the same rule the reading
+   * view uses, so a recipe is the same shape written as read. Held to a minimum instead,
+   * every column was 120px whatever it held, and a verb that would have said itself in one
+   * line said itself in three.
+   */
+  .grid.choosing {
+    grid-template-columns:
+      max-content max-content max-content repeat(var(--columns), fit-content(240px)) 46px;
+    width: max-content;
+  }
+
+  .grid.flat {
+    grid-template-columns: max-content max-content max-content;
+  }
+
+  .grid.choosing.flat {
+    grid-template-columns: max-content max-content max-content 46px;
+  }
+
+  .hold,
+  .holds {
+    display: grid;
+    grid-template-columns: subgrid;
+  }
+
+  .grid > *,
+  .hold > *,
+  .holds > * {
+    border-bottom: 1px solid var(--rule);
+    border-right: 1px solid var(--rule);
+    padding: 2px 7px;
+  }
+
+  .hold,
+  .holds {
+    border: 0;
+    padding: 0;
+  }
+
+  /*
+   * Free area is where an ingredient waits, and it belongs to the step it is waiting for:
+   * that step's cell stands at the right of these rows, and this is the space they wait in
+   * reaching back under them. The two make an L, and an L is one shape - one colour, one
+   * target, lit at once.
+   *
+   * It also carries the rules where two runs of blank meet at different widths
+   * (`LAYOUT.md` rule 3), which is why it is a rectangle of its own at all.
+   */
+  .grid > .free {
+    pointer-events: none;
+  }
+
+  .grid > .free.reaches {
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .grid > .rightmost,
+  .grid > .free.open,
+  .hold > .amount,
+  .hold > .unit,
+  .hold > .words,
+  .holds.rightmost > * {
+    border-right: 0;
+  }
+
+  .grid > .lowest,
+  .hold.lowest > *,
+  .holds.lowest > * {
+    border-bottom: 0;
+  }
+
+  /*
+   * The head of the table is white and closed by a line of ink - the weight, not a
+   * fill, is what separates it from the body. Column numbers stay mono: they are
+   * coordinates, and the only thing on the card a machine reads too.
+   */
+  .grid .label {
+    background: var(--paper);
+    border-bottom: 1px solid var(--edge) !important;
+  }
+
+  /* Preparations stand above the head, so the head is closed on both sides. Without them
+     it is the first row of the table and the box around it draws the line. */
+  .grid.banded .label {
+    border-top: 1px solid var(--edge);
+  }
+
+
+  /*
+   * A preparation, over the column of the step it comes before.
+   *
+   * It sits above the head of the table, which is where it happens: the head names when a
+   * column is, and this is the thing done before that. One belonging to the recipe is the
+   * same thing said about the first step there is, so it goes over the ingredient block.
+   *
+   * A cell of the table, not a tag on it. It was drawn as a tag - a dotted edge and a
+   * shrink-to-fit box floating over its column - and a tag is for one value lifted out of
+   * a line of words. This is not that: it is a thing to do, standing where the things to
+   * do stand. So it fills its column, takes the rules its neighbours take, and is told
+   * apart by the tint alone.
+   */
+  .preparation {
+    background: var(--wash);
+    text-align: center;
+  }
+
+  .amount,
+  .words {
+    white-space: nowrap;
+  }
+
+  .amount {
+    padding-right: 3px;
+    text-align: right;
+  }
+
+  /*
+   * Tight to the amount, ordinary to the name. A unit belongs to the number before it, so
+   * 3px there against the 7px every other cell keeps - and the same 7px on the other side,
+   * because the gap between a unit and a name should be the gap between any two cells and
+   * no smaller. The 36px of slack that used to sit there was the fixed track, not the
+   * padding, and it is the track that was wrong.
+   */
+  .unit {
+    padding-left: 3px;
+  }
+
+  .unit,
+  .aside,
+  .words,
+  .note {
+    color: var(--grey);
+  }
+
+  .grid .name {
+    white-space: nowrap;
+  }
+
+  .aside {
+    margin-left: 4px;
+  }
+
+  .step {
+    align-content: center;
+    display: grid;
+    text-align: center;
+  }
+
+  .verb {
+    font-weight: 600;
+    text-wrap: balance;
+  }
+
+  /*
+   * How long a step takes, marked where it stands. It is the one thing in a verb a
+   * cook looks for while the pan is already hot, and it is buried in the middle of
+   * the words. Not decoration: it is the same pattern the specification sums, so
+   * the tags on the table are exactly what the `Time` row adds up.
+   */
+  .time {
+    background: var(--tint-time);
+    border: 1px dotted var(--edge-time);
+    padding: 0 3px;
+    white-space: nowrap;
+  }
+
+  .note {
+    line-height: 1.25;
+    text-wrap: balance;
+  }
+
+  /* ---- reading a card that will not fit ----------------------------------- */
+
+  .places {
+    background: var(--shade);
+    border-bottom: 1px solid var(--edge);
+    display: flex;
+  }
+
+  .place {
+    align-items: center;
+    color: var(--grey);
+    display: flex;
+    flex: none;
+    font-weight: 600;
+    height: 24px;
+    overflow: hidden;
+    padding: 0 7px;
+  }
+
+  .place + .place {
+    border-left: 1px solid var(--rule);
+  }
+
+  /* Where you are standing, in the same gold as every other chosen thing. */
+  .place.now {
+    background: var(--gold);
+    color: var(--ink);
+  }
+
+  /*
+   * Reading a card that will not fit. The ingredient block is held at the left edge, so
+   * its width is what the rest of the screen is short of - but it was short by more than
+   * it had to be: at 200px `Roggenvollkornmehl` wrapped and `Wasser ca. 35 °C` broke over
+   * two lines, and a table that is read while cooking should say a line in a line.
+   *
+   * The `vw` term is what protects a small screen; the pixel cap is what a large one was
+   * being held to for no reason. 300 is where the names on the sample cards stop wrapping,
+   * and it is what the same column takes when the card is written.
+   */
+  .reading .grid {
+    grid-template-columns:
+      max-content max-content min(34vw, 300px)
+      repeat(var(--columns), fit-content(240px))
+      var(--tail, 0px);
+    width: max-content;
+  }
+
+  .reading .scroll {
+    touch-action: pan-y;
+  }
+
+  .reading .grid .name {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .reading .hold > .amount,
+  .reading .hold > .unit,
+  .reading .hold > .name,
+  .reading .hold > .words,
+  .reading .holds > .step {
+    background: var(--paper);
+    position: sticky;
+    z-index: 1;
+  }
+
+  .reading .hold > .amount,
+  .reading .hold > .words,
+  .reading .holds > .step { left: 0; }
+  .reading .hold > .unit { left: var(--amount, 58px); }
+  .reading .hold > .name { left: calc(var(--amount, 58px) + var(--unit, 54px)); }
+
+  /* ---- writing ------------------------------------------------------------ */
+
+  /* ---- writing ------------------------------------------------------------ */
+
+  /*
+   * A table being written is the table it is read as, to the pixel.
+   *
+   * There is not one field in it. Cells used to open where they stood, and a field is not
+   * the words it replaces - it has a border and a padding they do not, so it wraps at a
+   * different width and the one piece of text being looked at reflowed as it was reached
+   * for. A column of boxes came and went beside it and moved the rest. Everything you can
+   * type is in the sheet, which is a layer over the page.
+   *
+   * So the only thing that ever differs is colour, and there are three of them.
+   */
+  .pickable {
+    cursor: pointer;
+  }
+
+  /* What a tap would open. Grey, not amber: amber is what a row going into the open step
+     is painted, and a hover in the same colour would say the row had been chosen by
+     pointing at it. */
+  /*
+   * A row is its three cells, and stops there. The blank it waits in is the step's, and
+   * takes the step's colour - so the pointer does not reach the row through it either.
+   */
+  .grid > .hold {
+    pointer-events: none;
+  }
+
+  .grid > .hold > * {
+    pointer-events: auto;
+  }
+
+  .hold.pickable:hover > *,
+  .step.lit,
+  .free.lit {
+    background: var(--shade);
+  }
+
+  /*
+   * What goes into the step the sheet is open on. A step is shaded over the whole of its
+   * region, blank included: the cell and the space its rows wait in are one L, and half
+   * an L shaded is what this looked like when the blank was left out of it.
+   *
+   * Chosen beats lit, which needs saying because `:hover` was the more specific selector
+   * and won on its own. Pointing at something coming in turned it grey, which is what
+   * something *not* coming in looks like - so a sweep of the pointer read as unchoosing.
+   */
+  .hold.chosen > *,
+  .step.chosen,
+  .free.chosen,
+  .step.chosen.lit,
+  .free.chosen.lit {
+    background: var(--amber);
+  }
+
+  /* And the one thing the sheet is open on. A cell can be both this and shaded, so this
+     cannot be a fill: it is a ring, drawn inside the cell so it takes up no room. */
+  .hold.here,
+  .step.here {
+    box-shadow: inset 0 0 0 2px var(--link);
+  }
+
+  .grid > .add {
+    background: var(--shade);
+    color: var(--grey);
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  .grid > .add:hover {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .grid > .add.step {
+    align-content: center;
+    border-left: 1px solid var(--rule);
+    border-right: 0;
+    display: grid;
+    padding: 6px 1px;
+    text-align: center;
+    writing-mode: vertical-rl;
+  }
+
+  .faults .fault {
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    display: block;
+    font: inherit;
+    padding: 1px 0;
+    text-align: left;
+    width: 100%;
+  }
+
+  .faults .fault::before {
+    content: '\203a\00a0';
+  }
+
+  .faults .fault:hover {
+    font-weight: 600;
+  }
+
+  /* A form field that takes a whole line of the sheet. */
+  .compose .row.wide {
+    width: 100%;
+  }
+
+  /* ---- forms over the card ------------------------------------------------ */
+
+  .compose {
+    background: var(--paper);
+    border: 1px solid var(--edge);
+    box-shadow: var(--cast);
+    margin: 0 auto;
+    max-height: 88vh;
+    max-width: 640px;
+    padding: 0;
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    width: 100%;
+  }
+
+  .compose::backdrop,
+  .sheet::backdrop {
+    background: rgb(20 20 15 / 42%);
+  }
+
+  .compose .body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 8px;
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 12px;
+  }
+
+  .compose .heading {
+    color: var(--ink);
+    font: 600 14px/1.35 var(--sans);
+    width: 100%;
+  }
+
+  .compose .row {
+    border: 0;
+    display: block;
+    padding: 0;
+    width: 100%;
+  }
+
+  .compose .row:hover {
+    background: none;
+  }
+
+  .compose .row.short {
+    width: calc(50% - 4px);
+  }
+
+  .compose .row > .name {
+    color: var(--ink);
+    display: block;
+    font-weight: 600;
+  }
+
+  .compose textarea {
+    resize: vertical;
+  }
+
+  .compose .hint {
+    color: var(--grey);
+    display: block;
+  }
+
+  .compose .hint.warn {
+    color: var(--warning);
+  }
+
+  .compose .inputs {
+    border: 1px solid var(--edge);
+    box-shadow: var(--cast);
+    max-height: 34vh;
+    overflow-y: auto;
+  }
+
+  .compose .choice {
+    align-items: center;
+    border-bottom: 1px solid var(--rule);
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+    min-height: 38px;
+    padding: 4px 8px;
+  }
+
+  .compose .choice:last-child {
+    border-bottom: 0;
+  }
+
+  .compose .choice:hover {
+    background: var(--shade);
+  }
+
+  .compose .choice input {
+    accent-color: var(--accent);
+    height: 16px;
+    margin: 0;
+    width: 16px;
+  }
+
+  /* A strand goes in whole, so a step's name is set as the thing it is: one input that
+     brings everything under it. */
+  .compose .choice.strand .what {
+    font-weight: 600;
+  }
+
+  .compose .choice .aside {
+    color: var(--grey);
+    flex: 1;
+    text-align: right;
+  }
+
+  /*
+   * The share panel's lists are `.inputs` of `.choice`, like every other list in a modal -
+   * a name, what they hold, and the one act. `.aside` above already takes the middle and
+   * pushes what follows it to the right edge, so a row needs nothing of its own.
+   *
+   * The link it mints once is a note under them. `.compose .row` flattens a row to a block,
+   * which is right for a sentence and wrong for a field beside its button, so the two that
+   * are laid out sideways say so.
+   */
+  .compose .sheetnote {
+    border: 1px solid var(--edge);
+    box-shadow: var(--cast);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .compose .sheetnote .list {
+    border: 0;
+    box-shadow: none;
+  }
+
+  .compose .sheetnote .row {
+    border: 0;
+    padding: 0;
+  }
+
+  .compose .sheetnote .row.wide {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+  }
+
+  .compose .sheetnote .row.wide input[type='text'] {
+    flex: 1;
+  }
+
+  .compose .sheetnote .code svg {
+    display: block;
+    margin: 0 auto;
+    max-width: 190px;
+    width: 100%;
+  }
+
+  /* Ticked, and painted the colour the table paints what is coming in - so what the list
+     said is what you come back to. It used to mean something else here, and said so with
+     `display: block`, which flattened the line it was on. */
+  .compose .choice.taken {
+    background: var(--amber);
+  }
+
+  .compose .actions {
+    background: var(--paper);
+    border-top: 1px solid var(--rule);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding-top: 10px;
+    position: sticky;
+    bottom: 0;
+    width: 100%;
+  }
+
+  .compose .actions .warn {
+    margin-left: auto;
+  }
+
+  /* ---- the sheet a row or a step is written in ----------------------------- */
+
+  /*
+   * One row or one step, in a sheet over the page.
+   *
+   * It is docked to the foot of the window rather than centred, so the head of the table
+   * stays above it, and it is as tall as it needs to be. That is what a layer buys over a
+   * panel in the page: a panel has to fit the room left over, and how much room is left
+   * over depends on how long the recipe is - which is not a thing a panel should depend on.
+   */
+  .compose .at {
+    align-items: baseline;
+    border-bottom: 1px dashed var(--rule);
+    display: flex;
+    gap: 8px;
+    padding-bottom: 8px;
+    width: 100%;
+  }
+
+  .compose .at > .kind {
+    font-weight: 600;
+  }
+
+  .compose .at > .spring {
+    flex: 1;
+  }
+
+  .compose .at > .place {
+    color: var(--grey);
+  }
+
+  /*
+   * The fields, each under its own name.
+   *
+   * The name is written above the field, not inside it. A placeholder is the one piece of
+   * text that goes away exactly when the field has something in it, so three stacked
+   * fields that had all been filled were three identical boxes.
+   */
+  .compose .rows {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 96px 74px minmax(0, 1fr) minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .compose .rows.forStep {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+
+  .compose .rows > label {
+    display: block;
+    min-width: 0;
+  }
+
+  /* `.said`, not `.name`: `name` is the class an ingredient's own field carries, and a
+     caption rule that also matched the field styled the two as one thing. */
+  .compose .rows > label > .said {
+    color: var(--grey);
+    display: block;
+    padding-bottom: 2px;
+  }
+
+  /* A run of preparations is named once, at its head: repeating `Before it` down a column
+     of them says nothing their shape has not. */
+  .compose .rows > label > .said:empty {
+    visibility: hidden;
+  }
+
+  /* An amount is read against the column of amounts above it, so it is set as one. */
+  .compose .rows input.amount {
+    text-align: right;
+  }
+
+  /* `Close` is not one of the two acts; it is the way out, so it sits away from them. */
+  .compose .actions .spring {
+    flex: 1;
+  }
+
+  .compose .rows textarea {
+    height: 3.2rem;
+    resize: none;
+  }
+
+  /*
+   * On a narrow screen the fields stack. Three columns of a phone's width are three fields
+   * none of which can hold a line, and the sheet is the one place on the page with room to
+   * spare - it is as tall as it needs to be.
+   */
+  @media (max-width: 620px) {
+    .compose .rows,
+    .compose .rows.forStep {
+      grid-template-columns: 1fr;
+    }
+
+    .compose .rows textarea {
+      height: 2.6rem;
+    }
+
+    /* What an input brings is the first thing to go when its name needs the width. */
+    .compose .choice .aside {
+      display: none;
+    }
+  }
+
+  /* ---- sharing dialog ------------------------------------------------------ */
+
+  .sheet {
+    background: var(--paper);
+    border: 1px solid var(--edge);
+    box-shadow: var(--cast);
+    color: var(--ink);
+    font: inherit;
+    margin: auto;
+    max-width: min(100%, 320px);
+    padding: 0;
+  }
+
+  .sheet > .verb,
+  .sheet > .note,
+  .sheet > .code {
+    padding: 8px 12px;
+  }
+
+  .sheet > .verb {
+    background: var(--shade);
+    border-bottom: 1px solid var(--edge);
+    text-align: center;
+  }
+
+  .sheet > .note {
+    color: var(--grey);
+    text-align: center;
+  }
+
+  .code {
+    display: block;
+  }
+
+  .code svg {
+    display: block;
+    margin: 0 auto;
+    width: min(100%, 240px);
+  }
+
+  .sheet .address {
+    border-top: 1px solid var(--rule);
+    color: var(--grey);
+    cursor: text;
+    font: 400 12px/1.5 var(--mono);
+    overflow-wrap: anywhere;
+    padding: 6px 12px;
+  }
+
+  .sheet .bar {
+    border-top: 1px solid var(--rule);
+    justify-content: flex-end;
+    margin: 0;
+    padding: 8px 12px;
+  }
+
+  /* ---- specification ------------------------------------------------------- */
+
+  /*
+   * What the app knows about what is on the screen, said out loud: how wide the
+   * table came out, how many rows it took, how large the file behind it is, when
+   * it last changed. None of it is needed to cook, and all of it is needed to
+   * trust the thing - a card that will not tell you its own shape is asking to be
+   * taken on faith.
+   *
+   * It is also what fills the foot of a page that a short card leaves empty, with
+   * something true rather than with air.
+   */
+  .spec {
+    border: 1px solid var(--edge);
+    border-left: 3px solid var(--faint);
+    box-shadow: var(--cast);
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .spec > * {
+    border-bottom: 1px solid var(--rule);
+    padding: 2px 9px;
+  }
+
+  .spec > .label {
+    border-right: 1px solid var(--rule);
+  }
+
+  .spec > .value {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Only what a person wrote can be written again. Time, weight and the counts are
+     worked out from the recipe and have no field to type in. */
+  .spec .value input {
+    padding: 0 6px;
+    width: 100%;
+  }
+
+  .spec > .value:has(input) {
+    padding: 3px 6px 1px;
+  }
+
+  .spec > *:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .spec > *:not(:nth-child(2n)) {
+    border-right: 1px solid var(--rule);
+  }
+
+  .spec > *:nth-last-child(-n + 4) {
+    border-bottom: 0;
+  }
+
+  @media (max-width: 620px) {
+    .spec {
+      grid-template-columns: max-content minmax(60px, 1fr);
+    }
+
+    .spec > *:nth-child(2n) {
+      border-right: 0;
+    }
+
+    .spec > *:not(:nth-child(2n)) {
+      border-right: 1px solid var(--rule);
+    }
+
+    .spec > *:nth-last-child(-n + 2) {
+      border-bottom: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    button.go,
+    button.quiet,
+    .bar a,
+    .switch button,
+    .grid > .add,
+    .row {
+      transition: background-color 90ms ease, color 90ms ease, border-color 90ms ease;
+    }
+  }
+
+  /* ---- paper --------------------------------------------------------------- */
+
+  @media print {
+    .bar,
+    .badge,
+    .sheet,
+    .compose,
+    .faults,
+    .add,
+    .places,
+    button {
+      display: none;
+    }
+
+    .read {
+      border-width: 1px;
+    }
+
+    .scroll {
+      overflow-x: visible;
+    }
+
+    .grid,
+    .reading .grid {
+      grid-template-columns:
+        fit-content(58px) fit-content(54px) fit-content(150px)
+        repeat(var(--columns), minmax(0, 1fr));
+      width: auto;
+    }
+
+    .grid.choosing {
+      grid-template-columns:
+        min-content fit-content(58px) fit-content(54px) fit-content(150px)
+        repeat(var(--columns), minmax(0, 1fr)) min-content;
+    }
+
+    .grid.flat {
+      grid-template-columns: fit-content(58px) fit-content(54px) fit-content(150px);
+      width: auto;
+    }
+
+    .grid.choosing.flat {
+      grid-template-columns:
+        min-content fit-content(58px) fit-content(54px) fit-content(150px) min-content;
+    }
+
+    .grid .name,
+    .grid .step,
+    .grid .preparation,
+    .grid .words,
+    .grid .carried {
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    /* Paper is fitted to the page by the tracks above, so a table shrunk to fit a screen
+       is not also shrunk to fit the sheet. */
+    .grid {
+      zoom: 1;
+    }
+
+    .row {
+      break-inside: avoid;
+    }
+  }
+}

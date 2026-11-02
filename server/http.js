@@ -123,15 +123,17 @@ async function route(store, options, request, response) {
   if (path === '/api/cards') {
     /* The library. Where nothing is owned everybody sees everything, which is what
      * `NONE` and `LOGIN` mean; under `GRANT` you see what a grant names you on. A library
-     * is always somebody's, so unlike a single recipe it is never opened by a token. */
+     * is always somebody's, so unlike a single recipe it is never opened by a token.
+     *
+     * Each recipe comes with its text: searching its ingredients and drawing its list both
+     * need every one of them, and one answer is also one thing for the worker to keep for
+     * a kitchen without a signal. A household's library is a few hundred kilobytes. */
     if (request.method === 'GET') {
-      if (options.mode === 'NONE') return json(response, 200, store.all())
-      if (!session) throw new Refusal(401, 'sign in first')
-      return json(
-        response,
-        200,
-        options.mode === 'GRANT' ? options.grants.cards(session.person) : store.all(),
-      )
+      if (options.mode !== 'NONE' && !session) throw new Refusal(401, 'sign in first')
+      const rows =
+        options.mode === 'GRANT' ? options.grants.cards(session.person) : store.all()
+      const texts = await Promise.all(rows.map((row) => store.read(row.id)))
+      return json(response, 200, rows.map((row, index) => ({ ...row, text: texts[index] })))
     }
 
     if (request.method !== 'POST') throw new Refusal(405, 'method not allowed')

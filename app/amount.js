@@ -27,12 +27,23 @@ export function formatAmount(amount) {
   return amount.unit ? `${number} ${amount.unit}` : number
 }
 
-/** Multiplies. Ranges scale from both ends, words never scale. */
+/**
+ * Multiplies. Ranges scale from both ends, words never scale. What comes out is rounded
+ * the way it is measured: 47 ml rather than 46,957, and a count with no unit to halves,
+ * since a clove of garlic can be halved and not cut into thirds of a third.
+ */
 export function scaleAmount(amount, factor) {
-  if (!amount || amount.kind === 'words') return amount
+  if (!amount || amount.kind === 'words' || factor === 1) return amount
+  const round = (value) => (amount.unit ? measured(value) : Math.max(0.5, Math.round(value * 2) / 2))
   if (amount.kind === 'range')
-    return { ...amount, from: amount.from * factor, to: amount.to * factor }
-  return { ...amount, value: amount.value * factor }
+    return { ...amount, from: round(amount.from * factor), to: round(amount.to * factor) }
+  return { ...amount, value: round(amount.value * factor) }
+}
+
+function measured(value) {
+  if (value >= 10) return Math.round(value)
+  if (value >= 0.1) return Math.round(value * 10) / 10
+  return Math.round(value * 100) / 100
 }
 
 function toNumber(text) {
