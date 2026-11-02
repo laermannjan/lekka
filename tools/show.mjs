@@ -28,7 +28,7 @@ function draw(card, grid, scale) {
   })
 
   const head = band.length
-  box(sheet, 0, 1, head, 1, 'ZUTAT', 'left')
+  box(sheet, 0, 1, head, 1, 'INGREDIENT', 'left')
   for (let column = 1; column <= columns; column++)
     box(sheet, column, 1, head, 1, String(column).padStart(2, '0'), 'left')
 
