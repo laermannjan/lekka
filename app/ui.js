@@ -1,5 +1,6 @@
 import { scaleAmount, showAmount } from './amount.js'
 import { marks } from './recipe.js'
+import { t } from './i18n.js'
 
 /**
  * The few parts every screen is built from. Icons are drawn here as strokes, the way the
@@ -21,6 +22,8 @@ const ICONS = {
   more: '<circle cx="5" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   minus: '<path d="M5 12h14"/>',
+  cut: '<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M1.5 12h21" stroke-dasharray="2.6 2.4"/>',
+  join: '<rect x="7" y="5" width="4.5" height="14" rx="1.3"/><rect x="12.5" y="5" width="4.5" height="14" rx="1.3"/><path d="M1.5 12h3M3.2 10l1.8 2-1.8 2M22.5 12h-3M20.8 10l-1.8 2 1.8 2"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
@@ -134,6 +137,21 @@ export function wave() {
   const holder = element('span')
   holder.innerHTML = `<svg class="wave" height="8" aria-hidden="true"><path d="M1 4q4 -3.5 8 0${'t8 0'.repeat(150)}"/></svg>`
   return holder.firstChild
+}
+
+/**
+ * What comes before the first step: when to start, the oven, the tin. Unnumbered, under a
+ * rule that says so where a step's number would stand.
+ */
+export function before(preparations) {
+  return element('div', 'before', undefined, [
+    divider(t('before')),
+    ...preparations.map((prep) => element('p', 'sentence', undefined, said(marks(capital(prep.aside ? `${prep.text}, ${prep.aside}` : prep.text))))),
+  ])
+}
+
+function capital(text) {
+  return text.charAt(0).toLocaleUpperCase() + text.slice(1)
 }
 
 /** Where a step starts: the wavy rule, its number set into the middle of it. */

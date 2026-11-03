@@ -44,122 +44,19 @@ const CARD = `# Pfannkuchen (12 Stück)
     - Butter: 30 g
 `
 
-/* A card with rows that wait: six ingredients stand through two columns before the
-   step that takes them, which is where a row is wider than its own fields. */
-const LONG = await (await import('node:fs/promises')).readFile(
-  new URL('../test/cards/roggenquarkbrot.lekka', import.meta.url), 'utf8')
-
 /** Each scene is a heading and something to put under it, drawn one above the other. */
 const SCENES = `
 import { parseCard } from './card.js'
 import { renderCard } from './render.js'
 import { renderReading } from './read.js'
-import { buildEditor } from './editor.js'
-import { buildForm } from './form.js'
-import { toDraft, addIngredient, candidates } from './edit.js'
 
 const TEXT = ${JSON.stringify(CARD)}
-const LONG = ${JSON.stringify(LONG)}
 const screen = document.getElementById('screen')
-const editor = () =>
-  buildEditor({
-    draft: addIngredient(toDraft(parseCard(TEXT)), { name: 'Zucker', amount: '2', unit: 'EL' }),
-    onSave: async () => null,
-    onClose: () => {},
-  })
-
 scene('Card view', wrap(renderCard(parseCard(TEXT), 1)))
 
 // The same card in a box too narrow for it, which is the only way the reading
 // affordances appear: they are not a mode to be asked for.
 scene('Reading, a card wider than its box', narrow(renderReading(parseCard(TEXT), 1, 0, () => {})))
-
-// The two states a card passes through before it has a single step, which is where
-// the table has no step columns at all.
-scene('Editor, a new card', buildEditor({ draft: toDraft(parseCard('# Neu\\n')), onSave: async () => null, onClose: () => {} }))
-scene('Editor, ingredients but no step', buildEditor({
-  draft: ['Mehl', 'Milch'].reduce((d, name) => addIngredient(d, { name, amount: '250', unit: 'g' }), toDraft(parseCard('# Neu\\n'))),
-  onSave: async () => null,
-  onClose: () => {},
-}))
-
-scene('Editor, at rest', editor())
-
-/*
- * A step selected. This is the whole of what the table does while a recipe is being
- * written: a ring on the one thing the form holds, and a shading on what goes into it.
- * There is not a field in it, and not one column that was not there a moment ago.
- */
-const opened = editor()
-scene('Editor, a step selected', opened)
-tapStep(opened, 'verrühren')
-
-/*
- * The L. Here vermengen is an input of Stockgare, so it is coming in and shaded - and
- * its region is its own cell plus the blank its six waiting rows stand in, which
- * together make an L. Both halves take the colour, or the corner is missing.
- */
-const wide = buildEditor({ draft: toDraft(parseCard(LONG)), onSave: async () => null, onClose: () => {} })
-scene('Editor, a step coming in, shaded over its whole L', wide)
-tapStep(wide, 'Stockgare')
-
-/*
- * The form, drawn where it can be seen rather than over the page. It is a dialog: on
- * the real screen it is docked to the foot of the window with the page dimmed behind
- * it, which a picture of the whole page cannot show and a picture of the form can.
- */
-const draft = toDraft(parseCard(LONG))
-const vermengen = holds(draft.strands[0], 'vermengen')
-scene('The form, on a step', inline(buildForm({
-  node: vermengen,
-  place: 'column 03',
-  offers: candidates(draft, vermengen),
-  onChoose: () => {},
-  onApply: () => {},
-  onDrop: () => {},
-  onClose: () => {},
-})))
-
-const mehl = rowsOf(draft.strands[0]).find((one) => one.name === 'Roggenvollkornmehl')
-scene('The form, on a row', inline(buildForm({
-  node: mehl,
-  place: '',
-  onApply: () => {},
-  onDrop: () => {},
-  onClose: () => {},
-})))
-
-/** A tap on the step whose verb starts with this. */
-function tapStep(view, verb) {
-  for (const cell of view.querySelectorAll('.grid .holds > .step'))
-    if (cell.textContent.startsWith(verb)) cell.onclick()
-  // The form it opens is a modal dialog, and a modal dialog in a picture of the page
-  // covers the page. The table is the subject here, so it is shut again at once.
-  for (const box of document.querySelectorAll('dialog.compose')) box.remove()
-}
-
-/** A dialog drawn as a block, so it appears in a picture of the page at all. */
-function inline(box) {
-  box.style.position = 'static'
-  box.style.display = 'block'
-  box.style.maxWidth = '640px'
-  box.style.margin = '0'
-  return box
-}
-
-function holds(node, verb) {
-  if (node.verb?.startsWith(verb)) return node
-  for (const child of node.children ?? []) {
-    const found = holds(child, verb)
-    if (found) return found
-  }
-  return null
-}
-
-function rowsOf(node) {
-  if (node.kind === 'ingredient') return [node]
-  return (node.children ?? []).flatMap(rowsOf)
-}
 
 function scene(name, body) {
   const head = document.createElement('div')

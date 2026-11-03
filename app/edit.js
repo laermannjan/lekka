@@ -1,6 +1,6 @@
 import { splitAside, formatCard, parseCard } from './card.js'
 import { parseAmount, formatAmount } from './amount.js'
-import { t } from './i18n.js'
+import { language, t } from './i18n.js'
 
 /**
  * A card being written, as the forest it really is.
@@ -38,28 +38,9 @@ export function fromDraft(draft) {
   }
 }
 
-/**
- * What may be fed into a step. Anything already an input has a parent and is therefore
- * not a strand, so it is not offered - the filter the editor needs is simply "the roots".
- *
- * Editing an existing step adds back its own inputs, which are otherwise invisible for
- * exactly that reason, and drops any strand the step lies inside, since feeding a step
- * the strand it belongs to would make a loop.
- */
-export function candidates(draft, step = null) {
-  const free = draft.strands.filter((strand) => !holds(strand, step))
-  return step ? [...inputs(step), ...free] : free
-}
-
 /** A step's inputs: its children, minus the preparations, which bring nothing in. */
 export function inputs(step) {
   return step.children.filter((child) => child.kind !== 'preparation')
-}
-
-/** Every ingredient somewhere under a node: what a strand has gathered so far. */
-export function beneath(node) {
-  if (node.kind === 'ingredient') return [node]
-  return (node.children ?? []).flatMap(beneath)
 }
 
 /** Whether `node` is `root` or lies somewhere under it. */
@@ -88,196 +69,233 @@ function search(root, node) {
 }
 
 /**
- * What a set of chosen rows means, as nodes.
- *
- * A row is an ingredient, but what you point at when you point at a row is whatever is
- * currently holding it - the rightmost cell in that row, which by right alignment is the
- * root of its strand. So the rule is: take the **outermost node whose rows are all
- * chosen**. Choose every row under `verrühren` and you have said `verrühren`; choose two
- * of its three and you have said those two ingredients, which then have to come out of
- * it. Nothing else needs deciding, and both readings fall out of the same walk.
+ * The steps in the order they are done, across every strand: what the editor lists, and
+ * what it numbers. A step comes after everything that flows into it, as `stepsOf` reads
+ * a card; a strand nobody has joined yet comes after the ones before it.
  */
-export function claim(draft, chosen) {
-  const wanted = new Set(chosen)
-  const taken = []
-  for (const strand of draft.strands) gather(strand, wanted, taken)
-  return taken
+export function stepsIn(draft) {
+  const steps = []
+  const visit = (node) => {
+    for (const child of node.children) if (child.kind === 'step') visit(child)
+    steps.push(node)
+  }
+  for (const strand of draft.strands) if (strand.kind === 'step') visit(strand)
+  return steps
 }
 
-function gather(node, wanted, taken) {
-  const rows = beneath(node)
-  if (rows.length > 0 && rows.every((row) => wanted.has(row))) return void taken.push(node)
-  if (node.kind !== 'step') return
-  for (const child of inputs(node)) gather(child, wanted, taken)
+/** The ingredients that go into a step itself, not those of the steps before it. */
+export function ingredientsOf(step) {
+  return step.children.filter((child) => child.kind === 'ingredient')
 }
 
 /**
- * What taking those nodes would disturb: each one that is currently an input somewhere,
- * and each step that taking them would leave with nothing going into it.
- *
- * Said before it happens, because it is the one move in the editor that changes
- * something the user did not point at.
+ * What a step may take from before: the steps it takes now, and the ends of every other
+ * strand. A step inside its own strand is never offered, which would make a loop.
  */
-export function upheaval(draft, taken) {
-  const moved = []
-  const emptied = []
-  const gone = new Set(taken)
-
-  // Emptying climbs: a step left with nothing goes, which can leave *its* step with
-  // nothing, and so on to the root. `detach` and `removeNode` already do this, so
-  // anything that stops at the first parent promises less than it delivers.
-  const climb = (node) => {
-    const from = parentOf(draft, node)
-    if (!from || inputs(from).some((child) => !gone.has(child))) return
-    if (!emptied.includes(from)) emptied.push(from)
-    gone.add(from)
-    climb(from)
-  }
-
-  for (const node of taken) {
-    const from = parentOf(draft, node)
-    if (from) moved.push({ node, from })
-  }
-  for (const node of taken) climb(node)
-  return { moved, emptied }
-}
-
-/** What deleting a node would take with it: the steps it would leave holding nothing. */
-export function sweptBy(draft, node) {
-  return upheaval(draft, [node]).emptied
-}
-
-
-/** A new ingredient, waiting to be used. */
-export function addIngredient(draft, fields) {
-  const node = ingredient(fields)
-  return { ...draft, strands: [...draft.strands, node] }
+export function sources(draft, step) {
+  const taken = step ? step.children.filter((child) => child.kind === 'step') : []
+  const free = draft.strands.filter((strand) => strand.kind === 'step' && !holds(strand, step))
+  return [...taken, ...free]
 }
 
 /**
- * A new step. Its inputs stop being where they were and become its children; the step
- * takes their place, at the position of the earliest of them, so the list keeps its order.
- *
- * An input taken out of another step leaves that step behind, and a step with nothing
- * going into it is not a thing the format has - `FORMAT.md` rule 5 - so it goes with it.
- * `upheaval` is what says so before the move is made.
+ * A new step, said in `fields`, that goes after `after`: it takes what `after` made, and
+ * whatever took that takes the new step instead - the chain spliced where it was cut. With
+ * nothing before it, it starts a strand of its own.
  */
-export function addStep(draft, fields) {
-  const node = step(fields)
-  const taken = fields.inputs ?? []
-  let next = draft
-  for (const input of taken) next = detach(next, input, taken)
-  return { ...next, strands: replaceAll(next.strands, taken, node) }
+export function insertAfter(draft, after, fields) {
+  const from = fields.from ?? (after ? [after] : [])
+  const node = { kind: 'step', verb: '', aside: null, children: [] }
+  let next
+  if (after && from.includes(after)) next = replace(draft, after, node)
+  else {
+    // Taking nothing from the step it was added under, it is a strand of its own, listed
+    // after that one's until a later step takes both.
+    const strands = [...draft.strands]
+    const at = after ? strands.findIndex((strand) => holds(strand, after)) : -1
+    strands.splice(at === -1 ? strands.length : at + 1, 0, node)
+    next = { ...draft, strands }
+  }
+  return { draft: setStep(next, node, { ...fields, from }), node }
 }
 
-/** Lifts one node out of wherever it sits, and clears up after it. */
-function detach(draft, node, taken) {
-  const from = parentOf(draft, node)
-  if (!from) return draft
-  from.children = from.children.filter((child) => child !== node)
-  return inputs(from).length === 0 ? removeNode(draft, from, taken) : draft
+/**
+ * A step written again from its fields: how it is said and called, its ingredients, and
+ * the steps it takes. A step it no longer takes is a strand of its own again, until
+ * another takes it; one it takes now was the end of a strand, and is no longer.
+ *
+ * What it keeps keeps its place among its children, so a card that is opened and closed
+ * again is the card it was. A preparation under it, from a card written before they all
+ * came first, stays where it is.
+ */
+export function setStep(draft, node, { sentence = '', verb = '', aside = '', ingredients = [], from = [] }) {
+  const had = node.children
+  const dropped = had.filter((child) => child.kind === 'step' && !from.includes(child))
+  const kept = had.filter((child) => child.kind === 'preparation' || from.includes(child) || ingredients.includes(child))
+  const added = [...from.filter((one) => !had.includes(one)), ...ingredients.filter((one) => !had.includes(one))]
+
+  node.verb = verb.trim()
+  node.aside = blank(aside)
+  const said = braced(sentence.trim(), ingredients)
+  if (said) node.sentence = said
+  else delete node.sentence
+  node.children = [...kept, ...added]
+
+  const strands = draft.strands.filter((strand) => !from.includes(strand))
+  const at = strands.findIndex((strand) => holds(strand, node))
+  strands.splice(at === -1 ? strands.length : at, 0, ...dropped)
+  return { ...draft, strands }
 }
 
-/** The same fields on a node that already exists. Inputs move in and out of the roots. */
-export function editIngredient(draft, node, fields) {
-  Object.assign(node, ingredient(fields))
+/**
+ * Takes a step out. Its own ingredients go with it; what went into it from before goes
+ * into the step after it instead, so nothing else comes apart.
+ */
+export function deleteStep(draft, node) {
+  const before = node.children.filter((child) => child.kind === 'step')
+  const parent = parentOf(draft, node)
+  if (parent) {
+    parent.children = parent.children.flatMap((child) => (child === node ? before : [child]))
+    return { ...draft }
+  }
+  return { ...draft, strands: draft.strands.flatMap((strand) => (strand === node ? before : [strand])) }
+}
+
+/** The step a step can be joined with: the one right before it, when that goes straight into it. */
+export function mergeable(draft, node) {
+  const steps = stepsIn(draft)
+  const before = steps[steps.indexOf(node) - 1]
+  return before && node.children.includes(before) ? before : null
+}
+
+/**
+ * Two steps as one: the one before goes into the merged step with everything it took, so
+ * whatever took the second takes the merged one. The same ingredient in both, in one
+ * unit, is one line of their sum.
+ */
+export function merge(draft, node, fields) {
+  const before = mergeable(draft, node)
+  if (!before) return draft
+  node.children = node.children.flatMap((child) => (child === before ? before.children : [child]))
+  const ingredients = []
+  for (const child of ingredientsOf(node)) {
+    const same = ingredients.find((one) => one.name === child.name && one.aside === child.aside && summable(one.amount, child.amount))
+    if (same) same.amount = { ...same.amount, value: same.amount.value + child.amount.value }
+    else ingredients.push(child)
+  }
+  return setStep(draft, node, { ...fields, ingredients, from: node.children.filter((child) => child.kind === 'step') })
+}
+
+function summable(one, other) {
+  return one?.kind === 'number' && other?.kind === 'number' && one.unit === other.unit
+}
+
+/** What two steps would say as one, to be read over before they are joined. */
+export function joined(before, node) {
+  const said = (step) => unbraced(step.sentence ?? step.verb)
+  return {
+    sentence: `${said(before)}${t(', then ')}${said(node)}`,
+    verb: `${before.verb}, ${node.verb}`,
+    aside: [before.aside, node.aside].filter(Boolean).join(', '),
+  }
+}
+
+/**
+ * A step in two: what is moving goes into a new step right after it, which takes what the
+ * step made - and whatever took that takes the new step.
+ */
+export function split(draft, node, { keep, next, moving }) {
+  const staying = ingredientsOf(node).filter((one) => !moving.includes(one))
+  const from = node.children.filter((child) => child.kind === 'step')
+  const once = setStep(draft, node, { ...keep, ingredients: staying, from })
+  return insertAfter(once, node, { ...next, ingredients: moving, from: [node] })
+}
+
+/** An ingredient taken from its step into another. */
+export function moveIngredient(draft, ingredient, to) {
+  const from = parentOf(draft, ingredient)
+  if (from) from.children = from.children.filter((child) => child !== ingredient)
+  to.children = [...to.children, ingredient]
   return { ...draft }
 }
 
-export function editStep(draft, node, fields) {
-  const wanted = fields.inputs ?? []
-  const dropped = inputs(node).filter((child) => !wanted.includes(child))
-  const taken = wanted.filter((child) => draft.strands.includes(child))
-
-  Object.assign(node, step({ ...fields, inputs: wanted }))
-  return {
-    ...draft,
-    // Dropped inputs become strands again, in place of the ones the step swallowed.
-    strands: [...replaceAll(draft.strands, taken, null), ...dropped].filter(Boolean),
+/** Puts `node` where `old` stood, in its step or among the strands. */
+function replace(draft, old, node) {
+  const parent = parentOf(draft, old)
+  if (parent) {
+    parent.children = parent.children.map((child) => (child === old ? node : child))
+    return { ...draft }
   }
+  return { ...draft, strands: draft.strands.map((strand) => (strand === old ? node : strand)) }
+}
+
+/** An ingredient from the two fields it is written in: how much, and what - a sort in brackets. */
+export function ingredientOf({ amount = '', name = '' }) {
+  const { text, aside } = splitAside(name.trim())
+  return { kind: 'ingredient', name: text.trim(), aside: blank(aside ?? ''), amount: parseAmount(amount.trim()) }
+}
+
+/** And back: the two fields an ingredient is written in. */
+export function rowOf(node) {
+  return {
+    amount: formatAmount(node.amount),
+    name: node.aside ? `${node.name} (${node.aside})` : node.name,
+  }
+}
+
+/** A sentence as it is typed: its braces out, so a name reads as the word it is. */
+export function unbraced(sentence) {
+  return (sentence ?? '').replace(/\{([^{}]*)\}/g, '$1')
 }
 
 /**
- * Deleting a step frees what it was holding rather than taking the strand with it: the
- * inputs go back to the roots, in its place. Deleting an ingredient deletes it.
+ * The names of `ingredients` that a typed sentence says, as whole words and whatever
+ * their case, so they need never be braced by hand.
  */
-export function removeNode(draft, node, taken = []) {
-  // What the step held goes back to the roots, minus anything already being moved.
-  const freed = (node.kind === 'step' ? inputs(node) : []).filter((one) => !taken.includes(one))
-  const parent = parentOf(draft, node)
-  if (parent) {
-    parent.children = parent.children.filter((child) => child !== node)
-    const next = { ...draft, strands: [...draft.strands, ...freed] }
-    return inputs(parent).length === 0 ? removeNode(next, parent, taken) : next
-  }
-  return {
-    ...draft,
-    strands: draft.strands.flatMap((strand) => (strand === node ? freed : [strand])),
-  }
+export function named(text, ingredients) {
+  return ingredients.filter((one) => find(text, one.name) !== -1)
 }
 
-/** Replaces `taken` in the roots with one node, at the earliest place any of them held. */
-function replaceAll(strands, taken, node) {
-  const first = strands.findIndex((strand) => taken.includes(strand))
-  const kept = strands.filter((strand) => !taken.includes(strand))
-  if (!node) return kept
-  const at = first === -1 ? kept.length : Math.min(first, kept.length)
-  return [...kept.slice(0, at), node, ...kept.slice(at)]
-}
-
-function ingredient({ name, aside, amount, unit }) {
-  const text = [amount, unit].map((part) => (part ?? '').trim()).filter(Boolean).join(' ')
-  return {
-    kind: 'ingredient',
-    name: (name ?? '').trim(),
-    aside: blank(aside),
-    amount: parseAmount(text),
+/** And the sentence as it is stored: each name it says braced, once, longest first. */
+export function braced(text, ingredients) {
+  let said = text
+  const names = [...new Set(ingredients.map((one) => one.name).filter(Boolean))].sort((a, b) => b.length - a.length)
+  for (const name of names) {
+    const at = find(said, name)
+    if (at !== -1) said = `${said.slice(0, at)}{${name}}${said.slice(at + name.length)}`
   }
+  return said
 }
 
-function step({ verb, aside, preparations = [], inputs = [] }) {
-  return {
-    kind: 'step',
-    verb: (verb ?? '').trim(),
-    aside: blank(aside),
-    children: [...preparations.map(preparation), ...inputs],
+/** Where a name stands in a sentence as a word of its own, outside any braces; -1 if it does not. */
+function find(text, name) {
+  if (!name) return -1
+  const word = new RegExp(`(?<![\\p{L}\\p{N}])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'giu')
+  for (const found of text.matchAll(word)) {
+    const before = text.slice(0, found.index)
+    if (before.lastIndexOf('{') <= before.lastIndexOf('}')) return found.index
   }
+  return -1
 }
 
-function preparation(text) {
-  const { text: body, aside } = splitAside(String(text))
-  return { kind: 'preparation', text: body, aside }
+/**
+ * The short form of a step that has only been said: its verb, then what can be heated or
+ * timed, so the table has a label and the timer a time. The verb stands last in German,
+ * "ruhen lassen" included, and first in English. It is a guess, and a field to correct.
+ */
+export function shortOf(text) {
+  const plain = unbraced(text)
+  const words = plain.replace(/[.,;:!]/g, ' ').trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return ''
+  const verb = language === 'de' ? (words.at(-1) === 'lassen' && words.length > 1 ? words.slice(-2).join(' ') : words.at(-1)) : words[0]
+  const heat = /\d+(?:[.,]\d+)?\s*°\s*[CF]\b/.exec(plain)?.[0]
+  const time = /\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?\s*(?:min|h)\b/.exec(plain)?.[0]
+  return [verb.toLocaleLowerCase(), heat, time].filter(Boolean).join(' ')
 }
 
 function blank(text) {
   const trimmed = (text ?? '').trim()
   return trimmed === '' ? null : trimmed
-}
-
-/** The preparations of a step, as the lines the editor shows them as. */
-export function preparationLines(node) {
-  return (node.children ?? [])
-    .filter((child) => child.kind === 'preparation')
-    .map((child) => (child.aside ? `${child.text} (${child.aside})` : child.text))
-}
-
-/** The fields of a node, ready to fill a form with. */
-export function fieldsOf(node) {
-  if (node.kind === 'ingredient') {
-    const amount = node.amount
-    return {
-      name: node.name,
-      aside: node.aside ?? '',
-      amount: amount ? formatAmount({ ...amount, unit: '' }) : '',
-      unit: amount?.unit ?? '',
-    }
-  }
-  return {
-    verb: node.verb,
-    aside: node.aside ?? '',
-    preparations: preparationLines(node),
-    inputs: inputs(node),
-  }
 }
 
 /**

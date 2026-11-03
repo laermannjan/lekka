@@ -1470,23 +1470,346 @@ body.cook .bar .middle {
   color: #ffb340;
 }
 
+/* ---- writing a recipe -------------------------------------------------------- */
+
+/* The recipe as it is read, every part of it in reach: what it is in fields at the top,
+   each step drawn as it reads and opened with a tap. */
+.writer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.writer .bar .middle,
+.sheet-head .middle {
+  color: var(--secondary);
+  font-size: 15px;
+}
+
+.sheet-head .middle {
+  color: var(--label);
+  font-family: var(--serif);
+  font-size: 18px;
+}
+
+.writer .bar .plain,
+.sheet-head .plain {
+  color: var(--secondary);
+  font-size: 17px;
+  min-height: 44px;
+}
+
+/* Saving is the one thing to do next, so it is the one filled button. */
+.writer .save,
+.sheet-head .save {
+  background: var(--ink);
+  border-radius: 18px;
+  color: var(--on-ink);
+  font-size: 15px;
+  font-weight: 600;
+  height: 36px;
+  padding: 0 18px;
+}
+
+.writer .fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.labelled,
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.labelled > p.label,
+.part > p.label {
+  margin: 0;
+  text-align: left;
+}
+
+.labelled > .hint,
+.part > .hint {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.writer input,
+.writer textarea,
+.step-sheet input,
+.step-sheet textarea {
+  background: var(--field);
+  border: 0;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--field-edge);
+  color: var(--label);
+  font: inherit;
+  font-size: max(1em, 16px);
+  line-height: 22px;
+  min-width: 0;
+  outline: none;
+  padding: 8px 12px;
+  width: 100%;
+}
+
+.writer input:focus,
+.writer textarea:focus,
+.step-sheet input:focus,
+.step-sheet textarea:focus {
+  box-shadow: inset 0 0 0 1.5px var(--label);
+}
+
+.writer textarea,
+.step-sheet textarea {
+  overflow: hidden;
+  resize: none;
+}
+
+.writer input.title {
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 38px;
+  padding: 6px 14px;
+}
+
+.writer textarea.note {
+  font-family: var(--serif);
+  font-style: italic;
+}
+
+.step-sheet textarea.sentence {
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 28px;
+  padding: 10px 12px;
+}
+
+.pair {
+  display: flex;
+  gap: 12px;
+}
+
+.pair > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.writer .pair > :first-child {
+  flex: 0 0 38%;
+}
+
+.writer .row,
+.step-sheet .row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.rows,
+.before-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.step-sheet .row.ingredient .amount {
+  flex: 0 0 96px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+
+.step-sheet .row .text {
+  flex: 1;
+  font-family: var(--serif);
+}
+
+.add {
+  align-items: center;
+  align-self: flex-start;
+  display: inline-flex;
+  font-size: 16px;
+  font-weight: 600;
+  gap: 6px;
+  min-height: 36px;
+}
+
+.add-step {
+  align-self: center;
+  background: var(--raised);
+  border-radius: 16px;
+  color: var(--secondary);
+  font-size: 14px;
+  min-height: 32px;
+  margin-top: 8px;
+  padding: 0 14px 0 10px;
+}
+
+/* A small round button on a step's line or beside its words, reaching wider than it looks. */
+.tool {
+  align-items: center;
+  background: color-mix(in srgb, var(--label) 7%, transparent);
+  border-radius: 50%;
+  color: var(--secondary);
+  display: inline-flex;
+  flex: 0 0 30px;
+  height: 30px;
+  justify-content: center;
+  position: relative;
+  width: 30px;
+}
+
+.tool::after {
+  content: '';
+  inset: -7px;
+  position: absolute;
+}
+
+.tool svg {
+  height: 17px;
+  width: 17px;
+}
+
+.tool.hollow {
+  background: none;
+  visibility: hidden;
+}
+
+.method.writing {
+  gap: 18px;
+}
+
+.writing .said {
+  cursor: pointer;
+  padding-right: 44px;
+  position: relative;
+}
+
+/* The sentence starts 14px into its block, so its middle is 7px below the block's. */
+.writing .said .tool {
+  position: absolute;
+  right: 0;
+  top: calc(50% + 7px);
+  transform: translateY(-50%);
+}
+
+.writing .uses {
+  cursor: pointer;
+}
+
+.writing > li {
+  display: flex;
+  flex-direction: column;
+}
+
+.writing > li.first {
+  align-items: stretch;
+  gap: 14px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  align-items: center;
+  border-radius: 16px;
+  box-shadow: inset 0 0 0 1px var(--field-edge);
+  color: var(--secondary);
+  display: inline-flex;
+  font-family: var(--serif);
+  font-size: 15px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px 0 10px;
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--label) 50%, transparent);
+  color: var(--label);
+}
+
+.step-sheet .row.ticked {
+  gap: 12px;
+}
+
+.step-sheet .row.ticked .amount {
+  flex: 0 0 64px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+
+.tick {
+  align-items: center;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--field-edge);
+  color: transparent;
+  display: flex;
+  flex: 0 0 28px;
+  height: 28px;
+  justify-content: center;
+}
+
+.tick[aria-pressed='true'] {
+  background: var(--label);
+  box-shadow: none;
+  color: var(--ground);
+}
+
+.plain.danger {
+  align-self: flex-start;
+  color: var(--danger);
+  min-height: 44px;
+}
+
+.faults {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.faults .plain {
+  color: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A step deleted, and the way to have it back, for a few seconds. */
+.undo {
+  align-items: center;
+  border-radius: 26px;
+  bottom: var(--bottom);
+  display: flex;
+  gap: 12px;
+  height: 52px;
+  justify-content: space-between;
+  left: 50%;
+  max-width: 688px;
+  padding: 0 8px 0 20px;
+  position: fixed;
+  transform: translateX(-50%);
+  width: calc(100% - 2 * var(--gutter));
+  z-index: 20;
+}
+
+.undo .plain {
+  background: var(--raised);
+  border-radius: 18px;
+  font-weight: 600;
+  min-height: 36px;
+  padding: 0 14px;
+}
+
 /* ---- what is still drawn as the datasheet ----------------------------------- */
-
-/* Dialogs the datasheet opens live in here, so its rules reach them; the box itself
-   takes no room. */
-.datasheet.layer {
-  display: contents;
-}
-
-/* Its forms stand at the bottom too, and above the keyboard like the sheets. */
-.datasheet dialog.compose {
-  bottom: var(--keyboard, 0px);
-  max-height: calc(100dvh - var(--keyboard, 0px) - var(--top));
-}
-
-.datasheet dialog.compose .body {
-  max-height: calc(100dvh - var(--keyboard, 0px) - var(--top));
-}
 
 .table {
   overflow-x: auto;

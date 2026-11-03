@@ -1,7 +1,7 @@
 import { formatNumber, fraction, scaleAmount, showAmount } from './amount.js'
 import { renderReading } from './read.js'
 import { aboutOf, gather, phrase, servings, sourceName, stepsOf, totalTime } from './recipe.js'
-import { divider, element, icon, overview, roundButton, said, uses } from './ui.js'
+import { before, divider, element, icon, overview, roundButton, said, uses } from './ui.js'
 import { t } from './i18n.js'
 
 /**
@@ -72,7 +72,7 @@ export function renderRecipe(card, state, on) {
     ]),
     ...(state.table
       ? [element('div', 'datasheet table', undefined, [renderReading(card, state.factor, 0)])]
-      : [howMuch(card.yields, change, followers), ingredients(card, field, shown, scaled, state.factor, on.shop), method(steps, state.factor, shown)]),
+      : [howMuch(card.yields, change, followers), ingredients(card, field, shown, scaled, state.factor, on.shop), method(card, steps, state.factor, shown)]),
   ]
   follow(state.factor)
   return parts
@@ -164,19 +164,17 @@ function amountField(amount, label, change) {
 }
 
 /** The steps: each a wavy rule with its number, its sentence, and what it takes under it. */
-function method(steps, factor, shown) {
-  return element(
-    'ol',
-    'method',
-    undefined,
-    steps.map((step) =>
+function method(card, steps, factor, shown) {
+  return element('ol', 'method', undefined, [
+    card.preparations.length ? element('li', '', undefined, [before(card.preparations)]) : null,
+    ...steps.map((step) =>
       element('li', '', undefined, [
         divider(step.n),
         element('p', 'sentence', undefined, said(phrase(step))),
         step.ingredients.length ? uses(step.ingredients, factor, shown) : null,
       ]),
     ),
-  )
+  ])
 }
 
 function round(value, to = 10) {

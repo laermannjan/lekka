@@ -5,7 +5,8 @@
  * The card is a tree, last step outermost. Read in order, a step comes after everything
  * that flows into it, and a preparation comes right before the step that needs it - the
  * tin is greased when the dough is ready for it, not before the flour is weighed. One
- * standing at the outermost level comes before everything, as the format says.
+ * standing at the outermost level comes before everything and is no step of its own: it
+ * is what comes before step 1, and is drawn there.
  */
 export function stepsOf(card) {
   const steps = []
@@ -15,7 +16,6 @@ export function stepsOf(card) {
     for (const child of children) if (child.kind === 'preparation') steps.push(entry(child, []))
     steps.push(entry(node, children.filter((child) => child.kind === 'ingredient')))
   }
-  for (const preparation of card.preparations) steps.push(entry(preparation, []))
   if (card.root) visit(card.root)
   return steps.map((step, index) => ({ ...step, n: index + 1 }))
 }

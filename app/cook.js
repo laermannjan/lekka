@@ -1,6 +1,6 @@
 import { gather, phrase, stepsOf } from './recipe.js'
 import { t } from './i18n.js'
-import { arcOffset, divider, element, icon, menuItem, overview, picture, ring, roundButton, said, slide, uses } from './ui.js'
+import { arcOffset, before, divider, element, icon, menuItem, overview, picture, ring, roundButton, said, slide, uses } from './ui.js'
 
 /**
  * Cooking: one recipe at a time, a step at a time, with its timers.
@@ -117,6 +117,7 @@ export function renderCook(card, session, on) {
       ? element('div', 'banners', undefined, elsewhere.map(([n, one]) => banner(Number(n), one, () => go(Number(n)))))
       : null,
     element('section', 'guide', undefined, [
+      at === 1 && card.preparations.length ? before(card.preparations) : null,
       at > 1
         ? element('div', 'done', undefined, [icon('check', 16), element('span', 'title', steps[at - 2].title)])
         : null,
