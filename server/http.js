@@ -458,10 +458,16 @@ async function create(store, response, { text, label }, owner = null) {
  * A card is stored only if it parses; validation is parsing. It arrives as .lekka text, or
  * as JSON from an assistant, which is written out as text first. An assistant asked for
  * nothing but the card still tends to put it in a code fence, so a body that is one fence
- * and nothing else is taken for what is inside it.
+ * and nothing else is taken for what is inside it, and one with words around an object is
+ * taken for the object.
  */
 function card(body) {
   let text = FENCED.exec(body)?.[1] ?? body
+  // Or say a line before it, or after it: what is not a card is what lies around the object.
+  if (!text.trimStart().startsWith('#')) {
+    const [from, to] = [text.indexOf('{'), text.lastIndexOf('}')]
+    if (from !== -1 && to > from) text = text.slice(from, to + 1)
+  }
   try {
     if (text.trimStart().startsWith('{')) text = formatJson(JSON.parse(text))
     return { text, label: parseCard(text).title }

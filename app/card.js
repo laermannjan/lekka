@@ -155,11 +155,12 @@ function withAside(text, aside) {
  * fields of their own, and become notes until the format has a line for them.
  *
  * What the schema asks and the text cannot hold is refused here: brackets, which the text
- * would read as an aside, a colon in a name, which it would read as the amount, and a step
- * with nothing under it, which it would read as an ingredient. So is a sentence naming in
- * braces an ingredient its step does not take: whoever wrote it is there to be told, which
- * a card edited later, with an ingredient renamed, has nobody for. The rest is left to the
- * text it becomes, which is parsed like any other.
+ * would read as an aside, and a colon in a name, which it would read as the amount. What
+ * an assistant gets wrong only in form is forgiven, since nobody is there to be told: a
+ * preparation written as just its words, a step that nothing goes into, which is a
+ * preparation whatever it was called, and a brace around a word that is none of its
+ * step's ingredients, which is that word. The rest is left to the text it becomes, which
+ * is parsed like any other.
  */
 export function formatJson(json) {
   if (!isObject(json)) throw new ParseError('A recipe is an object', 1)
@@ -175,7 +176,7 @@ export function formatJson(json) {
       ...(aliases.length > 0 ? [`aliases: ${aliases.join(', ')}`] : []),
     ],
     preparations: list(json.preparations).map((entry) => {
-      const node = nodeFromJson(entry)
+      const node = nodeFromJson(entry, true)
       if (node.kind !== 'preparation') throw new ParseError('Only preparations come before everything', 1)
       return node
     }),
@@ -183,17 +184,20 @@ export function formatJson(json) {
   })
 }
 
-function nodeFromJson(json) {
+/** `inside` is whether the node stands under a step or before them all, rather than last. */
+function nodeFromJson(json, inside = false) {
+  if (typeof json === 'string' && inside) return { kind: 'preparation', text: plain(json, 'preparation'), aside: null }
   if (!isObject(json)) throw new ParseError('A step, an ingredient or a preparation is an object', 1)
   const aside = plain(json.aside, 'aside') || null
   if ('step' in json) {
     const verb = plain(json.step, 'step')
-    if (list(json.children).length === 0) throw new ParseError(`A step needs an ingredient: ${verb}`, 1)
-    const children = list(json.children).map(nodeFromJson)
-    const sentence = words(json.sentence)
+    if (list(json.children).length === 0) {
+      if (inside) return { kind: 'preparation', text: verb, aside }
+      throw new ParseError(`A step needs an ingredient: ${verb}`, 1)
+    }
+    const children = list(json.children).map((child) => nodeFromJson(child, true))
     const takes = children.filter((child) => child.kind === 'ingredient').map((child) => child.name)
-    for (const [, name] of sentence.matchAll(/\{([^{}]*)\}/g))
-      if (!takes.includes(name)) throw new ParseError(`{${name}} is no ingredient of the step ${verb}`, 1)
+    const sentence = words(json.sentence).replace(/\{([^{}]*)\}/g, (brace, name) => (takes.includes(name) ? brace : name))
     return { kind: 'step', verb, aside, ...(sentence ? { sentence } : {}), children }
   }
   if ('ingredient' in json) {

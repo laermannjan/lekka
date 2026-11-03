@@ -201,6 +201,17 @@ test('JSON is forgiven what an assistant gets wrong in form, not in substance', 
     /Only preparations/,
   )
   assert.throws(() => formatJson({ title: 'A', root: { step: 'nichts', children: [] } }), ParseError)
+
+  // A preparation written as just its words, and a step that nothing goes into, are
+  // preparations; only the last step must take something.
+  assert.equal(
+    formatJson({
+      title: 'Brot',
+      preparations: ['start the evening before'],
+      root: { step: 'bake', children: [{ step: 'heat the oven', children: [] }, { ingredient: 'dough' }] },
+    }),
+    '# Brot\n* start the evening before\n\n- bake\n  * heat the oven\n  - dough\n',
+  )
 })
 
 test('a step may say itself as a sentence, on a line right under it', () => {
@@ -227,13 +238,13 @@ test('a step may say itself as a sentence, on a line right under it', () => {
   fails('- mischen\n  >\n  - Mehl: 1 kg\n', /needs words/)
 })
 
-test('JSON names in a sentence only what its step takes', () => {
+test("a brace in JSON around anything but its step's own ingredient is read as the word it holds", () => {
   const step = (sentence) => ({
     title: 'A',
     root: { step: 'mix', sentence, children: [{ ingredient: 'flour', amount: '1 kg' }, { ingredient: 'salt' }] },
   })
   assert.match(formatJson(step('mix {flour} and {salt}')), /\n {2}> mix \{flour\} and \{salt\}\n/)
   assert.match(formatJson(step('mix (gently) {flour}, the rest later')), /> mix \(gently\) \{flour\}/)
-  assert.throws(() => formatJson(step('mix {flour} and {sugar}')), /\{sugar\} is no ingredient of the step mix/)
+  assert.match(formatJson(step('mix {flour} into {the dough}')), /> mix \{flour\} into the dough\n/)
   assert.doesNotMatch(formatJson(step('  ')), />/)
 })
