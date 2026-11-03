@@ -1,7 +1,7 @@
 import { parseCard, ParseError } from './card.js'
 import * as api from './api.js'
 import { toDraft } from './edit.js'
-import { buildEditor } from './editor.js'
+import { renderWriter } from './write.js'
 import { section } from './page.js'
 import {
   devices as renderDevices,
@@ -463,11 +463,10 @@ function showEditor(id, draft) {
     history.replaceState(null, '', '/')
     return showLibrary()
   }
-  legacy(
-    id ? t('Edit') : t('New recipe'),
-    null,
-    buildEditor({
+  show(
+    renderWriter({
       draft,
+      fresh: !id,
       onClose: close,
       onSave: async (text) => {
         if (id) {

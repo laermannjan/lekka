@@ -3,351 +3,207 @@ import assert from 'node:assert/strict'
 
 import { parseCard, formatCard } from '../app/card.js'
 import {
-  toDraft, fromDraft, candidates, inputs, holds, parentOf, beneath,
-  addIngredient, addStep, editIngredient, editStep, removeNode, claim, upheaval,
-  fieldsOf, preparationLines, validate, label, storedForm, sweptBy,
+  toDraft, fromDraft, stepsIn, sources, ingredientsOf, insertAfter, setStep, deleteStep,
+  mergeable, merge, joined, split, moveIngredient, ingredientOf, rowOf, unbraced, named,
+  braced, shortOf, validate, storedForm,
 } from '../app/edit.js'
 
-const PANCAKES = `# Pfannkuchen (12 Stück)
+const ERDKRUSTE = `# Erdkruste (1 Laib)
 
-- braten (2 min je Seite)
+- reifen 12 h
   - verrühren
-    - Mehl: 250 g
-    - Milch: 500 ml
-  - schmelzen
-    - Butter: 30 g
+    > {Roggenvollkornmehl} und {Salz} einrühren
+    - aufschlämmen
+      > {reifes Anstellgut} in {Wasser 50 °C} aufschlämmen
+      - reifes Anstellgut: 50 g
+      - Wasser 50 °C: 285 g
+    - Roggenvollkornmehl: 250 g
+    - Salz: 5 g
 `
 
 const draftOf = (text) => toDraft(parseCard(text))
 const empty = () => draftOf('# Neu\n')
 const kinds = (faults) => faults.map((fault) => fault.kind)
-
-test('a card opens as one strand and closes as the same card', () => {
-  const draft = draftOf(PANCAKES)
-  assert.equal(draft.strands.length, 1)
-  assert.equal(draft.title, 'Pfannkuchen')
-  assert.equal(draft.yields, '12 Stück')
-  assert.equal(formatCard(fromDraft(draft)), PANCAKES)
+const verbs = (draft) => stepsIn(draft).map((step) => step.verb)
+const text = (draft) => formatCard(fromDraft(draft))
+const fieldsOf = (step) => ({
+  sentence: unbraced(step.sentence),
+  verb: step.verb,
+  aside: step.aside ?? '',
+  ingredients: ingredientsOf(step),
+  from: step.children.filter((child) => child.kind === 'step'),
 })
 
-test('an empty card has no strands and is not saveable', () => {
-  assert.deepEqual(empty().strands, [])
+test('a card opens as one strand, its steps listed in the order they are done, and closes as the card it was', () => {
+  const draft = draftOf(ERDKRUSTE)
+  assert.equal(draft.strands.length, 1)
+  assert.deepEqual(verbs(draft), ['aufschlämmen', 'verrühren', 'reifen 12 h'])
+  for (const step of stepsIn(draft)) setStep(draft, step, fieldsOf(step))
+  assert.equal(text(draft), ERDKRUSTE)
+})
+
+test('an empty card has no steps and is not saveable', () => {
+  assert.deepEqual(stepsIn(empty()), [])
   assert.deepEqual(kinds(validate(empty())), ['empty'])
 })
 
-test('a new ingredient waits as a strand of its own', () => {
-  const draft = addIngredient(empty(), { name: 'Mehl', amount: '250', unit: 'g' })
-  assert.equal(draft.strands.length, 1)
-  assert.deepEqual(draft.strands[0], {
-    kind: 'ingredient', name: 'Mehl', aside: null,
-    amount: { kind: 'number', value: 250, unit: 'g' },
+test('a recipe is written from scratch one step after the other, each carrying on from the last', () => {
+  let { draft, node: first } = insertAfter(empty(), null, {
+    sentence: 'Mehl und Milch verrühren',
+    verb: 'verrühren',
+    ingredients: [ingredientOf({ amount: '250 g', name: 'Mehl (Type 550)' }), ingredientOf({ amount: '500 ml', name: 'Milch' })],
   })
-})
+  ;({ draft } = insertAfter(draft, first, { sentence: 'in der Pfanne 2 min je Seite braten', verb: 'braten' }))
+  assert.equal(
+    text({ ...draft, title: 'Pfannkuchen' }),
+    `# Pfannkuchen
 
-test('an amount may be a range, a count, or words', () => {
-  const of = (amount, unit) =>
-    addIngredient(empty(), { name: 'X', amount, unit }).strands[0].amount
-  assert.deepEqual(of('40-60', 'g'), { kind: 'range', from: 40, to: 60, unit: 'g' })
-  assert.deepEqual(of('2', ''), { kind: 'number', value: 2, unit: '' })
-  assert.deepEqual(of('nach Geschmack', ''), { kind: 'words', text: 'nach Geschmack' })
-  assert.equal(of('', ''), null)
-})
-
-test('a note on an ingredient is its aside, and an empty one is no aside', () => {
-  const of = (aside) => addIngredient(empty(), { name: 'Mehl', aside }).strands[0].aside
-  assert.equal(of('Type 550'), 'Type 550')
-  assert.equal(of('   '), null)
-  assert.equal(of(undefined), null)
-})
-
-/* The filter the editor needs: everything already used has a parent, so it is not a root. */
-
-test('the candidates are the strands, and taking one hides it', () => {
-  let draft = addIngredient(addIngredient(empty(), { name: 'Mehl' }), { name: 'Milch' })
-  const [mehl, milch] = draft.strands
-  assert.deepEqual(candidates(draft), [mehl, milch])
-
-  draft = addStep(draft, { verb: 'verrühren', inputs: [mehl, milch] })
-  assert.deepEqual(candidates(draft), draft.strands)
-  assert.equal(candidates(draft).length, 1)
-  assert.equal(candidates(draft)[0].verb, 'verrühren')
-})
-
-test('a step takes the place of the earliest input it swallowed', () => {
-  let draft = empty()
-  for (const name of ['A', 'B', 'C', 'D']) draft = addIngredient(draft, { name })
-  const [a, b, c, d] = draft.strands
-
-  draft = addStep(draft, { verb: 'mischen', inputs: [b, d] })
-  assert.deepEqual(draft.strands.map(label), ['A', 'mischen', 'C'])
-  assert.deepEqual(inputs(draft.strands[1]), [b, d])
-  assert.deepEqual([a, c], [draft.strands[0], draft.strands[2]])
-})
-
-test('editing a step offers its own inputs back, and nothing it is inside', () => {
-  const draft = draftOf(PANCAKES)
-  const braten = draft.strands[0]
-  const [verruehren, schmelzen] = inputs(braten)
-
-  // Its own inputs are invisible as strands; only editing puts them back on the list.
-  assert.deepEqual(candidates(draft, braten), [verruehren, schmelzen])
-  // A step inside braten may never be fed braten: that would be a loop.
-  assert.deepEqual(candidates(draft, verruehren), inputs(verruehren))
-  assert.equal(holds(braten, verruehren), true)
-  assert.equal(holds(verruehren, braten), false)
-})
-
-test('dropping an input makes it a strand again, and adding one takes it away', () => {
-  let draft = draftOf(PANCAKES)
-  const braten = draft.strands[0]
-  const [verruehren, schmelzen] = inputs(braten)
-
-  draft = editStep(draft, braten, { verb: 'braten', inputs: [verruehren] })
-  assert.deepEqual(draft.strands, [braten, schmelzen])
-  assert.deepEqual(inputs(braten), [verruehren])
-  assert.deepEqual(kinds(validate(draft)), ['unjoined'])
-
-  draft = editStep(draft, braten, { verb: 'braten', inputs: [verruehren, schmelzen] })
-  assert.deepEqual(draft.strands, [braten])
-  assert.deepEqual(validate(draft), [])
-})
-
-test('deleting a step frees what it held instead of taking the strand with it', () => {
-  let draft = draftOf(PANCAKES)
-  const braten = draft.strands[0]
-  const kept = inputs(braten)
-
-  draft = removeNode(draft, braten)
-  assert.deepEqual(draft.strands, kept)
-  assert.deepEqual(kinds(validate(draft)), ['unjoined'])
-})
-
-test('deleting the last ingredient of a step takes the empty step with it', () => {
-  let draft = draftOf(PANCAKES)
-  const braten = draft.strands[0]
-  const [verruehren, schmelzen] = inputs(braten)
-  const butter = inputs(schmelzen)[0]
-  assert.equal(parentOf(draft, butter), schmelzen)
-
-  // A step with nothing going into it is not a shape the format has (rule 5), so it
-  // does not linger as a fault: it goes when the last thing in it goes.
-  draft = removeNode(draft, butter)
-  assert.deepEqual(inputs(braten), [verruehren])
-  assert.deepEqual(validate(draft), [])
-})
-
-test('emptying cascades only as far as it must', () => {
-  let draft = draftOf('# A\n\n- backen\n  - ruhen\n    - kneten\n      - Mehl: 500 g\n')
-  draft = removeNode(draft, beneath(draft.strands[0])[0])
-  // kneten, then ruhen, then backen are each left with nothing, so all three go.
-  assert.deepEqual(draft.strands, [])
-  assert.deepEqual(kinds(validate(draft)), ['empty'])
-})
-
-/* Choosing rows. A row is an ingredient; what it stands for is whatever holds it. */
-
-test('choosing every row of a strand means the strand', () => {
-  const draft = draftOf(PANCAKES)
-  const braten = draft.strands[0]
-  assert.deepEqual(claim(draft, beneath(braten)), [braten])
-})
-
-test('choosing every row under one step means that step, not the rows', () => {
-  const draft = draftOf(PANCAKES)
-  const [verruehren, schmelzen] = inputs(draft.strands[0])
-  assert.deepEqual(claim(draft, beneath(verruehren)), [verruehren])
-  assert.deepEqual(claim(draft, beneath(schmelzen)), [schmelzen])
-  // Both together are the whole strand again, so the answer climbs to its root.
-  assert.deepEqual(claim(draft, [...beneath(verruehren), ...beneath(schmelzen)]), [draft.strands[0]])
-})
-
-test('choosing some of a step means those ingredients, which must come out of it', () => {
-  const draft = draftOf(PANCAKES)
-  const verruehren = inputs(draft.strands[0])[0]
-  const [mehl] = inputs(verruehren)
-
-  const taken = claim(draft, [mehl])
-  assert.deepEqual(taken, [mehl])
-
-  const { moved, emptied } = upheaval(draft, taken)
-  assert.deepEqual(moved, [{ node: mehl, from: verruehren }])
-  // verrühren keeps Milch, so it is not left empty.
-  assert.deepEqual(emptied, [])
-})
-
-test('taking the last input of a step names the step as one that would be emptied', () => {
-  const draft = draftOf(PANCAKES)
-  const schmelzen = inputs(draft.strands[0])[1]
-  const butter = inputs(schmelzen)[0]
-
-  // Butter is the only thing in schmelzen, so choosing its row alone reads as schmelzen.
-  assert.deepEqual(claim(draft, [butter]), [schmelzen])
-  assert.deepEqual(upheaval(draft, [schmelzen]).emptied, [])
-
-  // Naming the ingredient itself is what would empty it.
-  const { moved, emptied } = upheaval(draft, [butter])
-  assert.deepEqual(moved, [{ node: butter, from: schmelzen }])
-  assert.deepEqual(emptied, [schmelzen])
-})
-
-test('rows chosen across two strands mean both roots, which is how strands join', () => {
-  let draft = addIngredient(empty(), { name: 'Reis' })
-  draft = addStep(draft, { verb: 'kochen', inputs: [draft.strands[0]] })
-  draft = addIngredient(draft, { name: 'Hähnchen' })
-  draft = addStep(draft, { verb: 'braten', inputs: [draft.strands[1]] })
-  const [kochen, braten] = draft.strands
-
-  const taken = claim(draft, draft.strands.flatMap(beneath))
-  assert.deepEqual(taken, [kochen, braten])
-  assert.deepEqual(upheaval(draft, taken), { moved: [], emptied: [] })
-
-  draft = addStep(draft, { verb: 'anrichten', inputs: taken })
-  assert.deepEqual(validate(draft), [])
-})
-
-test('a step built from rows pulled out of another leaves that one behind, minus them', () => {
-  let draft = draftOf(PANCAKES)
-  const braten = draft.strands[0]
-  const verruehren = inputs(braten)[0]
-  const [mehl, milch] = inputs(verruehren)
-
-  draft = addStep(draft, { verb: 'sieben', inputs: claim(draft, [mehl]) })
-  assert.deepEqual(inputs(verruehren), [milch])
-  assert.deepEqual(draft.strands.map(label), ['braten', 'sieben'])
-  assert.deepEqual(kinds(validate(draft)), ['unjoined'])
-})
-
-test('pulling out the last input takes the emptied step with it', () => {
-  let draft = draftOf(PANCAKES)
-  const braten = draft.strands[0]
-  const schmelzen = inputs(braten)[1]
-  const butter = inputs(schmelzen)[0]
-
-  draft = addStep(draft, { verb: 'bräunen', inputs: [butter] })
-  assert.deepEqual(inputs(braten).map(label), ['verrühren'])
-  assert.equal(draft.strands.includes(schmelzen), false)
-  assert.deepEqual(draft.strands.map(label), ['braten', 'bräunen'])
-})
-
-test('choosing nothing claims nothing', () => {
-  assert.deepEqual(claim(draftOf(PANCAKES), []), [])
-})
-
-/* Validation: the parser's own rules, said about a node instead of a line number. */
-
-test('an ingredient nobody uses is named as unused', () => {
-  const draft = addIngredient(draftOf(PANCAKES), { name: 'Zucker', amount: '2', unit: 'EL' })
-  const faults = validate(draft)
-  assert.deepEqual(kinds(faults), ['unused'])
-  assert.match(faults[0].message, /2 EL Zucker/)
-  assert.equal(faults[0].node, draft.strands.at(-1))
-})
-
-test('two strands that never meet are one fault naming both', () => {
-  let draft = addIngredient(empty(), { name: 'Reis' })
-  draft = addStep(draft, { verb: 'kochen', inputs: [draft.strands[0]] })
-  draft = addIngredient(draft, { name: 'Hähnchen' })
-  draft = addStep(draft, { verb: 'braten', inputs: [draft.strands[1]] })
-
-  const faults = validate(draft)
-  assert.deepEqual(kinds(faults), ['unjoined'])
-  assert.match(faults[0].message, /kochen and braten never meet/)
-
-  draft = addStep(draft, { verb: 'anrichten', inputs: [...draft.strands] })
-  assert.deepEqual(validate(draft), [])
-  assert.equal(draft.strands.length, 1)
-})
-
-test('a card needs a title, a step a verb, an ingredient a name', () => {
-  let draft = addIngredient({ ...empty(), title: ' ' }, { name: '  ' })
-  draft = addStep(draft, { verb: '', inputs: [draft.strands[0]] })
-  assert.deepEqual(kinds(validate(draft)).sort(), ['name', 'title', 'verb'])
-})
-
-test('a step fed only preparations is starved, as the parser would say', () => {
-  const draft = addStep(empty(), { verb: 'backen', preparations: ['Ofen vorheizen'] })
-  assert.deepEqual(kinds(validate(draft)), ['starved'])
-  assert.deepEqual(preparationLines(draft.strands[0]), ['Ofen vorheizen'])
-})
-
-test('a preparation keeps its bracket as an aside', () => {
-  const draft = addStep(empty(), { verb: 'backen', preparations: ['Ofen vorheizen (200 °C)'] })
-  const prep = draft.strands[0].children[0]
-  assert.deepEqual(prep, { kind: 'preparation', text: 'Ofen vorheizen', aside: '200 °C' })
-  assert.deepEqual(preparationLines(draft.strands[0]), ['Ofen vorheizen (200 °C)'])
-})
-
-/* The round trip: what the form shows is what the node holds. */
-
-test('a node fills a form, and the form written back leaves it unchanged', () => {
-  const draft = draftOf('# A\n\n- braten (kurz)\n  - Mehl (Type 550): 40-60 g\n')
-  const braten = draft.strands[0]
-  const mehl = inputs(braten)[0]
-
-  assert.deepEqual(fieldsOf(mehl), { name: 'Mehl', aside: 'Type 550', amount: '40-60', unit: 'g' })
-  assert.deepEqual(fieldsOf(braten), {
-    verb: 'braten', aside: 'kurz', preparations: [], inputs: [mehl],
-  })
-
-  editIngredient(draft, mehl, fieldsOf(mehl))
-  editStep(draft, braten, fieldsOf(braten))
-  assert.equal(formatCard(fromDraft(draft)), '# A\n\n- braten (kurz)\n  - Mehl (Type 550): 40-60 g\n')
-})
-
-test('an amount typed back in keeps its unit apart from its number', () => {
-  const draft = addIngredient(empty(), { name: 'Milch', amount: '0,5', unit: 'l' })
-  const milch = draft.strands[0]
-  editIngredient(draft, milch, { ...fieldsOf(milch), amount: '1' })
-  assert.deepEqual(milch.amount, { kind: 'number', value: 1, unit: 'l' })
-})
-
-/* What a move sweeps away that nobody pointed at. */
-
-const NESTED = `# A
-
-- anrichten (heiß)
-  * Teller wärmen
+- braten
+  > in der Pfanne 2 min je Seite braten
   - verrühren
-    - Mehl: 250 g
-`
-
-test('emptying climbs all the way, and is said all the way', () => {
-  const draft = draftOf(NESTED)
-  const anrichten = draft.strands[0]
-  const verruehren = inputs(anrichten)[0]
-  const mehl = inputs(verruehren)[0]
-
-  // Mehl is all verrühren holds, and verrühren is all anrichten holds, so deleting one
-  // ingredient takes the whole card body with it - including `(heiß)` and the preparation.
-  assert.deepEqual(sweptBy(draft, mehl).map(label), ['verrühren', 'anrichten'])
-  assert.deepEqual(upheaval(draft, [mehl]).emptied.map(label), ['verrühren', 'anrichten'])
-
-  assert.deepEqual(removeNode(draft, mehl).strands, [])
+    > {Mehl} und {Milch} verrühren
+    - Mehl (Type 550): 250 g
+    - Milch: 500 ml
+`,
+  )
+  assert.deepEqual(validate({ ...draft, title: 'Pfannkuchen' }), [])
 })
 
-test('nothing is swept when the step keeps something', () => {
-  const draft = draftOf(PANCAKES)
-  const verruehren = inputs(draft.strands[0])[0]
-  assert.deepEqual(sweptBy(draft, inputs(verruehren)[0]), [])
+test('a step put in between takes what the one above made, and gives it on to the one below', () => {
+  let draft = draftOf(ERDKRUSTE)
+  const [aufschlaemmen] = stepsIn(draft)
+  ;({ draft } = insertAfter(draft, aufschlaemmen, { sentence: 'kurz quellen lassen', verb: 'quellen' }))
+  assert.deepEqual(verbs(draft), ['aufschlämmen', 'quellen', 'verrühren', 'reifen 12 h'])
+  assert.deepEqual(validate(draft), [])
+})
+
+test('a new step that takes nothing from before starts a strand of its own, until a step takes both', () => {
+  let draft = draftOf(ERDKRUSTE)
+  const reifen = stepsIn(draft).at(-1)
+  let soaker
+  ;({ draft, node: soaker } = insertAfter(draft, reifen, {
+    sentence: 'die Saaten mit kochendem Wasser übergießen',
+    verb: 'übergießen',
+    ingredients: [ingredientOf({ amount: '100 g', name: 'Saaten' }), ingredientOf({ amount: '100 g', name: 'kochendes Wasser' })],
+    from: [],
+  }))
+  assert.equal(draft.strands.length, 2)
+  assert.deepEqual(kinds(validate(draft)), ['unjoined'])
+  assert.deepEqual(sources(draft, null).map((step) => step.verb), ['reifen 12 h', 'übergießen'])
+
+  ;({ draft } = insertAfter(draft, soaker, { sentence: 'alles verrühren', verb: 'verrühren', from: [reifen, soaker] }))
+  assert.equal(draft.strands.length, 1)
+  assert.deepEqual(verbs(draft), ['aufschlämmen', 'verrühren', 'reifen 12 h', 'übergießen', 'verrühren'])
+  assert.deepEqual(validate(draft), [])
+})
+
+test('a step no longer taken is the end of a strand again', () => {
+  let draft = draftOf(ERDKRUSTE)
+  const [aufschlaemmen, verruehren] = stepsIn(draft)
+  draft = setStep(draft, verruehren, { ...fieldsOf(verruehren), from: [] })
+  assert.equal(draft.strands.length, 2)
+  assert.ok(draft.strands.includes(aufschlaemmen))
+  assert.ok(sources(draft, verruehren).includes(aufschlaemmen))
+  assert.deepEqual(kinds(validate(draft)), ['unjoined'])
+})
+
+test('a step deleted takes its own ingredients, and what went into it goes into the step after it', () => {
+  let draft = draftOf(ERDKRUSTE)
+  const [, verruehren] = stepsIn(draft)
+  draft = deleteStep(draft, verruehren)
+  assert.deepEqual(verbs(draft), ['aufschlämmen', 'reifen 12 h'])
+  assert.ok(!text(draft).includes('Roggenvollkornmehl'))
+  assert.deepEqual(validate(draft), [])
+})
+
+test('the last step deleted leaves the one before it as the end', () => {
+  let draft = draftOf(ERDKRUSTE)
+  draft = deleteStep(draft, stepsIn(draft).at(-1))
+  assert.deepEqual(verbs(draft), ['aufschlämmen', 'verrühren'])
+  assert.equal(draft.strands.length, 1)
+})
+
+test('two steps merge when the first goes straight into the second: their words joined, their ingredients one list', () => {
+  let draft = draftOf(ERDKRUSTE)
+  const [aufschlaemmen, verruehren, reifen] = stepsIn(draft)
+  assert.equal(mergeable(draft, aufschlaemmen), null)
+  assert.equal(mergeable(draft, verruehren), aufschlaemmen)
+
+  const said = joined(aufschlaemmen, verruehren)
+  assert.equal(said.sentence, 'reifes Anstellgut in Wasser 50 °C aufschlämmen, then Roggenvollkornmehl und Salz einrühren')
+  assert.equal(said.verb, 'aufschlämmen, verrühren')
+
+  draft = merge(draft, verruehren, said)
+  assert.deepEqual(verbs(draft), ['aufschlämmen, verrühren', 'reifen 12 h'])
+  assert.deepEqual(ingredientsOf(verruehren).map((one) => one.name), ['reifes Anstellgut', 'Wasser 50 °C', 'Roggenvollkornmehl', 'Salz'])
+  assert.equal(verruehren.sentence, '{reifes Anstellgut} in {Wasser 50 °C} aufschlämmen, then {Roggenvollkornmehl} und {Salz} einrühren')
+  assert.ok(reifen.children.includes(verruehren))
+  assert.deepEqual(validate(draft), [])
+})
+
+test('the same ingredient in both merged steps, in one unit, is one line of their sum', () => {
+  let draft = draftOf('# B\n\n- kneten\n  - mischen\n    - Salz: 5 g\n    - Mehl: 300 g\n  - Salz: 3 g\n')
+  const [mischen, kneten] = stepsIn(draft)
+  draft = merge(draft, kneten, joined(mischen, kneten))
+  assert.deepEqual(ingredientsOf(kneten).map(rowOf), [{ amount: '8 g', name: 'Salz' }, { amount: '300 g', name: 'Mehl' }])
+})
+
+test('a step split: what is ticked moves into a new step right after it, which carries on from it', () => {
+  let draft = draftOf(ERDKRUSTE)
+  const [, verruehren] = stepsIn(draft)
+  const [mehl, salz] = ingredientsOf(verruehren)
+  ;({ draft } = split(draft, verruehren, {
+    keep: { sentence: 'Roggenvollkornmehl einrühren', verb: 'einrühren' },
+    next: { sentence: 'Salz einstreuen und 2 min weiterrühren', verb: 'weiterrühren 2 min' },
+    moving: [salz],
+  }))
+  assert.deepEqual(verbs(draft), ['aufschlämmen', 'einrühren', 'weiterrühren 2 min', 'reifen 12 h'])
+  assert.deepEqual(ingredientsOf(verruehren), [mehl])
+  assert.equal(stepsIn(draft)[2].sentence, '{Salz} einstreuen und 2 min weiterrühren')
+  assert.deepEqual(validate(draft), [])
+})
+
+test('an ingredient moves from one step to another', () => {
+  let draft = draftOf(ERDKRUSTE)
+  const [aufschlaemmen, verruehren] = stepsIn(draft)
+  const salz = ingredientsOf(verruehren).at(-1)
+  draft = moveIngredient(draft, salz, aufschlaemmen)
+  assert.ok(ingredientsOf(aufschlaemmen).includes(salz))
+  assert.ok(!ingredientsOf(verruehren).includes(salz))
+})
+
+test('an ingredient is written in two fields, its sort in brackets, and read back the same', () => {
+  const mehl = ingredientOf({ amount: '40-60 g', name: 'Mehl (Type 550)' })
+  assert.deepEqual(mehl, { kind: 'ingredient', name: 'Mehl', aside: 'Type 550', amount: { kind: 'range', from: 40, to: 60, unit: 'g' } })
+  assert.deepEqual(rowOf(mehl), { amount: '40-60 g', name: 'Mehl (Type 550)' })
+  assert.equal(ingredientOf({ amount: '', name: 'Pfeffer' }).amount, null)
+})
+
+test('a sentence is typed without braces, and the names it says are braced as it is stored', () => {
+  const ingredients = [ingredientOf({ name: 'Wasser 70 °C' }), ingredientOf({ name: 'Roggenvollkornmehl' }), ingredientOf({ name: 'Salz' }), ingredientOf({ name: 'Mehl' })]
+  const typed = 'Den Sauerteig mit Wasser 70 °C, Roggenvollkornmehl und salz verrühren'
+  assert.deepEqual(named(typed, ingredients).map((one) => one.name), ['Wasser 70 °C', 'Roggenvollkornmehl', 'Salz'])
+  assert.equal(braced(typed, ingredients), 'Den Sauerteig mit {Wasser 70 °C}, {Roggenvollkornmehl} und {Salz} verrühren')
+  assert.equal(unbraced('{Mehl} sieben'), 'Mehl sieben')
+})
+
+test('a short form is guessed from what a step says: its verb, its heat, its time', () => {
+  // Outside a browser the screens speak English, where the verb comes first.
+  assert.equal(shortOf('bake at 220 °C for 40 min'), 'bake 220 °C 40 min')
+  assert.equal(shortOf('{Mehl} sieben'), 'mehl')
+  assert.equal(shortOf(''), '')
 })
 
 test('a draft with more than one strand cannot be stored', () => {
-  // `fromDraft` keeps one root, so a comparison against it would be against the
-  // truncation itself and would always pass.
-  let draft = addIngredient(empty(), { name: 'Reis' })
-  draft = addStep(draft, { verb: 'kochen', inputs: [draft.strands[0]] })
+  let draft = draftOf(ERDKRUSTE)
   assert.equal(typeof storedForm(draft), 'string')
-
-  draft = addIngredient(draft, { name: 'Salz' })
-  draft = addStep(draft, { verb: 'würzen', inputs: [draft.strands[1]] })
-  assert.equal(draft.strands.length, 2)
+  ;({ draft } = insertAfter(draft, stepsIn(draft).at(-1), { sentence: 'salzen', verb: 'salzen', ingredients: [ingredientOf({ name: 'Salz' })], from: [] }))
   assert.equal(storedForm(draft), null)
 })
 
-
-test('editing a step keeps how it is said', () => {
-  const draft = draftOf('# A\n\n- braten\n  > {Butter} braten\n  - Butter: 30 g\n')
-  const braten = draft.strands[0]
-  editStep(draft, braten, { ...fieldsOf(braten), aside: 'kurz' })
-  assert.equal(formatCard(fromDraft(draft)), '# A\n\n- braten (kurz)\n  > {Butter} braten\n  - Butter: 30 g\n')
+test('a card needs a title, a step a verb, an ingredient a name, and every step something going in', () => {
+  const { draft } = insertAfter({ ...empty(), title: ' ' }, null, { sentence: '', verb: '', ingredients: [ingredientOf({ name: ' ' })] })
+  assert.deepEqual(kinds(validate(draft)).sort(), ['name', 'title', 'verb'])
+  const { draft: bare } = insertAfter(empty(), null, { sentence: 'backen', verb: 'backen' })
+  assert.deepEqual(kinds(validate(bare)), ['starved'])
 })

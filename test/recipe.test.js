@@ -60,9 +60,11 @@ test('a range anywhere makes the total a range', () => {
   assert.equal(clock(2 * 3600 - 10), '2h', 'a minute rounded up carries into the hour')
 })
 
-test('the outermost preparations come first', () => {
-  const steps = stepsOf(card('barbecue-pork-ribs'))
-  assert.equal(steps[0].title, 'Buy charcoal the day before')
+test('what comes before everything is no step: the steps start after it', () => {
+  const ribs = card('barbecue-pork-ribs')
+  assert.equal(ribs.preparations[0].text, 'buy charcoal the day before')
+  const steps = stepsOf(ribs)
+  assert.equal(steps[0].title, 'Remove membrane')
   assert.equal(steps.at(-1).title.startsWith('Glaze over medium heat'), true)
 })
 
