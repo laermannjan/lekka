@@ -226,9 +226,11 @@ A phone's keyboard covers the bottom of the page without telling it. Sheets and 
 editor's forms stand above it instead (`watchKeyboard` in `app/ui.js`), and the bar at
 the bottom steps aside while something in the page is typed into.
 
-**Shopping at `/shop/…`.** The gathered list at the amount the recipe was last scaled
-to, less what is at home: a line ticked off is at home, one with an amount noted is at
-home in part, and only the rest is bought. Shared as plain text, so it goes into
+**Shopping at `/shop/…`,** a button right under the gathered list. The same list at the
+amount the recipe was last scaled to, laid out the same way, less what is at home: every
+line starts with a field at nothing, and typing what there is leaves the rest to buy. A
+line there is all of, or one whose name is tapped, is crossed out and drops to the
+bottom, at home, where a tap brings it back. Shared as plain text, so it goes into
 Reminders, Notes or a message. What is at home is kept on the device, by recipe
 (`app/shop.js`).
 

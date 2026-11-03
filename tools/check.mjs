@@ -422,6 +422,28 @@ addEventListener('load', async () => {
   await after(100)
   check('and one fewer takes it back', count() === '12' && listed().startsWith('250 g Mehl'), \`\${count()}, \${listed()}\`)
 
+  // What to buy: everything at nothing at home, until it is typed in or crossed out.
+  named('Shopping list').click()
+  await after(400)
+  const buying = () => [...document.querySelectorAll('ul.shop:not(.home) .line')]
+    .map((one) => \`\${one.querySelector('.name').textContent}: \${one.querySelector('.sub').textContent}\`).join(' | ')
+  check('the shopping list starts with nothing at home',
+    buying() === 'Mehl Type 550: 250 g to buy | Milch: 500 ml to buy | Eier: 2 to buy | Butter: 30 g to buy', buying())
+  const flour = document.querySelector('ul.shop .line input')
+  flour.value = '100'
+  flour.dispatchEvent(new Event('input'))
+  check('typing what is at home leaves the rest to buy', buying().startsWith('Mehl Type 550: 150 g still to buy'), buying())
+  flour.dispatchEvent(new Event('change'))
+  labelled('Milch: not needed, cross it out').click()
+  await after(300)
+  const home = () => [...document.querySelectorAll('ul.shop.home .name')].map((one) => one.textContent).join(', ')
+  check('a line tapped is crossed out, at home', !buying().includes('Milch') && home() === 'Milch', \`\${buying()} / \${home()}\`)
+  labelled('Milch: put back on the list').click()
+  await after(300)
+  check('and a tap brings it back', buying().includes('Milch: 500 ml to buy') && home() === '', \`\${buying()} / \${home()}\`)
+  labelled('Back to the recipe').click()
+  await after(500)
+
   check('cooking starts from the bar at the bottom', Boolean(document.querySelector('#dock .start')))
 
   // The table is the datasheet's, inside a box of its own, so its rules reach it.
