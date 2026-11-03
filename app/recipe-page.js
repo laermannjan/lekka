@@ -1,7 +1,8 @@
-import { formatAmount, formatNumber } from './amount.js'
+import { formatAmount, formatNumber, scaleAmount } from './amount.js'
 import { renderReading } from './read.js'
-import { aboutOf, gather, marks, phrase, servings, sourceName, stepsOf, totalTime } from './recipe.js'
-import { element, overview, roundButton, said, slide, wave } from './ui.js'
+import { aboutOf, gather, phrase, servings, sourceName, stepsOf, totalTime } from './recipe.js'
+import { element, overview, roundButton, said, wave } from './ui.js'
+import { t } from './i18n.js'
 
 /**
  * A recipe as it is read before cooking: what it is and how long it takes, everything that
@@ -9,22 +10,45 @@ import { element, overview, roundButton, said, slide, wave } from './ui.js'
  * the same flow as a table. Cooking it starts from the bar at the bottom of the screen,
  * which is the caller's.
  *
- * Every amount on it scales the whole recipe: the yield's, a gathered one, one in a step.
- * Each opens the same sheet, which asks how much there is of that one thing.
+ * How much is set where it is listed: the yield and every amount in the gathered list are
+ * fields, and typing in one scales the whole recipe by it. Everything else follows as it is
+ * typed, in place, so the field keeps the keyboard and nothing is drawn again under it.
  *
- * `state` is `{ factor, table }` and lives with the caller, so the screen can be drawn
- * again without losing any of it. `on` holds what the screen cannot do itself: `back`,
- * `more` (table, edit, share, delete), and `redraw`.
+ * `state` is `{ factor, table }` and lives with the caller. `on` holds what the screen
+ * cannot do itself: `back`, `more` (table, edit, share, delete), `redraw`, and `factor`,
+ * told each factor as it is typed.
  */
 export function renderRecipe(card, state, on) {
   const steps = stepsOf(card)
   const about = aboutOf(card)
   const total = totalTime(steps)
-  const scale = (node) => scaleSheet(node, state, on)
+
+  // Every amount on the screen, so a field being typed in can be followed by the rest.
+  const shown = []
+  const fields = []
+  const scaled = element('p', 'scaled')
+  const follow = (factor, typing = null) => {
+    for (const { node, amount } of shown) node.textContent = formatAmount(scaleAmount(amount, factor))
+    for (const one of fields) if (one.input !== typing) one.show(factor)
+    const changed = Math.abs(factor - 1) > 0.005
+    const reset = element('button', 'plain', t('Back to the recipe’s amounts'))
+    reset.type = 'button'
+    reset.onclick = () => {
+      follow(1)
+      on.factor(1)
+    }
+    scaled.replaceChildren(...(changed ? [element('span', 'num', `× ${formatNumber(round(factor, 100))}`), reset] : []))
+    if (typing) on.factor(factor)
+  }
+  const field = (amount, label) => {
+    const one = amountField(amount, label, follow)
+    fields.push(one)
+    return one.node
+  }
 
   const facts = element('p', 'facts', undefined, [
     total ? element('span', 'token time', total) : null,
-    element('span', '', `${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`),
+    element('span', '', steps.length === 1 ? t('1 step') : t('{n} steps', { n: steps.length })),
   ])
   if (about.source) {
     const link = element('a', '', sourceName(about.source))
@@ -36,10 +60,10 @@ export function renderRecipe(card, state, on) {
     facts.append(link)
   }
 
-  return [
+  const parts = [
     element('div', 'bar', undefined, [
-      roundButton('back', 'Back to recipes', on.back),
-      roundButton('more', 'Table, edit, share or delete', on.more),
+      roundButton('back', t('Back to recipes'), on.back),
+      roundButton('more', t('Table, edit, share or delete'), on.more),
     ]),
     element('header', 'recipe-head', undefined, [
       element('h1', 'recipe-title', card.title),
@@ -48,38 +72,77 @@ export function renderRecipe(card, state, on) {
     ]),
     ...(state.table
       ? [element('div', 'datasheet table', undefined, [renderReading(card, state.factor, 0)])]
-      : [ingredients(card, state, scale), method(steps, state.factor, scale)]),
+      : [
+          ingredients(card, field, scaled, state.factor, shown),
+          method(steps, state.factor, (node, amount) => shown.push({ node, amount })),
+        ]),
   ]
+  follow(state.factor)
+  return parts
 }
 
-function ingredients(card, state, scale) {
+function ingredients(card, field, scaled, factor, shown) {
   const lines = gather(card)
-  const measured = lines.some((line) => line.amounts.some((amount) => amount.kind !== 'words'))
+  const counted = servings(card.yields)
+  const makes = counted
+    ? field({ kind: 'number', value: counted.count, unit: counted.unit }, counted.unit ? t('How much it makes, in {unit}', { unit: counted.unit }) : t('How much it makes'))
+    : element('span', 'quiet', card.yields ?? '')
+  const editable = lines.some((line) => line.amounts.length === 1 && line.amounts[0].kind === 'number')
+
   return element('section', 'ingredients', undefined, [
-    element('p', 'yield', undefined, [element('span', 'for', 'for'), yieldOf(card, state, scale)]),
-    overview(lines, state.factor, scale),
-    measured ? element('p', 'hint', 'Tap any amount to scale the whole recipe by it.') : null,
+    card.yields ? element('p', 'yield', undefined, [element('span', 'for', t('for')), makes]) : null,
+    overview(lines, factor, (line) => {
+      const one = line.amounts.length === 1 ? line.amounts[0] : null
+      if (one?.kind === 'number') return element('span', 'amount', undefined, [field(one, one.unit ? t('{name}, in {unit}', { name: line.name, unit: one.unit }) : line.name)])
+      // In two units, or as a range, an amount is shown and followed, not typed in.
+      const node = element('span', 'amount', line.amounts.map((each) => formatAmount(scaleAmount(each, factor))).join(' + '))
+      if (line.amounts.length === 1 && one) shown.push({ node, amount: one })
+      return node
+    }),
+    scaled,
+    editable ? element('p', 'hint', t('Change any amount, and the whole recipe follows.')) : null,
   ])
 }
 
-/** How much it makes, at the factor: an amount like any other, when it is counted. */
-function yieldOf(card, state, scale) {
-  const counted = servings(card.yields)
-  if (!counted)
-    return element('span', 'token use', state.factor === 1 ? (card.yields ?? 'as written') : `× ${formatNumber(round(state.factor))}`)
-  const amount = { kind: 'number', value: counted.count, unit: counted.unit }
-  const current = counted.count * state.factor
-  const shown = formatAmount({ ...amount, value: round(current) })
-  // A count scaled by what somebody has is rarely whole, and says it is near one.
-  const near = Math.abs(round(current) - current) > 0.001 ? '≈ ' : ''
-  const button = element('button', 'token use', `${near}${shown}`)
-  button.type = 'button'
-  button.setAttribute('aria-label', `Makes ${shown}: scale the recipe`)
-  button.onclick = () => scale({ name: counted.unit || card.yields, amount, makes: true })
-  return button
+/**
+ * One amount as a field: its number to type over, its unit after it. Typing a number
+ * tells `follow` the factor it makes; leaving the field shows what the factor makes of
+ * it again, whatever was left in it.
+ */
+function amountField(amount, label, follow) {
+  const input = element('input')
+  input.type = 'text'
+  input.inputMode = 'decimal'
+  input.enterKeyHint = 'done'
+  input.autocomplete = 'off'
+  input.setAttribute('aria-label', label)
+  let factor = 1
+  const fit = () => (input.style.width = `${Math.max(input.value.length, 1) + 0.4}ch`)
+  const show = (next) => {
+    factor = next
+    input.value = formatNumber(round(scaleAmount(amount, next).value, amount.unit ? 10 : 2))
+    fit()
+  }
+  input.oninput = () => {
+    fit()
+    const have = Number(input.value.replace(',', '.'))
+    if (!Number.isFinite(have) || have <= 0) return
+    factor = have / amount.value
+    follow(factor, input)
+  }
+  input.onkeydown = (event) => {
+    if (event.key === 'Enter') input.blur()
+  }
+  input.onblur = () => show(factor)
+  input.onfocus = () => input.select()
+  return {
+    input,
+    show: (next) => show(next),
+    node: element('label', 'field', undefined, [input, amount.unit ? element('span', 'unit', amount.unit) : null]),
+  }
 }
 
-function method(steps, factor, scale) {
+function method(steps, factor, follow) {
   return element(
     'ol',
     'method',
@@ -89,69 +152,11 @@ function method(steps, factor, scale) {
         wave(),
         element('div', 'step-row', undefined, [
           element('span', 'n', String(step.n)),
-          element('p', 'sentence', undefined, said(phrase(step), factor, scale)),
+          element('p', 'sentence', undefined, said(phrase(step), factor, follow)),
         ]),
       ]),
     ),
   )
-}
-
-/**
- * `I only have 1,8 kg of it`: one amount, of the yield or of one ingredient, decides the
- * factor for all the others. The recipe behind the sheet follows as it is typed, so what
- * that makes of the rest is seen where it is read.
- */
-function scaleSheet(node, state, on) {
-  const base = node.amount.kind === 'range' ? node.amount.from : node.amount.value
-  const unit = node.amount.unit
-  let current = state
-
-  const input = element('input')
-  input.type = 'text'
-  input.inputMode = 'decimal'
-  input.enterKeyHint = 'done'
-  input.value = formatNumber(round(base * state.factor))
-  input.setAttribute('aria-label', `How much ${node.name}${unit ? `, in ${unit}` : ''}`)
-  const factor = element('span', 'factor')
-
-  const reset = element('button', 'plain', 'Back to the recipe’s amounts')
-  reset.type = 'button'
-  const done = element('button', 'first', 'Done')
-  done.type = 'submit'
-
-  const paint = (next) => {
-    current = next
-    factor.textContent = Math.abs(next.factor - 1) < 0.005 ? '' : `× ${formatNumber(round(next.factor, 100))}`
-    on.redraw(next)
-  }
-  input.oninput = () => {
-    const have = Number(input.value.replace(',', '.'))
-    if (Number.isFinite(have) && have > 0) paint({ ...current, factor: have / base })
-  }
-  reset.onclick = () => {
-    input.value = formatNumber(base)
-    paint({ ...current, factor: 1 })
-  }
-
-  const form = element('form', '', undefined, [
-    element('div', '', undefined, [
-      element('h2', '', node.makes ? 'Scale by how much it makes' : `Scale by ${node.name}`),
-      element('p', 'says', undefined, said(marks(`The recipe ${node.makes ? 'makes' : 'uses'} ${formatAmount(node.amount)}.`))),
-    ]),
-    element('label', 'have', undefined, [input, unit ? element('span', 'unit', unit) : null, factor]),
-    element('p', 'hint', 'Everything else changes with it.'),
-    element('div', 'actions', undefined, [reset, done]),
-  ])
-  // The recipe stays in sight behind it, so the sheet dims nothing.
-  const sheet = slide(form)
-  sheet.classList.add('clear')
-  form.onsubmit = (event) => {
-    event.preventDefault()
-    sheet.close()
-  }
-  paint(current)
-  input.focus()
-  input.select()
 }
 
 function round(value, to = 10) {

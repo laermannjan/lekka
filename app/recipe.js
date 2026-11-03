@@ -58,15 +58,18 @@ export function totalTime(steps) {
   if (timed.length === 0) return null
   const from = timed.reduce((sum, step) => sum + step.time.from, 0)
   const to = timed.reduce((sum, step) => sum + step.time.to, 0)
-  return from === to ? clock(from) : `${clock(from)} to ${clock(to)}`
+  return from === to ? clock(from) : `${clock(from)}-${clock(to)}`
 }
 
-/** `15 h 15 min`, `45 min`, `2 h`. */
+/**
+ * `15h15`, `45 min`, `2h`: as short as a duration goes and still never read as a time
+ * of day, which `15:15` would be. The same in every language the screen speaks.
+ */
 export function clock(seconds) {
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.round((seconds % 3600) / 60)
+  const all = Math.round(seconds / 60)
+  const [hours, minutes] = [Math.floor(all / 60), all % 60]
   if (hours === 0) return `${minutes} min`
-  return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`
+  return minutes === 0 ? `${hours}h` : `${hours}h${String(minutes).padStart(2, '0')}`
 }
 
 /** `10 Portionen` is ten of something, which is what a stepper counts. Words are nothing. */

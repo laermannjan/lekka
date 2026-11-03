@@ -1,5 +1,6 @@
 import { splitAside, formatCard, parseCard } from './card.js'
 import { parseAmount, formatAmount } from './amount.js'
+import { t } from './i18n.js'
 
 /**
  * A card being written, as the forest it really is.
@@ -289,21 +290,21 @@ export function fieldsOf(node) {
  */
 export function validate(draft) {
   const faults = []
-  if ((draft.title ?? '').trim() === '') faults.push({ kind: 'title', message: 'The recipe needs a name' })
+  if ((draft.title ?? '').trim() === '') faults.push({ kind: 'title', message: t('The recipe needs a name') })
   storable(null, faults, false, ['title', draft.title], ['yield', draft.yields])
   for (const prep of draft.preparations) walk(prep, faults)
 
   const loose = draft.strands.filter((strand) => strand.kind === 'ingredient')
   for (const node of loose)
-    faults.push({ kind: 'unused', node, message: `${label(node)} goes into no step` })
+    faults.push({ kind: 'unused', node, message: t('{label} goes into no step', { label: label(node) }) })
 
   const ends = draft.strands.filter((strand) => strand.kind === 'step')
-  if (draft.strands.length === 0) faults.push({ kind: 'empty', message: 'The recipe has no steps' })
+  if (draft.strands.length === 0) faults.push({ kind: 'empty', message: t('The recipe has no steps') })
   else if (ends.length > 1)
     faults.push({
       kind: 'unjoined',
       nodes: ends,
-      message: `${ends.map(label).join(' and ')} never meet. Add a step that takes them all`,
+      message: t('{labels} never meet. Add a step that takes them all', { labels: ends.map(label).join(t(' and ')) }),
     })
 
   for (const strand of draft.strands) walk(strand, faults)
@@ -322,40 +323,40 @@ function storable(node, faults, splits, ...fields) {
   for (const [what, text] of fields) {
     if (text === null || text === undefined) continue
     if (/[()\n]/.test(text))
-      faults.push({ kind: 'unstorable', node, message: `Brackets cannot be part of a ${what}. Put it in the note instead` })
+      faults.push({ kind: 'unstorable', node, message: t('Brackets cannot be part of a {what}. Put it in the note instead', { what: t(what) }) })
     // Only an ingredient line is split at a colon, and it is split at the *first* one,
     // before the bracket is looked for - so a colon in its note is as fatal as one in
     // its name. A step, a preparation and the title are never split, and may hold one.
     else if (splits && text.includes(':'))
-      faults.push({ kind: 'unstorable', node, message: `A colon cannot be part of a ${what}. Put it in the amount instead` })
+      faults.push({ kind: 'unstorable', node, message: t('A colon cannot be part of a {what}. Put it in the amount instead', { what: t(what) }) })
   }
 }
 
 function walk(node, faults) {
   if (node.kind === 'ingredient') {
-    if (node.name.trim() === '') faults.push({ kind: 'name', node, message: 'An ingredient needs a name' })
+    if (node.name.trim() === '') faults.push({ kind: 'name', node, message: t('An ingredient needs a name') })
     storable(node, faults, true, ['name', node.name], ['note', node.aside])
     return
   }
   if (node.kind === 'preparation') {
     if (node.text.trim() === '')
-      faults.push({ kind: 'name', node, message: 'A preparation needs something to do' })
+      faults.push({ kind: 'name', node, message: t('A preparation needs something to do') })
     storable(node, faults, false, ['preparation', node.text], ['note', node.aside])
     return
   }
-  if (node.verb.trim() === '') faults.push({ kind: 'verb', node, message: 'A step needs a verb' })
+  if (node.verb.trim() === '') faults.push({ kind: 'verb', node, message: t('A step needs a verb') })
   storable(node, faults, false, ['instruction', node.verb], ['note', node.aside])
   if (inputs(node).length === 0)
-    faults.push({ kind: 'starved', node, message: `${label(node)} has nothing going into it` })
+    faults.push({ kind: 'starved', node, message: t('{label} has nothing going into it', { label: label(node) }) })
   for (const child of node.children) walk(child, faults)
 }
 
 /** A node in one line, for a message or a checkbox. */
 export function label(node) {
-  if (node.kind === 'step') return node.verb.trim() === '' ? 'A step with no verb' : node.verb
+  if (node.kind === 'step') return node.verb.trim() === '' ? t('A step with no verb') : node.verb
   if (node.kind === 'preparation') return node.text
   const amount = formatAmount(node.amount)
-  const name = node.name.trim() === '' ? 'an ingredient with no name' : node.name
+  const name = node.name.trim() === '' ? t('an ingredient with no name') : node.name
   return amount ? `${amount} ${name}` : name
 }
 

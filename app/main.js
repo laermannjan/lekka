@@ -15,7 +15,8 @@ import { renderLibrary, renderResults } from './library.js'
 import { renderRecipe } from './recipe-page.js'
 import { begin, cooking, keep, miniBar, renderCook, stayAwake, stop, tick } from './cook.js'
 import { renderShopping } from './shop.js'
-import { element, icon, menuItem, roundButton, slide } from './ui.js'
+import { element, icon, menuItem, roundButton, slide, watchKeyboard } from './ui.js'
+import { language, t } from './i18n.js'
 
 const screen = document.getElementById('screen')
 const dock = document.getElementById('dock')
@@ -26,6 +27,7 @@ const dock = document.getElementById('dock')
  * the first real request then says what is wrong, which it would have anyway.
  */
 async function boot() {
+  document.documentElement.lang = language
   instance = await api.me().catch(() => instance)
   return start()
 }
@@ -72,12 +74,12 @@ async function showLibrary() {
     library = await readLibrary()
   } catch (error) {
     if (error instanceof api.ApiError && error.status === 401) return locked()
-    return show(element('h1', 'title', 'Recipes'), notice(`The library did not load. ${reason(error)}`))
+    return show(element('h1', 'title', t('Recipes')), notice(t('The library did not load. {reason}', { reason: reason(error) })))
   }
 
   show(...renderLibrary(library, { open: showRecipe, corner: whoButton() }))
   setDock(
-    element('div', 'row', undefined, [searchOpener(), roundButton('plus', 'Add a recipe', addSheet)]),
+    element('div', 'row', undefined, [searchOpener(), roundButton('plus', t('Add a recipe'), addSheet)]),
   )
 }
 
@@ -95,7 +97,7 @@ async function readLibrary() {
 /** Your name, and the way to the browsers signed in as you. Only where there is a door. */
 function whoButton() {
   if (!instance.person) return null
-  return roundButton('person', `${instance.person.name}: devices and sign out`, () => {
+  return roundButton('person', t('{name}: devices and sign out', { name: instance.person.name }), () => {
     history.replaceState(null, '', '/devices')
     showDevices()
   })
@@ -103,7 +105,7 @@ function whoButton() {
 
 /** Looks like the search field and is a button: tapping it opens search with the keyboard up. */
 function searchOpener() {
-  const opener = element('button', 'searchbox glass', undefined, [icon('search'), 'Search recipes, ingredients'])
+  const opener = element('button', 'searchbox glass', undefined, [icon('search'), t('Search recipes, ingredients')])
   opener.type = 'button'
   opener.onclick = () => showSearch()
   return opener
@@ -111,18 +113,18 @@ function searchOpener() {
 
 function addSheet() {
   const sheet = slide(
-    element('h2', '', 'Add a recipe'),
+    element('h2', '', t('Add a recipe')),
     element('div', 'menu', undefined, [
-      menuItem('edit', 'Write one', () => {
+      menuItem('edit', t('Write one'), () => {
         sheet.close()
         showWriting()
       }),
-      menuItem('paste', 'Paste one', () => {
+      menuItem('paste', t('Paste one'), () => {
         sheet.close()
         pasteSheet()
       }),
     ]),
-    element('p', 'hint', 'From the web: share the page to lekka with the Add to lekka shortcut.'),
+    element('p', 'hint', t('From the web: share the page to lekka with the Add to lekka shortcut.')),
   )
 }
 
@@ -131,16 +133,16 @@ function pasteSheet() {
   const area = element('textarea', 'paste')
   area.rows = 10
   area.spellcheck = false
-  area.setAttribute('aria-label', 'Recipe')
+  area.setAttribute('aria-label', t('Recipe'))
   area.placeholder = '# Pfannkuchen (12 Stück)\n\n- braten (2 min je Seite)\n  - verrühren\n    - Mehl: 250 g'
   const wrong = element('p', 'hint warning')
-  const take = element('button', 'first', 'Add')
+  const take = element('button', 'first', t('Add'))
   take.type = 'submit'
-  const cancel = element('button', 'second', 'Cancel')
+  const cancel = element('button', 'second', t('Cancel'))
   cancel.type = 'button'
 
   const form = element('form', '', undefined, [
-    element('h2', '', 'Paste a recipe'),
+    element('h2', '', t('Paste a recipe')),
     area,
     wrong,
     element('div', 'actions', undefined, [cancel, take]),
@@ -170,20 +172,20 @@ async function showSearch() {
   go('/search')
   const input = element('input')
   input.type = 'search'
-  input.placeholder = 'Search recipes, ingredients'
-  input.setAttribute('aria-label', 'Search recipes, ingredients')
+  input.placeholder = t('Search recipes, ingredients')
+  input.setAttribute('aria-label', t('Search recipes, ingredients'))
   input.enterKeyHint = 'search'
   input.autocomplete = 'off'
 
   const clear = element('button', '', undefined, [icon('clear', 22)])
   clear.type = 'button'
   clear.className = 'quiet'
-  clear.setAttribute('aria-label', 'Clear search')
+  clear.setAttribute('aria-label', t('Clear search'))
 
   setDock(
     element('div', 'row', undefined, [
       element('label', 'searchbox glass', undefined, [icon('search'), input, clear]),
-      roundButton('close', 'Close search', () => {
+      roundButton('close', t('Close search'), () => {
         history.replaceState(null, '', '/')
         showLibrary()
       }),
@@ -220,7 +222,7 @@ async function showRecipe(id) {
   let text = library?.find((entry) => entry.id === id)?.text ?? null
   if (text === null) {
     const held = await api.readCard(id).catch(() => null)
-    if (held === null) return fail('No recipe under this link.')
+    if (held === null) return fail(t('No recipe under this link.'))
     text = held.text
   }
 
@@ -229,32 +231,42 @@ async function showRecipe(id) {
     card = parseCard(text)
   } catch (error) {
     if (!(error instanceof ParseError)) throw error
-    return fail(`Line ${error.line}: ${error.message}`)
+    return fail(t('Line {line}: {message}', { line: error.line, message: error.message }))
   }
   opened = { id, card }
 
-  const draw = (state) => {
+  // How much is being made is typed into the screen, which is not drawn again for it:
+  // the latest is kept here, for cooking, shopping, and the next time it is drawn.
+  let current = null
+  const scale = (factor) => {
+    current = { ...current, factor }
+    scaled = { id, factor }
     // Changing how much while cooking it changes how much is being cooked.
     const session = cooking()
-    if (session?.id === id && session.factor !== state.factor) keep({ ...session, factor: state.factor })
-    scaled = { id, factor: state.factor }
+    if (session?.id === id && session.factor !== factor) keep({ ...session, factor })
+  }
+  const draw = (state) => {
+    current = state
+    scale(state.factor)
     show(
       ...renderRecipe(card, state, {
         back: () => {
           history.replaceState(null, '', '/')
           showLibrary()
         },
-        more: () => recipeMenu(id, card, state.table, () => draw({ ...state, table: !state.table })),
+        more: () => recipeMenu(id, card, current.table, () => draw({ ...current, table: !current.table })),
         redraw: draw,
+        factor: scale,
       }),
     )
     // While this one is cooking, the cook bar is the way back in.
+    const session = cooking()
     setDock(
       session?.id === id
         ? null
         : element('div', 'row', undefined, [
-            cookButton(() => startCooking(id, card, state.factor)),
-            roundButton('basket', 'Shopping list', () => showShopping(id)),
+            cookButton(() => startCooking(id, card, current.factor)),
+            roundButton('basket', t('Shopping list'), () => showShopping(id)),
           ]),
     )
   }
@@ -266,7 +278,7 @@ async function showRecipe(id) {
 let scaled = null
 
 function cookButton(run) {
-  const button = element('button', 'start', undefined, [icon('play', 18), 'Start cooking'])
+  const button = element('button', 'start', undefined, [icon('play', 18), t('Start cooking')])
   button.type = 'button'
   button.onclick = run
   return button
@@ -281,7 +293,7 @@ function cookButton(run) {
 async function showShopping(id) {
   go(`/shop/${encodeURIComponent(id)}`)
   const card = await cardOf(id)
-  if (!card) return fail('No recipe under this link.')
+  if (!card) return fail(t('No recipe under this link.'))
   const session = cooking()
   const factor = session?.id === id ? session.factor : scaled?.id === id ? scaled.factor : 1
 
@@ -323,8 +335,10 @@ function startCooking(id, card, factor) {
   if (session && session.id !== id) {
     const running = Object.keys(session.timers).length
     const ask = running
-      ? `You are cooking ${session.title}, with ${running === 1 ? 'a timer' : `${running} timers`} running. Stop it and cook ${card.title}?`
-      : `You are cooking ${session.title}. Stop it and cook ${card.title}?`
+      ? running === 1
+        ? t('You are cooking {title}, with a timer running. Stop it and cook {next}?', { title: session.title, next: card.title })
+        : t('You are cooking {title}, with {n} timers running. Stop it and cook {next}?', { title: session.title, n: running, next: card.title })
+      : t('You are cooking {title}. Stop it and cook {next}?', { title: session.title, next: card.title })
     if (!confirm(ask)) return
   }
   if (session?.id !== id) begin(id, card, factor)
@@ -337,7 +351,7 @@ async function showCook(id) {
   go(`/cook/${encodeURIComponent(id)}`, { cook: true })
 
   const card = await cardOf(id)
-  if (!card) return fail('No recipe under this link.')
+  if (!card) return fail(t('No recipe under this link.'))
 
   const draw = (now) => {
     keep(now)
@@ -346,7 +360,7 @@ async function showCook(id) {
         minimise: () => showRecipe(id),
         end: () => {
           const timers = Object.keys(cooking()?.timers ?? {}).length
-          if (timers && !confirm(timers === 1 ? 'Stop cooking? Its timer stops too.' : `Stop cooking? Its ${timers} timers stop too.`))
+          if (timers && !confirm(timers === 1 ? t('Stop cooking? Its timer stops too.') : t('Stop cooking? Its {n} timers stop too.', { n: timers })))
             return
           stop()
           showRecipe(id)
@@ -387,23 +401,23 @@ function recipeMenu(id, card, table, flip) {
   const sheet = slide(
     element('h2', '', card.title),
     element('div', 'menu', undefined, [
-      menuItem(table ? 'list' : 'table', table ? 'Show as a list' : 'Show as a table', () => {
+      menuItem(table ? 'list' : 'table', table ? t('Show as a list') : t('Show as a table'), () => {
         sheet.close()
         flip()
       }),
-      menuItem('edit', 'Edit', () => {
+      menuItem('edit', t('Edit'), () => {
         sheet.close()
         showEditor(id, toDraft(card))
       }),
       instance.mode === 'GRANT'
-        ? menuItem('share', 'Share', () => {
+        ? menuItem('share', t('Share'), () => {
             sheet.close()
             share(id, card)
           })
         : null,
       menuItem(
         'trash',
-        'Delete',
+        t('Delete'),
         () => {
           sheet.close()
           erase(id, card)
@@ -416,8 +430,8 @@ function recipeMenu(id, card, table, flip) {
 
 /** Deleting drops the recipe itself, for everyone who could open it. */
 async function erase(id, card) {
-  if (!confirm(`Delete ${card.title} for everyone who can open it?`)) return
-  if ((await attempt(() => api.deleteCard(id), 'The recipe was not deleted.')) === FAILED) return
+  if (!confirm(t('Delete {title} for everyone who can open it?', { title: card.title }))) return
+  if ((await attempt(() => api.deleteCard(id), t('The recipe was not deleted.'))) === FAILED) return
   library = null
   history.replaceState(null, '', '/')
   showLibrary()
@@ -456,7 +470,7 @@ function showEditor(id, draft) {
     return showLibrary()
   }
   legacy(
-    id ? 'Edit' : 'New recipe',
+    id ? t('Edit') : t('New recipe'),
     null,
     buildEditor({
       draft,
@@ -466,7 +480,7 @@ function showEditor(id, draft) {
           try {
             await api.writeCard(id, text)
           } catch (error) {
-            return `Not saved. ${reason(error)}`
+            return t('Not saved. {reason}', { reason: reason(error) })
           }
           return null
         }
@@ -475,7 +489,7 @@ function showEditor(id, draft) {
         try {
           made = await api.createCard(text)
         } catch (error) {
-          return `Not saved. ${reason(error)}`
+          return t('Not saved. {reason}', { reason: reason(error) })
         }
         id = made.id
         history.replaceState(null, '', address(id))
@@ -491,7 +505,7 @@ function showWriting() {
 }
 
 function share(id, card) {
-  shareOpen(id, card).catch((error) => notice(`Who holds this did not load. ${reason(error)}`))
+  shareOpen(id, card).catch((error) => notice(t('Who holds this did not load. {reason}', { reason: reason(error) })))
 }
 
 /**
@@ -504,7 +518,7 @@ async function shareOpen(id, card) {
     held = await api.grantsOn(id)
   } catch (error) {
     if (error instanceof api.ApiError && error.status === 404)
-      return notice('This recipe is not yours to share.')
+      return notice(t('This recipe is not yours to share.'))
     throw error
   }
   shareSheet({
@@ -517,7 +531,7 @@ async function shareOpen(id, card) {
       try {
         return await api.grantsOn(id)
       } catch (error) {
-        notice(`Who holds this did not load. ${reason(error)}`)
+        notice(t('Who holds this did not load. {reason}', { reason: reason(error) }))
         return null
       }
     },
@@ -525,10 +539,10 @@ async function shareOpen(id, card) {
       try {
         return await api.share(id, asked)
       } catch (error) {
-        return { error: `Not shared. ${reason(error)}` }
+        return { error: t('Not shared. {reason}', { reason: reason(error) }) }
       }
     },
-    onRevoke: (grant) => attempt(() => api.revokeGrant(grant), 'It was not revoked.'),
+    onRevoke: (grant) => attempt(() => api.revokeGrant(grant), t('It was not revoked.')),
   })
 }
 
@@ -542,13 +556,13 @@ function showSignIn(message = null) {
   go('/')
   const first =
     message === 'first'
-      ? band('Nobody has signed in here yet. The link that makes the first person is in the server’s log.', 'warning')
+      ? band(t('Nobody has signed in here yet. The link that makes the first person is in the server’s log.'), 'warning')
       : null
   legacy(
     'lekka',
     null,
     first ?? (message ? band(message, 'warning') : null),
-    section('Sign in'),
+    section(t('Sign in')),
     signInForm({ onSignIn: signedIn }),
   )
 }
@@ -558,7 +572,7 @@ async function signedIn(name, password) {
     await api.signIn(name, password)
   } catch (error) {
     return showSignIn(
-      error instanceof api.ApiError && error.status === 401 ? 'That name and password do not match.' : reason(error),
+      error instanceof api.ApiError && error.status === 401 ? t('That name and password do not match.') : reason(error),
     )
   }
   instance = await api.me()
@@ -576,15 +590,15 @@ async function showJoining(token) {
     return legacy(
       'lekka',
       null,
-      section('Join'),
-      band('This link has been used already, or it has expired. Ask for another.', 'warning'),
+      section(t('Join')),
+      band(t('This link has been used already, or it has expired. Ask for another.'), 'warning'),
       signInForm({ onSignIn: signedIn }),
     )
 
   legacy(
     'lekka',
     null,
-    section('Join'),
+    section(t('Join')),
     joiningForm({
       invite,
       onJoin: async (who) => {
@@ -604,28 +618,28 @@ async function showJoining(token) {
 
 async function showDevices() {
   go('/devices')
-  const list = await attempt(() => api.sessions(), 'The list did not load.')
+  const list = await attempt(() => api.sessions(), t('The list did not load.'))
   if (list === FAILED) return
 
   const everyone = instance.person?.admin ? await api.people().catch(() => null) : null
 
   legacy(
-    instance.person?.name ?? 'Devices',
+    instance.person?.name ?? t('Devices'),
     {
-      label: 'Back to recipes',
+      label: t('Back to recipes'),
       run: () => {
         history.replaceState(null, '', '/')
         showLibrary()
       },
     },
-    section('Devices'),
+    section(t('Devices')),
     renderDevices(list, instance.session, {
       onRevoke: async (id) => {
-        if ((await attempt(() => api.revokeSession(id), 'It was not revoked.')) === FAILED) return
+        if ((await attempt(() => api.revokeSession(id), t('It was not revoked.'))) === FAILED) return
         showDevices()
       },
       onInvite: async () => {
-        const made = await attempt(() => api.makeInvite(), 'No link was made.')
+        const made = await attempt(() => api.makeInvite(), t('No link was made.'))
         return made === FAILED ? null : made
       },
       onSignOut: async () => {
@@ -633,18 +647,18 @@ async function showDevices() {
         instance = { ...instance, person: null, session: null }
         await purge()
         history.replaceState(null, '', '/')
-        showSignIn('Signed out.')
+        showSignIn(t('Signed out.'))
       },
     }),
-    everyone ? section('People') : null,
+    everyone ? section(t('People')) : null,
     everyone
       ? renderHousehold(everyone, instance.person.id, {
           onRemove: async (person) => {
             if (
-              !confirm(`Remove ${person.name}? They are signed out everywhere, and any recipe they own becomes yours.`)
+              !confirm(t('Remove {name}? They are signed out everywhere, and any recipe they own becomes yours.', { name: person.name }))
             )
               return
-            if ((await attempt(() => api.removePerson(person.id), 'They were not removed.')) === FAILED) return
+            if ((await attempt(() => api.removePerson(person.id), t('They were not removed.'))) === FAILED) return
             showDevices()
           },
         })
@@ -676,7 +690,7 @@ async function purge() {
 async function locked() {
   instance = { ...instance, person: null, session: null }
   await purge()
-  showSignIn('You were signed out.')
+  showSignIn(t('You were signed out.'))
 }
 
 /* ---- the frame ------------------------------------------------------------------ */
@@ -699,8 +713,8 @@ async function attempt(work, message) {
 
 function reason(error) {
   if (error instanceof api.ApiError)
-    return error.status === 404 ? 'The link is gone.' : `The server said ${error.status}.`
-  if (error instanceof TypeError) return 'No connection.'
+    return error.status === 404 ? t('The link is gone.') : t('The server said {status}.', { status: error.status })
+  if (error instanceof TypeError) return t('No connection.')
   return error.message
 }
 
@@ -739,7 +753,7 @@ function setDock(...rows) {
 function fail(message) {
   show(
     element('div', 'bar', undefined, [
-      roundButton('back', 'Back to recipes', () => {
+      roundButton('back', t('Back to recipes'), () => {
         history.replaceState(null, '', '/')
         showLibrary()
       }),
@@ -765,6 +779,7 @@ function register() {
  * stopped there and drew nothing - on every iPhone, while Chrome drew the page. */
 boot()
 register()
+watchKeyboard()
 setInterval(tick, 1000)
 // A phone that slept gave the screen back; while cooking, it stays on again.
 document.addEventListener('visibilitychange', () => {

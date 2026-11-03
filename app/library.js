@@ -1,6 +1,7 @@
 import { stepsOf, totalTime } from './recipe.js'
 import { search } from './search.js'
 import { element, picture } from './ui.js'
+import { t } from './i18n.js'
 
 /**
  * Every recipe, by name, with how long it takes and how much it makes. A recipe with a
@@ -9,17 +10,17 @@ import { element, picture } from './ui.js'
  */
 export function renderLibrary(entries, { open, photo = () => null, corner = null }) {
   const head = corner
-    ? element('div', 'bar', undefined, [element('h1', 'title', 'Recipes'), corner])
-    : element('h1', 'title', 'Recipes')
+    ? element('div', 'bar', undefined, [element('h1', 'title', t('Recipes')), corner])
+    : element('h1', 'title', t('Recipes'))
   if (entries.length === 0)
     return [
       head,
       element('div', 'notice', undefined, [
-        element('p', '', 'No recipes yet.'),
+        element('p', '', t('No recipes yet.')),
         element(
           'p',
           'quiet',
-          'Share a recipe page to lekka with the Add to lekka shortcut, or write one with +.',
+          t('Share a recipe page to lekka with the Add to lekka shortcut, or write one with +.'),
         ),
       ]),
     ]
@@ -30,11 +31,11 @@ export function renderLibrary(entries, { open, photo = () => null, corner = null
 
 /** What answers the query, each recipe once, saying why when its name does not. */
 export function renderResults(entries, query, { open, photo = () => null }) {
-  if (query.trim() === '') return [element('p', 'hint', 'Names, other names, ingredients and steps.')]
+  if (query.trim() === '') return [element('p', 'hint', t('Names, other names, ingredients and steps.'))]
   const found = search(entries, query)
-  if (found.length === 0) return [element('p', 'hint', `Nothing for “${query.trim()}”.`)]
+  if (found.length === 0) return [element('p', 'hint', t('Nothing for “{query}”.', { query: query.trim() }))]
   return [
-    element('p', 'hint', found.length === 1 ? '1 recipe' : `${found.length} recipes`),
+    element('p', 'hint', found.length === 1 ? t('1 recipe') : t('{n} recipes', { n: found.length })),
     element(
       'div',
       'group',
@@ -62,7 +63,7 @@ function row(entry, open, photo, why = null) {
 
 /** `15 h 15 min · 10 Portionen`: what decides whether it is the one to cook today. */
 function about(card) {
-  if (!card) return element('span', 'sub', 'This recipe does not read.')
+  if (!card) return element('span', 'sub', t('This recipe does not read.'))
   const total = totalTime(stepsOf(card))
   return element('span', 'sub', undefined, [
     total ? element('span', 'time', total) : null,

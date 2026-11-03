@@ -88,9 +88,37 @@ export function slide(...parts) {
     if (event.target === box) box.close()
   }
   box.onclose = () => box.remove()
+  // Focused itself, not its first button: a phone would ring that button as if it were
+  // picked. A sheet with a field focuses the field after.
+  box.autofocus = true
   document.body.append(box)
   box.showModal()
   return box
+}
+
+/**
+ * A phone's keyboard covers the bottom of the page without the page being told, and a
+ * sheet anchored there opens behind it. This says how much is covered, as `--keyboard`,
+ * so whatever stands at the bottom can stand above it instead.
+ */
+export function watchKeyboard() {
+  const view = window.visualViewport
+  if (!view) return
+  // Safari does not always say when the keyboard goes - not when its own address bar
+  // takes the focus, say - so a keyboard is only counted while a field of ours has it.
+  const typing = () => document.hasFocus() && Boolean(document.activeElement?.matches('input, textarea'))
+  const measure = () => {
+    const covered = typing() ? Math.max(0, Math.round(window.innerHeight - view.height - view.offsetTop)) : 0
+    document.documentElement.style.setProperty('--keyboard', `${covered}px`)
+    document.documentElement.classList.toggle('keyboard', covered > 80)
+  }
+  // Again once the keyboard has finished moving, which is after the focus has.
+  const soon = () => setTimeout(measure, 350)
+  view.addEventListener('resize', measure)
+  view.addEventListener('scroll', measure)
+  for (const event of ['focusin', 'focusout']) document.addEventListener(event, soon)
+  for (const event of ['focus', 'blur']) window.addEventListener(event, soon)
+  measure()
 }
 
 /** A row in a sheet's menu: an icon and what it does. */
@@ -111,49 +139,38 @@ export function wave() {
 /**
  * The parts `phrase` reads a step out as, drawn: words in the serif, every number out of
  * it, a time or a heat as a token in its own colour, and an ingredient as a token of its
- * amount and name, at `factor`. With `tap`, a measured ingredient's token is a button.
+ * amount and name, at `factor`. `follow`, when given, is handed each amount as it is
+ * drawn, with what it shows, so it can be shown at another factor without drawing again.
  */
-export function said(parts, factor, tap = null) {
+export function said(parts, factor, follow = null) {
   return parts.map((part) => {
     if (part.kind === 'text') return document.createTextNode(part.text)
     if (part.kind !== 'use') return element('span', part.kind === 'number' ? 'num' : `token ${part.kind}`, part.text)
-    return quantity(part.node, factor, tap, 'token use', [' ', ...said(marks(part.node.name))])
+    const amount = element('span', 'num', formatAmount(scaleAmount(part.node.amount, factor)))
+    if (part.node.amount) follow?.(amount, part.node.amount)
+    return element('span', 'token use', undefined, [part.node.amount ? amount : null, part.node.amount ? ' ' : null, ...said(marks(part.node.name))])
   })
 }
 
 /**
  * Every ingredient once, as `gather` adds them up: how much, right-aligned against what.
  * Here, and on the shopping list, an ingredient's aside is shown: what to buy, how to
- * prepare it. In a step it is not.
+ * prepare it. In a step it is not. `amountOf`, when given, draws a line's amount instead.
  */
-export function overview(lines, factor, tap = null) {
+export function overview(lines, factor, amountOf = null) {
   return element(
     'div',
     'overview',
     undefined,
     lines.map((line) => {
-      const one = line.amounts.length === 1 ? line.amounts[0] : null
-      const amount = one
-        ? quantity({ name: line.name, amount: one }, factor, tap, 'amount')
-        : element('span', 'amount', line.amounts.map((each) => formatAmount(scaleAmount(each, factor))).join(' + '))
+      const amount =
+        amountOf?.(line) ??
+        element('span', 'amount', line.amounts.map((each) => formatAmount(scaleAmount(each, factor))).join(' + '))
       const name = element('span', 'name', undefined, said(marks(line.name)))
       if (line.aside) name.append(' ', element('span', 'quiet', line.aside))
       return element('div', 'line', undefined, [amount, name])
     }),
   )
-}
-
-/** An amount, scaled: a button that scales by it where it can, words where it cannot. */
-function quantity(node, factor, tap, className, after = []) {
-  const shown = formatAmount(scaleAmount(node.amount, factor))
-  const amount = element('span', 'num', shown)
-  if (!tap || !node.amount || node.amount.kind === 'words')
-    return element('span', className, undefined, [shown ? amount : null, ...(shown ? after : after.slice(1))])
-  const button = element('button', className, undefined, [amount, ...after])
-  button.type = 'button'
-  button.setAttribute('aria-label', `${shown} ${node.name}: scale the recipe by it`)
-  button.onclick = () => tap(node)
-  return button
 }
 
 /**

@@ -1,4 +1,5 @@
 import { splitAside } from './card.js'
+import { t } from './i18n.js'
 import { buildForest } from './grid.js'
 import { nameSection, specification } from './page.js'
 import { renderGrid } from './render.js'
@@ -161,7 +162,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     if (node.kind !== 'step') return ''
     const grid = buildForest(shown().strands, shown().preparations)
     const cell = grid.cells.find((one) => one.node === node)
-    return cell ? `column ${String(cell.column).padStart(2, '0')}` : ''
+    return cell ? t('column {n}', { n: String(cell.column).padStart(2, '0') }) : ''
   }
 
   function close() {
@@ -200,8 +201,11 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
     const swept = sweptBy(current, node).filter((one) => one !== node)
     if (swept.length > 0) {
       const names = [...new Set(swept.map(label))].join(', ')
-      const going = swept.length === 1 ? 'it goes' : 'they go'
-      if (!confirm(`Deleting ${label(node)} leaves ${names} with nothing, so ${going} too. Delete anyway?`))
+      const asked =
+        swept.length === 1
+          ? t('Deleting {label} leaves {names} with nothing, so it goes too. Delete anyway?', { label: label(node), names })
+          : t('Deleting {label} leaves {names} with nothing, so they go too. Delete anyway?', { label: label(node), names })
+      if (!confirm(asked))
         return
     }
     const next = removeNode(current, node)
@@ -242,7 +246,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    * in the form, where that row or step is.
    */
   function actions(faults) {
-    const save = element('button', 'go', 'Save')
+    const save = element('button', 'go', t('Save'))
     save.disabled = faults.length > 0 || !dirty || saving
     save.onclick = async () => {
       if (saving) return
@@ -258,7 +262,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       try {
         failed = await commit(sent)
       } catch (error) {
-        failed = `Not saved. ${error.message}`
+        failed = t('Not saved. {reason}', { reason: error.message })
       } finally {
         saving = false
       }
@@ -267,15 +271,15 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       notice = failed
         ? { text: failed, bad: true }
         : current === sent
-          ? { text: 'Saved.', bad: false }
-          : { text: 'Saved. What you changed while it was sending is not - save again.', bad: false }
+          ? { text: t('Saved.'), bad: false }
+          : { text: t('Saved. What you changed while it was sending is not - save again.'), bad: false }
       paint()
     }
 
     // `Cancel` undoes; with nothing to undo it is `Done`, which is what leaving a
     // recipe you only looked at actually is.
-    const leave = button(dirty ? 'Cancel' : 'Done', () => {
-      if (dirty && !confirm('Leave without saving? The changes are lost.')) return
+    const leave = button(dirty ? t('Cancel') : t('Done'), () => {
+      if (dirty && !confirm(t('Leave without saving? The changes are lost.'))) return
       onClose()
     })
 
@@ -292,7 +296,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
   function makeStep() {
     const loose = current.strands.filter((strand) => strand.kind === 'ingredient')
     const wanted = loose.length > 0 ? loose : current.strands
-    if (wanted.length === 0) return say('Add an ingredient first.')
+    if (wanted.length === 0) return say(t('Add an ingredient first.'))
 
     const before = new Set(current.strands)
     const next = addStep(current, { verb: '', aside: '', preparations: [], inputs: wanted })
@@ -317,7 +321,7 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
    */
   async function commit(sent) {
     const text = storedForm(sent)
-    if (text === null) return 'This card does not come back the same when stored. Nothing was saved.'
+    if (text === null) return t('This card does not come back the same when stored. Nothing was saved.')
     const failed = await onSave(text)
     if (failed) return failed
     // Only what was sent is saved. An edit made while it was in flight is not, so the
@@ -382,8 +386,8 @@ export function buildEditor({ draft, onSave, onClose, onChange }) {
       'div',
       'band',
       faults.some((fault) => fault.kind === 'title')
-        ? 'Give the recipe a name, then add the first ingredient.'
-        : 'Add an ingredient, then a step that takes it.',
+        ? t('Give the recipe a name, then add the first ingredient.')
+        : t('Add an ingredient, then a step that takes it.'),
     )
   }
 

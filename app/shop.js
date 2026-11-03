@@ -1,6 +1,7 @@
 import { formatAmount, formatNumber, scaleAmount } from './amount.js'
 import { gather, marks, servings } from './recipe.js'
 import { element, icon, roundButton, said } from './ui.js'
+import { t } from './i18n.js'
 
 /**
  * What to buy for a recipe: every ingredient once, at the recipe's factor, less what is
@@ -16,15 +17,15 @@ export function renderShopping(card, factor, kept, on) {
   const home = rows.filter((row) => row.home)
   const made = makes(card, factor)
 
-  const share = element('button', 'start', undefined, [icon('share', 18), buy.length === 1 ? 'Share 1 item' : `Share ${buy.length} items`])
+  const share = element('button', 'start', undefined, [icon('share', 18), buy.length === 1 ? t('Share 1 item') : t('Share {n} items', { n: buy.length })])
   share.type = 'button'
   share.disabled = buy.length === 0
   share.onclick = async () => {
-    const text = [made ? `${card.title}, for ${made}` : card.title, ...buy.map((row) => `- ${row.text}`)].join('\n')
+    const text = [made ? t('{title}, for {made}', { title: card.title, made }) : card.title, ...buy.map((row) => `- ${row.text}`)].join('\n')
     try {
-      if (navigator.share) return await navigator.share({ title: `Shopping list: ${card.title}`, text })
+      if (navigator.share) return await navigator.share({ title: t('Shopping list: {title}', { title: card.title }), text })
       await navigator.clipboard.writeText(text)
-      share.lastChild.textContent = 'Copied'
+      share.lastChild.textContent = t('Copied')
     } catch {
       // Closing the share sheet is no failure; the list is still here.
     }
@@ -38,15 +39,15 @@ export function renderShopping(card, factor, kept, on) {
     })
 
   return [
-    element('div', 'bar', undefined, [roundButton('back', 'Back to the recipe', on.back)]),
+    element('div', 'bar', undefined, [roundButton('back', t('Back to the recipe'), on.back)]),
     element('header', 'shop-head', undefined, [
-      element('h1', 'title', 'Shopping list'),
-      element('p', 'quiet', made ? `${card.title}, for ${made}` : card.title),
+      element('h1', 'title', t('Shopping list')),
+      element('p', 'quiet', made ? t('{title}, for {made}', { title: card.title, made }) : card.title),
     ]),
     buy.length
       ? element('ul', 'shop', undefined, buy.map((row) => buyRow(row, kept, on, toggle)))
-      : element('p', 'hint', 'Everything is at home.'),
-    home.length ? element('p', 'label', 'At home') : null,
+      : element('p', 'hint', t('Everything is at home.')),
+    home.length ? element('p', 'label', t('At home')) : null,
     home.length ? element('ul', 'shop home', undefined, home.map((row) => homeRow(row, toggle))) : null,
   ]
 }
@@ -56,7 +57,7 @@ let noting = null
 function buyRow(row, kept, on, toggle) {
   const check = element('button', 'check')
   check.type = 'button'
-  check.setAttribute('aria-label', `${row.name}: at home, take off the list`)
+  check.setAttribute('aria-label', t('{name}: at home, take off the list', { name: row.name }))
   check.onclick = () => toggle(row)
 
   const name = element('span', 'name', undefined, said(marks(row.name)))
@@ -67,7 +68,7 @@ function buyRow(row, kept, on, toggle) {
   if (row.notable) {
     amount = element('button', 'amount', row.amount)
     amount.type = 'button'
-    amount.setAttribute('aria-label', `${row.name}: note how much is at home`)
+    amount.setAttribute('aria-label', t('{name}: note how much is at home', { name: row.name }))
     amount.onclick = () => {
       noting = noting === row.key ? null : row.key
       on.keep(kept)
@@ -81,10 +82,10 @@ function buyRow(row, kept, on, toggle) {
     input.inputMode = 'decimal'
     input.enterKeyHint = 'done'
     input.value = kept.have[row.key] ?? ''
-    input.setAttribute('aria-label', `${row.name} at home${row.unit ? `, in ${row.unit}` : ''}`)
+    input.setAttribute('aria-label', row.unit ? t('{name} at home, in {unit}', { name: row.name, unit: row.unit }) : t('{name} at home', { name: row.name }))
     // Kept when it is done with, not on every key: keeping draws the list again.
     input.onchange = () => on.keep({ ...kept, have: { ...kept.have, [row.key]: input.value } })
-    parts.push(element('label', 'noting', undefined, [element('span', 'quiet', 'at home already'), input, element('span', 'quiet', row.unit)]))
+    parts.push(element('label', 'noting', undefined, [element('span', 'quiet', t('at home already')), input, element('span', 'quiet', row.unit)]))
     queueMicrotask(() => input.focus())
   }
   return element('li', '', undefined, parts)
@@ -93,7 +94,7 @@ function buyRow(row, kept, on, toggle) {
 function homeRow(row, toggle) {
   const check = element('button', 'check done', undefined, [icon('check', 14)])
   check.type = 'button'
-  check.setAttribute('aria-label', `${row.name}: put back on the list`)
+  check.setAttribute('aria-label', t('{name}: put back on the list', { name: row.name }))
   check.onclick = () => toggle(row)
   return element('li', '', undefined, [
     element('div', 'line', undefined, [check, element('span', 'text', undefined, [element('span', 'name', undefined, said(marks(row.name)))]), element('span', 'amount', row.all)]),
@@ -114,8 +115,8 @@ function rowOf(line, factor, kept) {
   const gone = Boolean(left) && (left.kind === 'range' ? left.to : left.value) === 0
   const amount = left ? formatAmount(left) : all
 
-  const steps = line.steps.length > 1 ? `for steps ${line.steps.slice(0, -1).join(', ')} and ${line.steps.at(-1)}` : ''
-  const part = held > 0 && !gone ? `${formatNumber(held)} ${one.unit} at home, ${formatAmount(one)} in all`.replace('  ', ' ') : ''
+  const steps = line.steps.length > 1 ? t('for steps {list} and {last}', { list: line.steps.slice(0, -1).join(', '), last: line.steps.at(-1) }) : ''
+  const part = held > 0 && !gone ? t('{held} at home, {all} in all', { held: `${formatNumber(held)} ${one.unit}`.trim(), all: formatAmount(one) }) : ''
   return {
     key,
     name: line.name,

@@ -49,13 +49,15 @@ test('a step knows its temperature and its time, and the time leaves the words',
   assert.equal(slow.temperature, '150 °C')
   assert.equal(slow.aside, 'bis 70 °C Kerntemperatur')
   assert.equal(fast.time.from, 900)
-  assert.equal(totalTime(stepsOf(PORCHETTA)), '15 h 15 min')
+  assert.equal(totalTime(stepsOf(PORCHETTA)), '15h15')
 })
 
 test('a range anywhere makes the total a range', () => {
-  assert.equal(totalTime(stepsOf(card('barbecue-pork-ribs'))), '14 h 33 min to 15 h 33 min')
+  assert.equal(totalTime(stepsOf(card('barbecue-pork-ribs'))), '14h33-15h33')
   assert.equal(clock(45 * 60), '45 min')
-  assert.equal(clock(7200), '2 h')
+  assert.equal(clock(7200), '2h')
+  assert.equal(clock(3600 + 5 * 60), '1h05')
+  assert.equal(clock(2 * 3600 - 10), '2h', 'a minute rounded up carries into the hour')
 })
 
 test('the outermost preparations come first', () => {

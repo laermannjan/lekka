@@ -7,6 +7,7 @@
  * next - the router owns that, the way it owns every other screen.
  */
 import { linkOut } from './handoff.js'
+import { t } from './i18n.js'
 
 /** A field with its name beside it, in the same two-column frame a card's notes use. */
 function field(name, type, { value = '', hint = null, focus = false } = {}) {
@@ -45,9 +46,9 @@ function form(rows, action, onSubmit, note = null) {
  * not say either - a name nobody has and a wrong password answer alike.
  */
 export function signIn({ onSignIn }) {
-  const name = field('Name', 'text', { focus: true })
-  const password = field('Password', 'password')
-  return form([name, password], 'Sign in', () =>
+  const name = field(t('Name'), 'text', { focus: true })
+  const password = field(t('Password'), 'password')
+  return form([name, password], t('Sign in'), () =>
     onSignIn(name.input.value.trim(), password.input.value),
   )
 }
@@ -58,17 +59,17 @@ export function signIn({ onSignIn }) {
  * first-boot link or an invite from a person, so the screen only says it back.
  */
 export function joining({ invite, onJoin }) {
-  const name = field('Name', 'text', { hint: 'what to call you', focus: true })
-  const password = field('Password', 'password', { hint: 'at least 12 characters' })
+  const name = field(t('Name'), 'text', { hint: t('what to call you'), focus: true })
+  const password = field(t('Password'), 'password', { hint: t('at least 12 characters') })
   password.input.autocomplete = 'new-password'
 
   return form(
     [name, password],
-    'Join',
+    t('Join'),
     () => onJoin({ name: name.input.value.trim(), password: password.input.value }),
     invite.first
-      ? 'Nobody has signed in here yet. This link makes the first person, and then stops working.'
-      : `${invite.who} invited you. Pick a name and a password, and they are yours from now on.`,
+      ? t('Nobody has signed in here yet. This link makes the first person, and then stops working.')
+      : t('{who} invited you. Pick a name and a password, and they are yours from now on.', { who: invite.who }),
   )
 }
 
@@ -88,10 +89,10 @@ export function devices(list, here, { onRevoke, onSignOut, onInvite }) {
     const line = element('div', 'row')
     const mine = row.id === here?.id
     line.append(
-      element('span', 'name', mine ? `${row.label} · this one` : row.label),
-      element('span', 'aside', `last seen ${when(row.seen)}`),
+      element('span', 'name', mine ? t('{label} · this one', { label: row.label }) : row.label),
+      element('span', 'aside', t('last seen {when}', { when: when(row.seen) })),
     )
-    const drop = element('button', 'quiet danger', mine ? 'Sign out' : 'Revoke')
+    const drop = element('button', 'quiet danger', mine ? t('Sign out') : t('Revoke'))
     drop.type = 'button'
     drop.onclick = () => (mine ? onSignOut() : onRevoke(row.id))
     line.append(drop)
@@ -101,7 +102,7 @@ export function devices(list, here, { onRevoke, onSignOut, onInvite }) {
   const shown = element('div', 'list')
   shown.hidden = true
 
-  const someone = element('button', 'quiet', 'Invite someone')
+  const someone = element('button', 'quiet', t('Invite someone'))
   someone.type = 'button'
   someone.onclick = () => hand(shown, onInvite())
 
@@ -119,11 +120,11 @@ export function household(everyone, me, { onRemove }) {
   for (const person of everyone) {
     const line = element('div', 'row')
     line.append(
-      element('span', 'name', person.id === me ? `${person.name} · you` : person.name),
-      element('span', 'aside', person.admin ? 'keeps this instance' : `last seen ${when(person.seen)}`),
+      element('span', 'name', person.id === me ? t('{name} · you', { name: person.name }) : person.name),
+      element('span', 'aside', person.admin ? t('keeps this instance') : t('last seen {when}', { when: when(person.seen) })),
     )
     if (person.id !== me) {
-      const drop = element('button', 'quiet danger', 'Remove')
+      const drop = element('button', 'quiet danger', t('Remove'))
       drop.type = 'button'
       drop.onclick = () => onRemove(person)
       line.append(drop)
@@ -138,19 +139,19 @@ async function hand(box, asked) {
   if (!made) return
   const url = new URL(`/join#${made.token}`, location.origin).href
   box.replaceChildren(
-    linkOut(url, 'Send this to one person. It makes one account, then stops working, and expires in an hour.'),
+    linkOut(url, t('Send this to one person. It makes one account, then stops working, and expires in an hour.')),
   )
   box.hidden = false
 }
 
 /** Rough on purpose: a device list wants "yesterday", not a timestamp to the second. */
 function when(stamp) {
-  if (!stamp) return 'never'
+  if (!stamp) return t('never')
   const days = Math.floor((Date.now() - new Date(stamp).getTime()) / 86400000)
-  if (!Number.isFinite(days)) return 'at some point'
-  if (days < 1) return 'today'
-  if (days === 1) return 'yesterday'
-  if (days < 30) return `${days} days ago`
+  if (!Number.isFinite(days)) return t('at some point')
+  if (days < 1) return t('today')
+  if (days === 1) return t('yesterday')
+  if (days < 30) return t('{n} days ago', { n: days })
   return new Date(stamp).toISOString().slice(0, 10)
 }
 

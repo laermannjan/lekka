@@ -4,8 +4,8 @@
  * A recipe reads like a page of a cookbook: words in a serif, warm ground,
  * nothing boxed. Every highlight means one thing, everywhere:
  *
- *   serif    words: what it is and what to do
- *   sans     numbers, every one of them, even inside a sentence
+ *   serif    words: what it is and what to do, and where you are in it
+ *   sans     how much and how long, even inside a sentence
  *   label    what you read, and how much
  *   second   context: asides, counts, where it came from
  *   time     saffron, for time and nothing else
@@ -35,6 +35,8 @@
   --heat: #b03a26;
   --heat-bg: rgb(232 99 79 / 15%);
   --use-bg: rgb(42 36 32 / 7%);
+  --field: #fffcf6;
+  --field-edge: rgb(42 36 32 / 22%);
   --danger: #b03a26;
   --glass: rgb(255 252 246 / 82%);
   --glass-edge: rgb(42 36 32 / 10%);
@@ -65,6 +67,8 @@
     --heat: #f47f69;
     --heat-bg: rgb(232 99 79 / 20%);
     --use-bg: rgb(244 239 230 / 10%);
+    --field: rgb(244 239 230 / 7%);
+    --field-edge: rgb(244 239 230 / 22%);
     --danger: #f47f69;
     --glass: rgb(38 34 28 / 82%);
     --glass-edge: rgb(244 239 230 / 12%);
@@ -257,6 +261,12 @@ h1.title {
 }
 
 .dock:empty {
+  display: none;
+}
+
+/* Typing into the page, the keyboard is where the dock was; typing into the dock, as in
+   search, it stays. */
+.keyboard .dock:not(:focus-within) {
   display: none;
 }
 
@@ -468,11 +478,6 @@ h1.title {
   font-style: italic;
 }
 
-.yield .token {
-  font-family: var(--face);
-  font-weight: 600;
-}
-
 /* Everything that goes in, once: how much, right-aligned against what. */
 .overview {
   display: flex;
@@ -495,11 +500,6 @@ h1.title {
   text-align: right;
 }
 
-.overview .amount .num {
-  font-size: inherit;
-  font-weight: inherit;
-}
-
 .overview .name {
   flex: 1;
   font-family: var(--serif);
@@ -512,6 +512,64 @@ h1.title {
   font-size: 13px;
   margin-top: 6px;
   text-align: center;
+}
+
+/* What can be typed in looks like it: a field, its unit after the number. */
+.field {
+  align-items: baseline;
+  background: var(--field);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--field-edge);
+  cursor: text;
+  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  gap: 4px;
+  padding: 1px 8px;
+}
+
+.field:focus-within {
+  box-shadow: inset 0 0 0 1.5px var(--label);
+}
+
+/* Never under 16 px, or a phone zooms in on it. */
+.field input {
+  background: transparent;
+  border: 0;
+  color: var(--label);
+  font: inherit;
+  font-size: max(1em, 16px);
+  min-width: 1ch;
+  outline: none;
+  padding: 0;
+  text-align: right;
+}
+
+.overview .line {
+  min-height: 30px;
+}
+
+/* Scaled: by how much, and the way back. */
+.scaled {
+  align-items: baseline;
+  color: var(--secondary);
+  display: flex;
+  font-size: 15px;
+  gap: 12px;
+  justify-content: center;
+}
+
+.scaled:empty {
+  display: none;
+}
+
+.scaled .plain {
+  color: var(--label);
+  font-weight: 600;
+  min-height: 44px;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-underline-offset: 3px;
 }
 
 /* The steps: a wavy rule starts each, its number before it, its amounts in it. */
@@ -548,12 +606,15 @@ h1.title {
   gap: 12px;
 }
 
+/* A step's number is where you are, not how much: the serif's italic, at the size of the
+   sentence it starts, so it reads as the first word and not as a label beside it. */
 .step-row .n {
   color: var(--secondary);
-  flex: 0 0 22px;
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  flex: 0 0 24px;
+  font-family: var(--serif);
+  font-size: 19px;
+  font-style: italic;
+  font-variant-numeric: oldstyle-nums;
   text-align: right;
 }
 
@@ -611,15 +672,10 @@ h1.title {
   font-weight: 600;
 }
 
-/* A token too long for its line wraps inside, like the words around it. */
-button.token {
-  max-width: 100%;
-  text-align: left;
-}
-
 /* A time or a heat inside a name keeps its colour, without a token of its own. */
 .token.use .token,
-.overview .token {
+.overview .token,
+.shop .name .token {
   background: none;
   font-size: 0.9em;
   padding: 0;
@@ -627,15 +683,16 @@ button.token {
 
 /* ---- sheets: what slides up from the bottom --------------------------------- */
 
+/* Anchored to the bottom, and above the keyboard once one is up. */
 dialog.slide {
   background: var(--sheet);
   border: 0;
   border-radius: 28px 28px 0 0;
-  bottom: 0;
+  bottom: var(--keyboard, 0px);
   box-shadow: 0 -12px 40px rgb(0 0 0 / 25%);
   color: var(--label);
   margin: 0 auto;
-  max-height: 88dvh;
+  max-height: calc(100dvh - var(--keyboard, 0px) - var(--top));
   max-width: 720px;
   overflow-y: auto;
   padding: 8px var(--gutter) calc(var(--bottom) + 8px);
@@ -648,9 +705,8 @@ dialog.slide::backdrop {
   background: var(--scrim);
 }
 
-/* A sheet that changes what is behind it leaves it in sight. */
-dialog.slide.clear::backdrop {
-  background: transparent;
+dialog.slide:focus {
+  outline: none;
 }
 
 dialog.slide form,
@@ -672,14 +728,6 @@ dialog.slide h2 {
   font-family: var(--serif);
   font-size: 22px;
   font-weight: 600;
-}
-
-dialog.slide .says {
-  color: var(--secondary);
-  font-family: var(--serif);
-  font-size: 16px;
-  line-height: 22px;
-  margin-top: 2px;
 }
 
 dialog.slide .actions {
@@ -709,20 +757,6 @@ dialog.slide .actions .second {
   background: var(--raised);
 }
 
-dialog.slide .actions .plain {
-  color: var(--secondary);
-  flex: 1;
-  font-size: 16px;
-  font-weight: 600;
-  min-height: 44px;
-  text-align: left;
-}
-
-dialog.slide .actions .plain + .first {
-  flex: none;
-  padding: 0 32px;
-}
-
 dialog.slide .menu {
   background: var(--raised);
   border-radius: 16px;
@@ -746,42 +780,6 @@ dialog.slide .menu button {
 
 dialog.slide .menu .danger {
   color: var(--danger);
-}
-
-/* How much there is of the one thing the recipe is scaled by. */
-.have {
-  align-items: baseline;
-  border-bottom: 1px solid var(--rule);
-  display: flex;
-  gap: 10px;
-  padding-bottom: 8px;
-}
-
-.have input {
-  background: transparent;
-  border: 0;
-  color: var(--label);
-  font: inherit;
-  font-size: 44px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  line-height: 52px;
-  outline: none;
-  padding: 0;
-  width: 4.2ch;
-}
-
-.have .unit {
-  color: var(--secondary);
-  flex: 1;
-  font-size: 22px;
-}
-
-.have .factor {
-  color: var(--secondary);
-  font-size: 17px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
 }
 
 textarea.paste {
@@ -1038,6 +1036,7 @@ body.cook .bar .middle {
 
 .guide .step-row .n {
   flex-basis: 30px;
+  font-size: 20px;
 }
 
 .guide .title {
@@ -1067,7 +1066,7 @@ body.cook .bar .middle {
 }
 
 .now .step-row .n {
-  font-size: 17px;
+  font-size: 27px;
   line-height: 44px;
 }
 
@@ -1246,6 +1245,16 @@ body.cook .bar .middle {
    takes no room. */
 .datasheet.layer {
   display: contents;
+}
+
+/* Its forms stand at the bottom too, and above the keyboard like the sheets. */
+.datasheet dialog.compose {
+  bottom: var(--keyboard, 0px);
+  max-height: calc(100dvh - var(--keyboard, 0px) - var(--top));
+}
+
+.datasheet dialog.compose .body {
+  max-height: calc(100dvh - var(--keyboard, 0px) - var(--top));
 }
 
 .table {

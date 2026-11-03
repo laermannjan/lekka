@@ -1,5 +1,6 @@
 import { fieldsOf, label, preparationLines } from './edit.js'
 import { fit } from './render.js'
+import { t } from './i18n.js'
 
 /**
  * The one thing being written, in a form over the page.
@@ -32,7 +33,7 @@ export function buildForm({ node, place, offers = [], onChoose, onApply, onDrop,
    * one more thing to keep in step.
    */
   const at = element('div', 'at', undefined, [
-    element('span', 'kind', step ? 'Step' : 'Ingredient'),
+    element('span', 'kind', step ? t('Step') : t('Ingredient')),
     element('span', 'spring'),
     element('span', 'place', place ?? ''),
   ])
@@ -67,16 +68,16 @@ export function buildForm({ node, place, offers = [], onChoose, onApply, onDrop,
      * Above the verb, because that is when it happens.
      */
     made.before = [...preparationLines(node), ''].map((line, index) => {
-      const field = write(`before before-${index}`, index === 0 ? 'Before it' : '', line, true)
+      const field = write(`before before-${index}`, index === 0 ? t('Before it') : '', line, true)
       return field
     })
-    write('verb', 'Step', was.verb, true)
-    write('aside', 'Note', was.aside, true)
+    write('verb', t('Step'), was.verb, true)
+    write('aside', t('Note'), was.aside, true)
   } else {
-    write('amount', 'Amount', was.amount)
-    write('unit', 'Unit', was.unit)
-    write('name', 'Name', was.name)
-    write('aside', 'Qualifier', was.aside)
+    write('amount', t('Amount'), was.amount)
+    write('unit', t('Unit'), was.unit)
+    write('name', t('Name'), was.name)
+    write('aside', t('Qualifier'), was.aside)
   }
 
   body.append(at, fields)
@@ -95,26 +96,26 @@ export function buildForm({ node, place, offers = [], onChoose, onApply, onDrop,
     for (const one of offers) inputs.append(choice(one, chosen, onChoose))
     body.append(
       element('div', 'row wide', undefined, [
-        element('span', 'name', 'Takes'),
+        element('span', 'name', t('Takes')),
         offers.length > 0
           ? inputs
-          : element('span', 'hint', 'Nothing is free to go into this step.'),
+          : element('span', 'hint', t('Nothing is free to go into this step.')),
       ]),
     )
   }
 
-  const apply = element('button', 'go', 'Apply')
+  const apply = element('button', 'go', t('Apply'))
   apply.onclick = () => {
     const said = read()
     if (step && said.inputs.length === 0)
-      return warn('A step has to take something. Tick what goes into it.')
+      return warn(t('A step has to take something. Tick what goes into it.'))
     onApply(said)
   }
 
-  const erase = element('button', 'quiet danger', 'Delete')
+  const erase = element('button', 'quiet danger', t('Delete'))
   erase.onclick = () => onDrop()
 
-  const leave = element('button', 'quiet', 'Close')
+  const leave = element('button', 'quiet', t('Close'))
   leave.onclick = () => onClose()
 
   const trouble = element('span', 'hint warn')
@@ -189,7 +190,7 @@ function choice(node, chosen, said) {
 
   line.append(tick, element('span', 'what', label(node)))
   const rows = node.kind === 'step' ? count(node) : 0
-  if (rows > 1) line.append(element('span', 'aside', `${rows} ingredients`))
+  if (rows > 1) line.append(element('span', 'aside', t('{n} ingredients', { n: rows })))
   return line
 }
 
