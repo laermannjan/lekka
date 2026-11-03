@@ -257,18 +257,12 @@ async function showRecipe(id) {
         more: () => recipeMenu(id, card, current.table, () => draw({ ...current, table: !current.table })),
         redraw: draw,
         factor: scale,
+        shop: () => showShopping(id),
       }),
     )
     // While this one is cooking, the cook bar is the way back in.
     const session = cooking()
-    setDock(
-      session?.id === id
-        ? null
-        : element('div', 'row', undefined, [
-            cookButton(() => startCooking(id, card, current.factor)),
-            roundButton('basket', t('Shopping list'), () => showShopping(id)),
-          ]),
-    )
+    setDock(session?.id === id ? null : element('div', 'row', undefined, [cookButton(() => startCooking(id, card, current.factor))]))
   }
   const session = cooking()
   draw({ factor: session?.id === id ? session.factor : scaled?.id === id ? scaled.factor : 1, table: false })
@@ -301,9 +295,9 @@ async function showShopping(id) {
     show(
       ...renderShopping(card, factor, shoppingKept(id), {
         back: () => showRecipe(id),
-        keep: (kept) => {
+        keep: (kept, redraw) => {
           shoppingKeep(id, kept)
-          draw()
+          if (redraw) draw()
         },
         dock: (...rows) => setDock(...rows),
       }),

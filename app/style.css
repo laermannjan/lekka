@@ -301,6 +301,20 @@ h1.title {
   max-width: 340px;
 }
 
+/* A way somewhere that says where in words: round glass, stretched to fit them. */
+.pill {
+  align-items: center;
+  align-self: center;
+  border-radius: 22px;
+  display: inline-flex;
+  font-size: 16px;
+  font-weight: 600;
+  gap: 8px;
+  height: 44px;
+  margin-top: 10px;
+  padding: 0 20px 0 16px;
+}
+
 .searchbox {
   align-items: center;
   border-radius: 26px;
@@ -884,138 +898,132 @@ textarea.paste {
 /* ---- shopping --------------------------------------------------------------- */
 
 .shop-head {
+  align-items: center;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  text-align: center;
 }
 
 .shop-head .quiet {
-  font-family: var(--serif);
-  font-size: 16px;
+  font-size: 15px;
 }
 
+/* What a screen asks of you, said once under its title. */
+.lead {
+  color: var(--secondary);
+  font-family: var(--serif);
+  font-size: 16px;
+  font-style: italic;
+  line-height: 22px;
+  padding: 0 16px;
+  text-align: center;
+}
+
+/* A line to buy: how much is at home left of the middle, what it is and what is left
+   to buy right of it, as the recipe lists what goes in. */
 ul.shop {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   list-style: none;
   margin: 8px 0 0;
   padding: 0;
 }
 
 .shop .line {
-  align-items: center;
+  align-items: baseline;
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
-/* A circle to tick, in a target a thumb can find. */
-.shop .check {
-  align-items: center;
+.shop .have {
   display: flex;
-  flex: 0 0 44px;
-  height: 44px;
-  justify-content: center;
-  margin-left: -9px;
-  position: relative;
+  flex: 0 0 calc(50% - 6px);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  justify-content: flex-end;
+  line-height: 24px;
+  text-align: right;
 }
 
-.shop .check::before {
-  border: 1.5px solid color-mix(in srgb, var(--label) 35%, transparent);
-  border-radius: 50%;
-  content: '';
-  height: 26px;
-  position: absolute;
-  width: 26px;
-}
-
-.shop .check.done::before {
-  background: var(--secondary);
-  border-color: transparent;
-}
-
-.shop .check.done svg {
-  color: var(--ground);
-  position: relative;
-}
-
+/* What it is, and tapped, crossed out: the whole of it is the target, not only the word. */
 .shop .text {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 1px;
+  min-height: 44px;
   min-width: 0;
+  text-align: left;
 }
 
 .shop .name {
   font-family: var(--serif);
-  font-size: 19px;
+  font-size: 17px;
   line-height: 24px;
 }
 
 .shop .sub {
   color: var(--secondary);
   font-size: 13px;
-  font-variant-numeric: tabular-nums;
   line-height: 18px;
 }
 
-.shop .amount {
-  align-items: center;
-  display: flex;
-  font-size: 17px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  min-height: 44px;
-  white-space: nowrap;
-}
-
-.shop.home .name {
-  color: var(--secondary);
-  text-decoration: line-through;
-  text-decoration-color: color-mix(in srgb, var(--secondary) 60%, transparent);
-}
-
-.shop.home .amount {
-  color: var(--secondary);
-  font-size: 15px;
-  font-weight: 400;
-}
-
-.noting {
-  align-items: baseline;
-  border-bottom: 1px solid var(--rule);
-  display: flex;
-  gap: 8px;
-  margin: 6px 0 0 44px;
-  padding-bottom: 6px;
-}
-
-.noting .quiet:first-child {
-  flex: 1;
-  font-family: var(--serif);
-  font-style: italic;
-}
-
-.noting input {
-  background: transparent;
-  border: 0;
+.shop .sub .num {
   color: var(--label);
-  font: inherit;
-  font-size: 22px;
-  font-variant-numeric: tabular-nums;
+  font-size: inherit;
   font-weight: 600;
-  outline: none;
-  padding: 0;
-  text-align: right;
-  width: 4ch;
+}
+
+.field input::placeholder {
+  color: color-mix(in srgb, var(--label) 35%, transparent);
+}
+
+/* A field with something typed in it stands out from the ones still at nothing. */
+.field.held {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--label) 50%, transparent);
 }
 
 p.label {
   color: var(--secondary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.08em;
   margin-top: 16px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* At home: crossed out, and a tap brings it back. */
+ul.shop.home {
+  gap: 4px;
+}
+
+.shop.home .line {
+  color: var(--secondary);
+  min-height: 32px;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--secondary) 60%, transparent);
+  width: 100%;
+}
+
+.shop.home .amount {
+  flex: 0 0 calc(50% - 6px);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+
+.shop.home .name {
+  flex: 1;
+  text-align: left;
+}
+
+/* Crossed out, a heat is no longer something to look out for. */
+.shop.home .token {
+  color: inherit;
 }
 
 /* ---- cooking ----------------------------------------------------------------- */

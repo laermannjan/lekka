@@ -1,7 +1,7 @@
 import { formatNumber, fraction, scaleAmount, showAmount } from './amount.js'
 import { renderReading } from './read.js'
 import { aboutOf, gather, phrase, servings, sourceName, stepsOf, totalTime } from './recipe.js'
-import { divider, element, overview, roundButton, said, uses } from './ui.js'
+import { divider, element, icon, overview, roundButton, said, uses } from './ui.js'
 import { t } from './i18n.js'
 
 /**
@@ -16,8 +16,8 @@ import { t } from './i18n.js'
  * again under it.
  *
  * `state` is `{ factor, table }` and lives with the caller. `on` holds what the screen
- * cannot do itself: `back`, `more` (table, edit, share, delete), `redraw`, and `factor`,
- * told each factor as it is set.
+ * cannot do itself: `back`, `more` (table, edit, share, delete), `redraw`, `shop`, and
+ * `factor`, told each factor as it is set.
  */
 export function renderRecipe(card, state, on) {
   const steps = stepsOf(card)
@@ -72,7 +72,7 @@ export function renderRecipe(card, state, on) {
     ]),
     ...(state.table
       ? [element('div', 'datasheet table', undefined, [renderReading(card, state.factor, 0)])]
-      : [howMuch(card.yields, change, followers), ingredients(card, field, shown, scaled, state.factor), method(steps, state.factor, shown)]),
+      : [howMuch(card.yields, change, followers), ingredients(card, field, shown, scaled, state.factor, on.shop), method(steps, state.factor, shown)]),
   ]
   follow(state.factor)
   return parts
@@ -102,9 +102,13 @@ function howMuch(yields, change, followers) {
   ])
 }
 
-function ingredients(card, field, shown, scaled, factor) {
+function ingredients(card, field, shown, scaled, factor, shopping) {
   const lines = gather(card)
   const editable = lines.some((line) => line.amounts.length === 1 && line.amounts[0].kind === 'number')
+  // The way to what to buy for it, right under what goes in.
+  const shop = element('button', 'pill glass', undefined, [icon('basket', 18), t('Shopping list')])
+  shop.type = 'button'
+  shop.onclick = shopping
 
   return element('section', 'ingredients', undefined, [
     overview(lines, factor, (line) => {
@@ -117,6 +121,7 @@ function ingredients(card, field, shown, scaled, factor) {
     }),
     scaled,
     editable ? element('p', 'hint', t('Change any amount, and the whole recipe follows.')) : null,
+    lines.length ? shop : null,
   ])
 }
 
