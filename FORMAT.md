@@ -51,22 +51,23 @@ From that one rule everything follows:
 |---|---|
 | `# Pfannkuchen (12 Stück)` | title, and in brackets what it yields. Exactly one |
 | `> made this for Ida's birthday` | a note about the whole card. Any number |
-| `* Ofen auf 200 °C vorheizen` | a preparation: something you do that flows nowhere |
+| `* Ofen auf 200 °C vorheizen` | a preparation: something to know or do before the first step, that flows nowhere |
 | `- verrühren (von Hand)` | a step: verb first, remark in brackets |
 | `  > {Mehl} und {Milch} glatt verrühren` | the step above, said as a sentence. At most one, right under its step |
 | `- Mehl (Type 550): 250 g` | an ingredient: name, remark, then the amount |
 
 Indent by two spaces per level. Blank lines mean nothing.
 
-A preparation may stand at the outermost level, and then it comes before
-everything, or be indented under a step, and then it comes before that step. It
-is read like any other indented line: what is under a step happens before it. It
-simply brings no ingredient with it, so it gets no row.
+A preparation stands at the outermost level and comes before everything: when to
+start, a tin to ready, an oven to heat for a bake that begins at once. What happens
+later and goes into no food is said in the sentence of the step it happens during,
+`…, dabei den Ofen auf 250 °C vorheizen`. A card written before that may still have
+one indented under a step, and it is still read: it comes before that step, like any
+other indented line. It brings no ingredient with it, so it gets no row.
 
-**A note is a comment; a preparation is an instruction.** `> Sauerteig am
-Vorabend` tells you something about the recipe, and `* Ofen auf 200 °C vorheizen`
-tells you to do something. They look alike on the page and are not the same kind
-of line.
+**A note is a comment; a preparation is an instruction.** `> hält sich 5 Tage`
+tells you something about the recipe, and `* am Vorabend beginnen` tells you to do
+something. They look alike on the page and are not the same kind of line.
 
 **A preparation is not a step, and could not be one.** A step needs a place on
 both axes: its column is `max(column(input)) + 1`, and its height is the rows of
