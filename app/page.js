@@ -1,3 +1,5 @@
+import { t } from './i18n.js'
+
 /**
  * The furniture every screen is built out of: a heading with a dashed rule under it, and
  * the block of notes that closes a recipe.
@@ -49,7 +51,7 @@ export function nameSection(title, onRename) {
   const field = element('input', 'title')
   field.type = 'text'
   field.value = title ?? ''
-  field.placeholder = 'Name'
+  field.placeholder = t('Name')
   // A recipe with no name yet is one that was just started, and the name is the only
   // thing it is waiting for. `Create` opens the editor and the caret is already here.
   if (!title) field.autofocus = true
@@ -84,10 +86,10 @@ export function specification(card, edit = null) {
   const preps = edit ? [...preparations, ''] : preparations
 
   const rows = [
-    ...(edit ? pair('Yield', card.yields ?? '', (text) => edit.onYields(text)) : []),
+    ...(edit ? pair(t('Yield'), card.yields ?? '', (text) => edit.onYields(text)) : []),
     ...notes.flatMap((note, index) =>
       pair(
-        notes.length > 1 ? `Note ${index + 1}` : 'Note',
+        notes.length > 1 ? t('Note {n}', { n: index + 1 }) : t('Note'),
         note,
         edit && ((text) => edit.onNotes(replace(card.notes, index, text))),
       ),
@@ -95,7 +97,7 @@ export function specification(card, edit = null) {
     ...(edit
       ? preps.flatMap((prep, index) =>
           pair(
-            preps.length > 1 ? `Before ${index + 1}` : 'Before',
+            preps.length > 1 ? t('Before {n}', { n: index + 1 }) : t('Before'),
             prep,
             (text) => edit.onPreparations(replace(preparations, index, text)),
           ),
@@ -108,7 +110,7 @@ export function specification(card, edit = null) {
   // One to a line. Every row here is a sentence a person wrote, and a sentence gets the
   // width of the sheet rather than half of it.
   return element('div', '', undefined, [
-    section('Notes'),
+    section(t('Notes')),
     element('div', 'spec', undefined, rows.flatMap(({ label, value }) => [label, value])),
   ])
 }

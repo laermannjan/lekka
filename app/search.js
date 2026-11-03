@@ -1,5 +1,6 @@
 import { formatAmount } from './amount.js'
 import { aboutOf, stepsOf } from './recipe.js'
+import { t } from './i18n.js'
 
 /**
  * Recipes that answer a query, each once, with the best reason it answers: its name, then
@@ -25,19 +26,19 @@ function reasonFor(card, wanted) {
   if (has(card.title)) return { rank: fold(card.title).startsWith(wanted) ? 0 : 1, why: null }
 
   const alias = aboutOf(card).aliases.find(has)
-  if (alias) return { rank: 2, why: { label: 'Also known as', text: alias } }
+  if (alias) return { rank: 2, why: { label: t('Also known as'), text: alias } }
 
   const steps = stepsOf(card)
   for (const step of steps)
     for (const ingredient of step.ingredients)
       if (has(ingredient.name) || has(ingredient.aside)) {
         const amount = formatAmount(ingredient.amount)
-        return { rank: 3, why: { label: 'Ingredient', text: amount ? `${ingredient.name}, ${amount}` : ingredient.name } }
+        return { rank: 3, why: { label: t('Ingredient'), text: amount ? `${ingredient.name}, ${amount}` : ingredient.name } }
       }
 
   const step = steps.find((one) => has(one.title) || has(one.aside))
   if (step)
-    return { rank: 4, why: { label: `Step ${step.n}`, text: step.aside ? `${step.title}, ${step.aside}` : step.title } }
+    return { rank: 4, why: { label: t('Step {n}', { n: step.n }), text: step.aside ? `${step.title}, ${step.aside}` : step.title } }
 
   return null
 }

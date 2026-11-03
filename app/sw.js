@@ -22,6 +22,7 @@ const SHELL = [
   '/library.js',
   '/cook.js',
   '/shop.js',
+  '/i18n.js',
   '/recipe.js',
   '/recipe-page.js',
   '/search.js',

@@ -1,5 +1,6 @@
 import { buildGrid } from './grid.js'
 import { formatAmount, scaleAmount } from './amount.js'
+import { t } from './i18n.js'
 
 /*
  * Where the ingredient block ends when nothing is being written. Writing puts a column
@@ -120,7 +121,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
   })
 
   // The reading view puts steps in this column too, so it names it for what it holds.
-  const label = element('div', 'label heading', grid.heading ?? 'Ingredient')
+  const label = element('div', 'label heading', grid.heading ?? t('Ingredient'))
   label.style.gridColumn = `1 / ${lead + 1}`
   label.style.gridRow = String(head + 1)
   table.append(label)
@@ -221,7 +222,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
   // Under the last ingredient, where the next one goes. It runs the width of the
   // ingredient column, because a row that starts halfway leaves a notch.
   if (adds) {
-    const box = element('div', 'add', '+ Ingredient')
+    const box = element('div', 'add', t('+ Ingredient'))
     box.onclick = edit.onAdd
     table.append(put(box, {
       column: 1, columnSpan: lead, row: bottom, rowSpan: 1, last: true,
@@ -237,7 +238,7 @@ export function renderGrid(grid, scale = 1, edit = null) {
   // what a step is: the table has to say a step can be added before anybody ticks a row.
   // It runs the full height for the same reason the add row runs the full width.
   if (edit?.onStep) {
-    const box = element('div', 'add step', '+ Step')
+    const box = element('div', 'add step', t('+ Step'))
     box.onclick = edit.onStep
     // Everything under the head: every row, and the row that adds one.
     table.append(put(box, {

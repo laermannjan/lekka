@@ -1,4 +1,5 @@
 import { svg } from './qr.js'
+import { t } from './i18n.js'
 
 /**
  * A link, at the one moment it exists in a form anybody can copy.
@@ -14,16 +15,16 @@ export function linkOut(url, note) {
   shown.readOnly = true
   shown.value = url
 
-  const copy = element('button', 'quiet', 'Copy')
+  const copy = element('button', 'quiet', t('Copy'))
   copy.type = 'button'
   copy.onclick = async () => {
     try {
       await navigator.clipboard.writeText(url)
-      copy.textContent = 'Copied'
+      copy.textContent = t('Copied')
     } catch {
       // A clipboard the browser will not open is not a reason to lose the link.
       shown.select?.()
-      copy.textContent = 'Press ⌘C'
+      copy.textContent = t('Press ⌘C')
     }
   }
 

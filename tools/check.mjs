@@ -396,7 +396,9 @@ addEventListener('load', async () => {
   check('its steps in the order they are done, with their amounts in them',
     steps.join(' | ') === 'Pfanne vorheizen | Verrühren 250 g Mehl 500 ml Milch 2 Eier | Schmelzen 30 g Butter | Braten 2 min je Seite',
     steps.join(' | '))
-  const gathered = [...document.querySelectorAll('.overview .line')].map((one) => [...one.children].map((part) => part.textContent).join(' ').replace(/\\s+/g, ' '))
+  // An amount is a field to type in; what it says is its value, then its unit.
+  const shows = (part) => [...part.querySelectorAll('input')].map((field) => field.value).concat(part.textContent).join(' ')
+  const gathered = [...document.querySelectorAll('.overview .line')].map((one) => [...one.children].map(shows).join(' ').replace(/\\s+/g, ' ').trim())
   check('and above them everything that goes in, once', gathered.join(' | ') === '250 g Mehl Type 550 | 500 ml Milch | 2 Eier | 30 g Butter',
     gathered.join(' | '))
 
@@ -484,6 +486,8 @@ process.exit(failed > 0 ? 1 : 0)
 async function said(chrome, port, path, size) {
   const dom = await run(chrome, [
     '--headless=new',
+    // The checks read what the screens say in English, whatever this machine speaks.
+    '--lang=en-US',
     '--disable-gpu',
     '--hide-scrollbars',
     '--enable-logging=stderr',

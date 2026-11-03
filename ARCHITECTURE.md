@@ -202,14 +202,25 @@ the uses of one thing, one name and aside, added up (`gather` in `app/recipe.js`
 how much it makes. Then the steps, each read out as one sentence with its ingredients'
 amounts where they go in (`phrase`): the step's own sentence where it has one, with each
 `{name}` drawn as that ingredient's amount and name, and otherwise one made of its words,
-its time, its ingredients and its aside. Every amount on the screen, the yield's
-included, opens the same sheet, which asks how much there is of that one thing and
-scales the whole recipe by it as you type. `Start cooking` and the shopping list float
-at the bottom; the table view, Edit, Share and Delete are behind `…`.
+its time, its ingredients and its aside. How much is set where it is listed: the yield
+and every amount in the gathered list are fields that look like fields, and typing in
+one scales the whole recipe by it. The rest follows as it is typed, in place, so the
+field keeps the keyboard. `Start cooking` and the shopping list float at the bottom; the
+table view, Edit, Share and Delete are behind `…`.
 
 The look keeps one meaning per highlight: words in a serif, the phone's own, and every
-number in sans; saffron for time and ember for heat, wherever they stand; a tinted token
-for something measured, which tapping acts on. A wavy rule starts every step.
+amount and time in sans; a step's number in the serif's italic, as the first word of
+its sentence; saffron for time and ember for heat, wherever they stand. A wavy rule
+starts every step. Durations are as short as they go and still never read as a time of
+day: `15h15`, `45 min`, `2h`.
+
+What lekka says is German or English, as the phone is set (`app/i18n.js`); a recipe is
+in its own words whatever that is. The English is the key, so a line nobody translated
+reads as written, and a test holds every line the screens say to its German.
+
+A phone's keyboard covers the bottom of the page without telling it. Sheets and the
+editor's forms stand above it instead (`watchKeyboard` in `app/ui.js`), and the bar at
+the bottom steps aside while something in the page is typed into.
 
 **Shopping at `/shop/…`.** The gathered list at the amount the recipe was last scaled
 to, less what is at home: a line ticked off is at home, one with an amount noted is at

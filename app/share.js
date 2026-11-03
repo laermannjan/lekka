@@ -1,3 +1,5 @@
+import { t } from './i18n.js'
+
 /**
  * Who holds this recipe, and handing it to somebody else.
  *
@@ -15,25 +17,25 @@ export function shareSheet({ title, me, held: known, onList, onPeople, onGive, o
   const form = element('form', 'body')
   form.method = 'dialog'
 
-  const heading = element('h2', 'heading', `Share ${title}`)
+  const heading = element('h2', 'heading', t('Share {title}', { title }))
   heading.id = 'share-title'
   box.setAttribute('aria-labelledby', heading.id)
 
   const held = element('div', 'inputs')
 
   const who = people()
-  const scope = choose('They may', [
-    ['read', 'Read it'],
-    ['edit', 'Read and change it'],
+  const scope = choose(t('They may'), [
+    ['read', t('Read it')],
+    ['edit', t('Read and change it')],
   ])
-  const days = field('Expires', 'text', 'days, or leave empty for never')
+  const days = field(t('Expires'), 'text', t('days, or leave empty for never'))
 
   const wrong = element('span', 'hint warn')
   wrong.hidden = true
 
-  const give = element('button', 'go', 'Share')
+  const give = element('button', 'go', t('Share'))
   give.type = 'submit'
-  const done = element('button', 'quiet', 'Done')
+  const done = element('button', 'quiet', t('Done'))
   done.type = 'button'
   done.onclick = () => box.close()
 
@@ -59,7 +61,7 @@ export function shareSheet({ title, me, held: known, onList, onPeople, onGive, o
     const asked = { scope: scope.value(), days: many === '' ? null : Number(many) }
 
     if (chosen.length === 0) {
-      wrong.textContent = 'Choose somebody to share it with.'
+      wrong.textContent = t('Choose somebody to share it with.')
       wrong.hidden = false
       give.disabled = false
       return
@@ -83,7 +85,7 @@ export function shareSheet({ title, me, held: known, onList, onPeople, onGive, o
 
   form.append(
     heading,
-    element('div', 'hint', 'Everyone who holds this recipe, and what they may do with it.'),
+    element('div', 'hint', t('Everyone who holds this recipe, and what they may do with it.')),
     held,
     who.node,
     scope.node,
@@ -102,7 +104,7 @@ export function shareSheet({ title, me, held: known, onList, onPeople, onGive, o
 }
 
 function rows(list, onRevoke, refresh) {
-  if (list.length === 0) return [element('div', 'choice', 'Nobody yet.')]
+  if (list.length === 0) return [element('div', 'choice', t('Nobody yet.'))]
 
   return list.map((grant) => {
     const line = element('div', 'choice')
@@ -113,7 +115,7 @@ function rows(list, onRevoke, refresh) {
     // The owner is on the list because it is a grant like any other, but it is the one
     // row that cannot go: a recipe with no owner is one nobody could ever reach again.
     if (grant.scope !== 'owner') {
-      const drop = element('button', 'quiet danger', 'Revoke')
+      const drop = element('button', 'quiet danger', t('Revoke'))
       // Inside a form, a button with no type submits it. Without this, Revoke minted a
       // link and left Share looking pressed.
       drop.type = 'button'
@@ -128,9 +130,9 @@ function rows(list, onRevoke, refresh) {
 }
 
 function says(grant) {
-  const what = { owner: 'owns it', edit: 'may read and change it', read: 'may read it' }[grant.scope]
+  const what = { owner: t('owns it'), edit: t('may read and change it'), read: t('may read it') }[grant.scope]
   if (!grant.expires) return what
-  return `${what} · until ${grant.expires.slice(0, 10)}`
+  return t('{what} · until {date}', { what, date: grant.expires.slice(0, 10) })
 }
 
 /**
@@ -142,7 +144,7 @@ function says(grant) {
  */
 function people() {
   const list = element('div', 'inputs')
-  const node = element('div', 'row wide', undefined, [element('span', 'name', 'Share with'), list])
+  const node = element('div', 'row wide', undefined, [element('span', 'name', t('Share with')), list])
   const held = []
 
   return {
@@ -151,7 +153,7 @@ function people() {
       held.length = 0
       if (everyone.length === 0) {
         list.replaceChildren(
-          element('div', 'choice', 'Nobody else here yet. Invite somebody first.'),
+          element('div', 'choice', t('Nobody else here yet. Invite somebody first.')),
         )
         return
       }
@@ -165,7 +167,7 @@ function people() {
           const line = element('label', 'choice', undefined, [
             box,
             element('span', 'what', person.name),
-            element('span', 'aside', now ? says({ scope: now }) : 'holds nothing'),
+            element('span', 'aside', now ? says({ scope: now }) : t('holds nothing')),
           ])
           held.push(box)
           return line

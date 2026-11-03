@@ -1,4 +1,5 @@
 import { renderCard } from './render.js'
+import { t } from './i18n.js'
 
 /**
  * A card to read while cooking: the table, one scroll, and nothing else.
@@ -25,9 +26,9 @@ export function renderReading(card, scale, at, { onAt, onFits, fit = false } = {
   // scroll with the table. Next is the width that is left, and it is deliberately less
   // than a column: a card that runs on should say so.
   const places = element('div', 'places')
-  const done = element('div', 'place', 'Done')
-  const now = element('div', 'place now', 'Now')
-  const nextPlace = element('div', 'place', 'Next')
+  const done = element('div', 'place', t('Done'))
+  const now = element('div', 'place now', t('Now'))
+  const nextPlace = element('div', 'place', t('Next'))
   places.append(done, now, nextPlace)
 
   const scroll = element('div', 'scroll')

@@ -1,4 +1,5 @@
 import { gather, phrase, stepsOf } from './recipe.js'
+import { t } from './i18n.js'
 import { arcOffset, element, icon, menuItem, overview, picture, ring, roundButton, said, slide, wave } from './ui.js'
 
 /**
@@ -71,12 +72,12 @@ export function renderCook(card, session, on) {
   }
 
   const next = element('button', 'primary', undefined, [
-    element('span', '', after ? `Next: ${after.title}` : 'Done cooking'),
+    element('span', '', after ? t('Next: {step}', { step: after.title }) : t('Done cooking')),
     icon('down', 18),
   ])
   next.type = 'button'
   next.onclick = after ? () => go(at + 1) : on.end
-  const previous = roundButton('up', 'Previous step', () => go(at - 1))
+  const previous = roundButton('up', t('Previous step'), () => go(at - 1))
   previous.disabled = at === 1
 
   const elsewhere = Object.entries(session.timers)
@@ -85,12 +86,12 @@ export function renderCook(card, session, on) {
 
   return [
     element('div', 'bar', undefined, [
-      roundButton('down', 'Back to the recipe', on.minimise),
+      roundButton('down', t('Back to the recipe'), on.minimise),
       element('span', 'middle', undefined, [
         element('span', 'name', card.title),
-        element('span', 'count', `Step ${at} of ${steps.length}`),
+        element('span', 'count', t('Step {n} of {count}', { n: at, count: steps.length })),
       ]),
-      roundButton('more', 'All ingredients, or end cooking', () => cookMenu(card, session, on)),
+      roundButton('more', t('All ingredients, or end cooking'), () => cookMenu(card, session, on)),
     ]),
     elsewhere.length
       ? element('div', 'banners', undefined, elsewhere.map(([n, one]) => banner(Number(n), one, () => go(Number(n)))))
@@ -121,7 +122,7 @@ export function renderCook(card, session, on) {
 /** A step's timer: a button that starts it, then the time left and a button to stop it. */
 function timerControl(step, timer, toggle) {
   if (!timer) {
-    const start = element('button', 'timer-start', undefined, [icon('play', 16), `Start ${step.time.text} timer`])
+    const start = element('button', 'timer-start', undefined, [icon('play', 16), t('Start {time} timer', { time: step.time.text })])
     start.type = 'button'
     start.onclick = toggle
     return start
@@ -131,7 +132,7 @@ function timerControl(step, timer, toggle) {
   clock.classList.toggle('over', timer.ends <= Date.now())
   const stop = element('button', 'timer-stop', undefined, [ring(timer, 52), icon('stop', 16)])
   stop.type = 'button'
-  stop.setAttribute('aria-label', 'Stop the timer')
+  stop.setAttribute('aria-label', t('Stop the timer'))
   stop.onclick = toggle
   return element('div', 'timer-run', undefined, [clock, stop])
 }
@@ -141,9 +142,9 @@ function banner(n, timer, open) {
   const clock = element('span', 'clock-small', countdown((timer.ends - Date.now()) / 1000))
   clock.dataset.ends = String(timer.ends)
   clock.classList.toggle('over', timer.ends <= Date.now())
-  const button = element('button', 'banner', undefined, [icon('timer', 18), element('span', 'name', `${timer.title} · step ${n}`), clock])
+  const button = element('button', 'banner', undefined, [icon('timer', 18), element('span', 'name', t('{title} · step {n}', { title: timer.title, n })), clock])
   button.type = 'button'
-  button.setAttribute('aria-label', `${timer.title} timer, step ${n}: back to it`)
+  button.setAttribute('aria-label', t('{title} timer, step {n}: back to it', { title: timer.title, n }))
   button.onclick = open
   return button
 }
@@ -152,13 +153,13 @@ function cookMenu(card, session, on) {
   const sheet = slide(
     element('h2', '', card.title),
     element('div', 'menu', undefined, [
-      menuItem('list', 'All ingredients', () => {
+      menuItem('list', t('All ingredients'), () => {
         sheet.close()
-        slide(element('h2', '', 'All ingredients'), overview(gather(card), session.factor))
+        slide(element('h2', '', t('All ingredients')), overview(gather(card), session.factor))
       }),
       menuItem(
         'close',
-        'End cooking',
+        t('End cooking'),
         () => {
           sheet.close()
           on.end()
@@ -178,7 +179,7 @@ export function miniBar(session, card, open) {
   const step = steps[session.at - 1]
   const soonest = Object.values(session.timers).sort((a, b) => a.ends - b.ends)[0] ?? null
 
-  const sub = element('span', 'sub', `Step ${session.at}${step ? ` · ${step.title}` : ''}`)
+  const sub = element('span', 'sub', `${t('Step {n}', { n: session.at })}${step ? ` · ${step.title}` : ''}`)
   if (soonest) {
     const clock = element('span', 'clock-small', countdown((soonest.ends - Date.now()) / 1000))
     clock.dataset.ends = String(soonest.ends)
@@ -192,7 +193,7 @@ export function miniBar(session, card, open) {
     soonest ? ring(soonest) : icon('up', 22),
   ])
   link.href = `/cook/${session.id}`
-  link.setAttribute('aria-label', `Cooking ${session.title}, step ${session.at}`)
+  link.setAttribute('aria-label', t('Cooking {title}, step {n}', { title: session.title, n: session.at }))
   link.onclick = (event) => {
     event.preventDefault()
     open()
@@ -203,7 +204,7 @@ export function miniBar(session, card, open) {
 /** `2:41:07`, `04:59`, and `Done` once it has run out. */
 export function countdown(seconds) {
   const left = Math.ceil(seconds)
-  if (left <= 0) return 'Done'
+  if (left <= 0) return t('Done')
   const h = Math.floor(left / 3600)
   const m = String(Math.floor((left % 3600) / 60)).padStart(2, '0')
   const s = String(left % 60).padStart(2, '0')
