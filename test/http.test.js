@@ -96,6 +96,17 @@ test('a card in a code fence is stored without the fence', async (t) => {
   assert.equal(await (await call(`/api/cards/${id}`)).text(), CARD)
 })
 
+test('a card as JSON with words around it is taken for the JSON', async (t) => {
+  const { call, close } = await serve()
+  t.after(close)
+
+  const json = { title: 'Dinkelquarkbrot', yields: '1 Kastenbrot', root: { step: 'backen', children: [{ ingredient: 'Mehl', amount: '300 g' }] } }
+  const made = await call('/api/cards', { method: 'POST', body: `Here is the recipe:\n\n${JSON.stringify(json, null, 2)}\n\nEnjoy!` })
+  assert.equal(made.status, 201)
+  const { id } = await made.json()
+  assert.equal(await (await call(`/api/cards/${id}`)).text(), CARD)
+})
+
 test('a card may arrive as JSON, and is stored as text', async (t) => {
   const { call, close } = await serve()
   t.after(close)

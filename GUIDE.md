@@ -147,8 +147,8 @@ you have about it: is it needed at the stove, or before?
 - **`title`** is the name of the dish. What it makes goes in **`yields`**: a number and
   what of, `12 pancakes`, `1 loaf`.
 - **`preparations`** are what to know or do before the first step, in the order it is
-  done: `start the evening before`, `heat the oven to 180 °C`, `butter and flour a loaf
-  tin`. lekka shows them before the first step, unnumbered. They are the only place
+  done, each an object: `{ "preparation": "start the evening before" }`, `{ "preparation":
+  "heat the oven to 180 °C" }`, `{ "preparation": "butter and flour a loaf tin" }`. lekka shows them before the first step, unnumbered. They are the only place
   for a preparation: no step has one among its children.
 - **`source`** is where the recipe came from, if anything says so: its address.
 - **`aliases`** are the other names somebody might search for it under: other languages,
