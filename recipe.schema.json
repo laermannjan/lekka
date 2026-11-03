@@ -32,7 +32,7 @@
       "items": { "type": "string", "minLength": 1 }
     },
     "preparations": {
-      "description": "Preparations that come before everything else.",
+      "description": "What to know or do before the first step, in the order it is done: when to start (\"start the evening before\"), a tin to ready, an oven to heat for a bake that begins at once. The only place for a preparation: what happens later is said in the sentence of the step it happens during.",
       "type": "array",
       "items": { "$ref": "#/$defs/preparation" }
     },
@@ -59,20 +59,19 @@
           "pattern": "^[^()]+$"
         },
         "sentence": {
-          "description": "The step as a cook would write it, in the recipe's language: every ingredient this step takes named once in braces, exactly as its name is written, where its amount should stand: \"mix {flour}, {salt} and {dry yeast}\". No amounts, they come with the braces; what earlier steps made is named in plain words, \"the dough\". Lower case, no full stop.",
+          "description": "The step as a cook would write it, in the recipe's language: every ingredient this step takes named once in braces, exactly as its name is written: \"mix {flour}, {salt} and {dry yeast}\". No amounts: each ingredient is listed under the sentence with its own. What earlier steps made is named in plain words, \"the dough\"; what to do meanwhile is said too, \"meanwhile heat the oven to 220 °C\". Lower case, no full stop.",
           "type": "string",
           "minLength": 1
         },
         "aside": { "$ref": "#/$defs/aside" },
         "children": {
-          "description": "What flows into this step, in the order it joins: ingredients, earlier steps, and preparations this step needs.",
+          "description": "What flows into this step, in the order it joins: ingredients and earlier steps.",
           "type": "array",
           "minItems": 1,
           "items": {
             "oneOf": [
               { "$ref": "#/$defs/step" },
-              { "$ref": "#/$defs/ingredient" },
-              { "$ref": "#/$defs/preparation" }
+              { "$ref": "#/$defs/ingredient" }
             ]
           }
         }
@@ -98,7 +97,7 @@
       }
     },
     "preparation": {
-      "description": "Something done that nothing flows from: preheating, greasing a tin.",
+      "description": "Something to know or do before the first step, that nothing flows from: \"start the evening before\", \"grease a loaf tin\".",
       "type": "object",
       "required": ["preparation"],
       "additionalProperties": false,

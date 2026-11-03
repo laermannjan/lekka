@@ -18,9 +18,10 @@ much is being made:
 
 > `pour in {lukewarm water} and knead for 10 min, until smooth`
 >
-> reads: Pour in `350 ml lukewarm water` and knead for `10 min`, until smooth
+> reads: Pour in **lukewarm water** and knead for `10 min`, until smooth, with
+> `350 ml lukewarm water` right under it
 
-Whoever cooks never has to look up how much: it is there where it goes in. Above the
+Whoever cooks never has to look up how much: it is right under the step. Above the
 steps, lekka gathers every ingredient from them into one list, with its aside, and
 adds up what goes in more than once; the shopping list is that same list. Nobody
 writes it: you write each ingredient once, as a child of the step it goes into.
@@ -31,8 +32,10 @@ There are three kinds of entry:
   a preferment and 60 g more in the dough are two ingredients.
 - A **step** is something done to what flows into it: its `children`. A step's
   children are ingredients, earlier steps, or both.
-- A **preparation** is something done that nothing flows from: preheating the oven,
-  greasing a tin, soaking skewers. It has no children and is no step's input.
+- A **preparation** is something to know or to do before the first step, that nothing
+  flows from: when to start, a tin to grease, an oven to heat for a bake that begins
+  at once. It has no children, is no step's input, and belongs to the recipe as a
+  whole, never to one step.
 
 The last step is the `root`. Everything flows into it, so the JSON nests from the end
 of the recipe back to its beginning: the root's children are what the last step
@@ -54,13 +57,18 @@ cook reads.
 2. **Find where things meet.** Ingredients that go into one bowl together are children
    of the same step, next to each other. This decides the order, not the order of the
    source.
-3. **Pull out what does not flow.** Tins, tools, preheating: these are preparations.
-   Test every candidate: does it go into the food? If not, it is a preparation.
+3. **Pull out what comes before everything.** What has to be known or done before the
+   first step, and goes into no food, is a preparation: when to start, readying a tin,
+   heating the oven or grill when the cooking begins at once. What goes into the food
+   is a step, even when it is done the day before: soaking the beans overnight is a
+   step that takes the beans, and the preparation says to start the day before. What
+   goes into no food and happens later, like heating the oven while the dough rises, is
+   said in the sentence of the step it happens during.
 4. **Make each instruction one step with one verb.** Its short form takes the verb
    and parameters, its aside the condition; its sentence keeps the instruction as
    the source says it, with the step's ingredients put in braces.
 5. **Nest.** Start from the last step, give it what it takes as children, and repeat
-   until only ingredients and preparations are left.
+   until only ingredients are left.
 6. **Give side strands their own steps.** A preferment, a soaker, a sauce made on the
    side, a roux: each is its own step, a child of the step it joins.
 7. **Read it back** from the innermost steps outward. If that sounds like the recipe,
@@ -101,6 +109,9 @@ cook reads.
 - **Say the step's time, heat and aside** where they belong in the sentence: `bake at
   220 °C for 40 min`, `cover and leave to rise for 1 h`. Times and temperatures are
   highlighted wherever they stand.
+- **Say what to do meanwhile** in the step it is done during: `cover and leave to rise
+  for 1 h, meanwhile heat the oven to 220 °C`. That is how it reaches the cook at the
+  moment it is needed.
 - **One instruction, one sentence.** Lower case, no full stop; lekka capitalises it.
 
 ## Ingredients
@@ -135,14 +146,17 @@ you have about it: is it needed at the stove, or before?
 
 - **`title`** is the name of the dish. What it makes goes in **`yields`**: a number and
   what of, `12 pancakes`, `1 loaf`.
-- **`preparations`** are the ones that come before everything else. A preparation only
-  one step needs is a child of that step instead, so it is done when it is needed.
+- **`preparations`** are what to know or do before the first step, in the order it is
+  done: `start the evening before`, `heat the oven to 180 °C`, `butter and flour a loaf
+  tin`. lekka shows them before the first step, unnumbered. They are the only place
+  for a preparation: no step has one among its children.
 - **`source`** is where the recipe came from, if anything says so: its address.
 - **`aliases`** are the other names somebody might search for it under: other languages,
   the dish it is a kind of, what sets it apart. A vegan cheesecake on cashews might
   have `["cheesecake", "Käsekuchen", "vegan", "cashew"]`.
 - **`notes`** hold what is worth knowing about the recipe as a whole and is not part of
-  the flow: how it keeps, what it goes with, what to try next time. Not instructions.
+  the flow: how it keeps, what it goes with, what to try next time. Not instructions:
+  when to start is a preparation, since it is the first thing to know.
 
 ## Language and units
 
@@ -163,8 +177,8 @@ own. So:
 From this source:
 
 > Mix flour, salt and dry yeast. Add lukewarm water and knead for 10 minutes. Cover
-> and let rise for 1 hour. Grease a loaf tin, put the dough in and bake at 220 °C for
-> 40 minutes.
+> and let rise for 1 hour, and heat the oven to 220 °C meanwhile. Grease a loaf tin,
+> put the dough in and bake for 40 minutes.
 
 ```json
 {
@@ -172,6 +186,7 @@ From this source:
   "yields": "1 loaf",
   "source": "https://example.com/sandwich-loaf",
   "aliases": ["white bread", "tin loaf", "yeast bread"],
+  "preparations": [{ "preparation": "grease a loaf tin" }],
   "root": {
     "step": "bake 220 °C 40 min",
     "sentence": "bake at 220 °C for 40 min",
@@ -180,11 +195,10 @@ From this source:
         "step": "put in tin",
         "sentence": "put the dough into the tin",
         "children": [
-          { "preparation": "grease loaf tin" },
           {
             "step": "rise 1 h",
             "aside": "covered",
-            "sentence": "cover and leave to rise for 1 h",
+            "sentence": "cover and leave to rise for 1 h, meanwhile heat the oven to 220 °C",
             "children": [
               {
                 "step": "knead 10 min",
@@ -211,34 +225,37 @@ From this source:
 }
 ```
 
-Greasing the tin goes into nothing, so it is a preparation, and it sits with the step
-that needs the tin rather than at the start. "Cover" is a condition, not an action, so
-it is the aside of the rise. The water joins at kneading, not at mixing, because the
-source adds it afterwards.
+Greasing the tin goes into nothing and can be done before anything else, so it is the
+recipe's preparation, shown before the first step. Heating the oven goes into nothing
+too, but it happens while the dough rises, so the rise's sentence says it. "Cover" is a
+condition, not an action, so it is the aside of the rise. The water joins at kneading,
+not at mixing, because the source adds it afterwards.
 
 "Lukewarm" is part of the water's name, because it matters the moment the water goes
 in. Which flour to buy matters only in the shop, so it is the flour's aside. The
 dough is named in plain words; only a step's own ingredients take braces. The steps
 read:
 
-> 1 Mix `500 g flour`, `10 g salt` and `7 g dry yeast`
+> *before* Grease a loaf tin
 >
-> 2 Pour in `350 ml lukewarm water` and knead for `10 min`
+> 1 Mix **flour**, **salt** and **dry yeast**, with `500 g flour`, `10 g salt` and
+> `7 g dry yeast` under it
 >
-> 3 Cover and leave to rise for `1 h`
+> 2 Pour in **lukewarm water** and knead for `10 min`, with `350 ml lukewarm water`
+> under it
 >
-> 4 Grease loaf tin
+> 3 Cover and leave to rise for `1 h`, meanwhile heat the oven to `220 °C`
 >
-> 5 Put the dough into the tin
+> 4 Put the dough into the tin
 >
-> 6 Bake at `220 °C` for `40 min`
+> 5 Bake at `220 °C` for `40 min`
 
 ## Checks before you finish
 
 - It is one JSON object, valid against `recipe.schema.json`, and nothing else.
 - Every ingredient in the source is there, with the source's amount.
-- Every entry without children is a real ingredient or a preparation, not an
-  instruction.
+- Every entry without children is a real ingredient, not an instruction. Preparations
+  are only in `preparations`, and only what comes before the first step.
 - Every step has at least one ingredient flowing into it, directly or through earlier
   steps.
 - No step merges nothing and changes nothing.

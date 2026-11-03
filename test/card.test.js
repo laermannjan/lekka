@@ -145,14 +145,14 @@ test('the example in the guide is the card it means, and uses only what the sche
     `# Sandwich loaf (1 loaf)
 > source: https://example.com/sandwich-loaf
 > aliases: white bread, tin loaf, yeast bread
+* grease a loaf tin
 
 - bake 220 °C 40 min
   > bake at 220 °C for 40 min
   - put in tin
     > put the dough into the tin
-    * grease loaf tin
     - rise 1 h (covered)
-      > cover and leave to rise for 1 h
+      > cover and leave to rise for 1 h, meanwhile heat the oven to 220 °C
       - knead 10 min
         > pour in {lukewarm water} and knead for 10 min
         - mix
