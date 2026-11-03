@@ -124,7 +124,7 @@ test('a timer counts down in hours, minutes and seconds, and then says so', asyn
   assert.equal(countdown(-30), 'Done')
 })
 
-test('a step is read out as its sentence, its ingredients where the braces stand', async () => {
+test('a step is read out as its sentence, its ingredients named where the braces stand', async () => {
   const { phrase } = await import('../app/recipe.js')
   const card = parseCard(`# Brot
 
@@ -137,13 +137,28 @@ test('a step is read out as its sentence, its ingredients where the braces stand
   - Roggenmehl: 355 g
 `)
   const [reifen, verruehren] = stepsOf(card)
-  const read = (parts) => parts.map((part) => (part.kind === 'use' ? `[${part.node.name}]` : part.kind === 'text' ? part.text : `<${part.kind} ${part.text}>`)).join('')
-  assert.equal(read(phrase(verruehren)), 'Den Sauerteig mit [Wasser 70 °C], [Salz] und Zucker <time 2 min> verrühren [Roggenmehl]',
-    'a brace naming nothing is a plain word, an ingredient left unsaid comes last')
-  assert.equal(read(phrase(reifen)), 'Reifen <time 12 h> [Sauerteig]', 'no sentence: its words, its time, its ingredients')
+  const read = (parts) => parts.map((part) => (part.kind === 'use' ? `[${part.name}]` : part.kind === 'text' ? part.text : `<${part.kind} ${part.text}>`)).join('')
+  assert.equal(read(phrase(verruehren)), 'Den Sauerteig mit [Wasser 70 °C], [Salz] und Zucker <time 2 min> verrühren',
+    'a brace naming nothing is a plain word, an ingredient left unsaid is only listed')
+  assert.equal(read(phrase(reifen)), 'Reifen <time 12 h>', 'no sentence: its words and its time')
+
+  const [anstellen] = stepsOf(parseCard('# B\n\n- aufschlämmen\n  > {reifes Anstellgut} in Wasser aufschlämmen\n  - reifes Anstellgut: 50 g\n'))
+  assert.equal(read(phrase(anstellen)), '[Reifes Anstellgut] in Wasser aufschlämmen', 'a sentence opening on a name opens in capitals')
 
   const braten = stepsOf(parseCard('# P\n\n- backen 150 °C 3 h (nach 1 h begießen)\n  - Bauch: 2 kg\n'))[0]
-  assert.equal(read(phrase(braten)), 'Backen <heat 150 °C> <time 3 h> [Bauch], nach <time 1 h> begießen')
+  assert.equal(read(phrase(braten)), 'Backen <heat 150 °C> <time 3 h>, nach <time 1 h> begießen')
+})
+
+test('a spoon, a cup, a litre and a count are read in fractions, a weight is not', async () => {
+  const { parseAmount, scaleAmount, showAmount } = await import('../app/amount.js')
+  const read = (text, factor) => showAmount(scaleAmount(parseAmount(text), factor))
+  assert.equal(read('1 TL', 0.25), '¼ TL')
+  assert.equal(read('1 EL', 4 / 3), '1⅓ EL')
+  assert.equal(read('2 l', 0.75), '1½ l')
+  assert.equal(read('1-2 EL', 0.5), '½-1 EL')
+  assert.equal(read('3', 0.5), '1½')
+  assert.equal(read('1 l', 1.6), '1,6 l', 'no fraction near: the number')
+  assert.equal(read('250 g', 1.5), '375 g')
 })
 
 test('the ingredients are gathered from the steps: one line a thing, its uses added up', async () => {

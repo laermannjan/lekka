@@ -84,13 +84,13 @@ to do it, which sort of flour.
 **A sentence says the step as a cook would write it,** and is what the steps
 are read out as. The step line stays the short form the table is drawn with and
 the timer read from; the sentence is for reading. It names each ingredient of
-its step in braces, exactly as the ingredient's line names it, and an amount
-stands there in its place, scaled: `{Mehl} und {Milch} glatt verrühren` reads
-"250 g Mehl und 500 ml Milch glatt verrühren". What earlier steps made is named
-in plain words, `den Teig`. An ingredient the sentence leaves out is read after
-it, so no amount is lost, and a brace naming none of the step's ingredients -
-one renamed since, say - is read as the plain word. A step without a sentence
-is read out as its own line.
+its step in braces, exactly as the ingredient's line names it: `{Mehl} und
+{Milch} glatt verrühren` reads "**Mehl** und **Milch** glatt verrühren", and every
+ingredient the step takes is listed under it with its amount, scaled - named in
+the sentence or not, so no amount is lost. What earlier steps made is named in
+plain words, `den Teig`. A brace naming none of the step's ingredients - one
+renamed since, say - is read as the plain word. A step without a sentence is
+read out as its own line.
 
 **The amount** is everything after the colon: a number and a unit (`250 g`), a
 range (`40-60 g`), a count (`2`), or words (`nach Geschmack`). Whatever unit you

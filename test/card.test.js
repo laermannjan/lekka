@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 
 import { parseCard, formatCard, formatJson, ParseError } from '../app/card.js'
-import { parseAmount, formatAmount, scaleAmount } from '../app/amount.js'
+import { parseAmount, formatAmount, scaleAmount, showAmount } from '../app/amount.js'
 
 const PANCAKES = `# Pfannkuchen (12 Stück)
 > für Ida
@@ -70,7 +70,7 @@ test('scaling', () => {
   // Scaled by what somebody has, an amount is rounded the way it is measured.
   const by = 1.8 / 2.3
   assert.equal(formatAmount(scaleAmount(parseAmount('60 ml'), by)), '47 ml')
-  assert.equal(formatAmount(scaleAmount(parseAmount('1 EL'), by)), '0,8 EL')
+  assert.equal(showAmount(scaleAmount(parseAmount('1 EL'), by)), '¾ EL', 'a spoon to the fraction nearest')
   assert.equal(formatAmount(scaleAmount(parseAmount('3'), by)), '2,5')
   assert.equal(formatAmount(scaleAmount(parseAmount('1 Prise Salz'), 0.04)), '0,04 Prise Salz')
   assert.equal(formatAmount(scaleAmount(parseAmount('1'), 0.1)), '0,5')

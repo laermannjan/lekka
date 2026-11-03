@@ -1,48 +1,48 @@
-import { formatAmount, formatNumber, scaleAmount } from './amount.js'
+import { formatNumber, fraction, scaleAmount, showAmount } from './amount.js'
 import { renderReading } from './read.js'
 import { aboutOf, gather, phrase, servings, sourceName, stepsOf, totalTime } from './recipe.js'
-import { element, overview, roundButton, said, wave } from './ui.js'
+import { divider, element, overview, roundButton, said, uses } from './ui.js'
 import { t } from './i18n.js'
 
 /**
- * A recipe as it is read before cooking: what it is and how long it takes, everything that
- * goes in, gathered once, and then the steps, each a sentence with its amounts in it - or
- * the same flow as a table. Cooking it starts from the bar at the bottom of the screen,
- * which is the caller's.
+ * A recipe as it is read before cooking: what it is and how long it takes, how much of it,
+ * everything that goes in, gathered once, and then the steps, each a sentence with what it
+ * takes listed right under it - or the same flow as a table. Cooking it starts from the bar
+ * at the bottom of the screen, which is the caller's.
  *
- * How much is set where it is listed: the yield and every amount in the gathered list are
- * fields, and typing in one scales the whole recipe by it. Everything else follows as it is
- * typed, in place, so the field keeps the keyboard and nothing is drawn again under it.
+ * How much is set where it is shown: the stepper counts what the recipe makes, and every
+ * amount in the gathered list is a field, typing in one scaling the whole recipe by it.
+ * Everything else follows in place, so a field keeps the keyboard and nothing is drawn
+ * again under it.
  *
  * `state` is `{ factor, table }` and lives with the caller. `on` holds what the screen
  * cannot do itself: `back`, `more` (table, edit, share, delete), `redraw`, and `factor`,
- * told each factor as it is typed.
+ * told each factor as it is set.
  */
 export function renderRecipe(card, state, on) {
   const steps = stepsOf(card)
   const about = aboutOf(card)
   const total = totalTime(steps)
 
-  // Every amount on the screen, so a field being typed in can be followed by the rest.
-  const shown = []
-  const fields = []
+  // Everything on the screen that says how much, each told the factor and the field typed in.
+  const followers = []
   const scaled = element('p', 'scaled')
   const follow = (factor, typing = null) => {
-    for (const { node, amount } of shown) node.textContent = formatAmount(scaleAmount(amount, factor))
-    for (const one of fields) if (one.input !== typing) one.show(factor)
-    const changed = Math.abs(factor - 1) > 0.005
+    for (const one of followers) one(factor, typing)
     const reset = element('button', 'plain', t('Back to the recipe’s amounts'))
     reset.type = 'button'
-    reset.onclick = () => {
-      follow(1)
-      on.factor(1)
-    }
+    reset.onclick = () => change(1)
+    const changed = Math.abs(factor - 1) > 0.005
     scaled.replaceChildren(...(changed ? [element('span', 'num', `× ${formatNumber(round(factor, 100))}`), reset] : []))
-    if (typing) on.factor(factor)
   }
+  const change = (factor, typing = null) => {
+    follow(factor, typing)
+    on.factor(factor)
+  }
+  const shown = (node, amount) => followers.push((factor) => (node.textContent = showAmount(scaleAmount(amount, factor))))
   const field = (amount, label) => {
-    const one = amountField(amount, label, follow)
-    fields.push(one)
+    const one = amountField(amount, label, change)
+    followers.push((factor, typing) => typing !== one.input && one.show(factor))
     return one.node
   }
 
@@ -72,31 +72,47 @@ export function renderRecipe(card, state, on) {
     ]),
     ...(state.table
       ? [element('div', 'datasheet table', undefined, [renderReading(card, state.factor, 0)])]
-      : [
-          ingredients(card, field, scaled, state.factor, shown),
-          method(steps, state.factor, (node, amount) => shown.push({ node, amount })),
-        ]),
+      : [howMuch(card.yields, change, followers), ingredients(card, field, shown, scaled, state.factor), method(steps, state.factor, shown)]),
   ]
   follow(state.factor)
   return parts
 }
 
-function ingredients(card, field, scaled, factor, shown) {
+/**
+ * How much the recipe makes: counted, a stepper of it, a whole one more or less at a
+ * press; in words, only said.
+ */
+function howMuch(yields, change, followers) {
+  const counted = servings(yields)
+  if (!counted) return yields ? element('p', 'yield', undefined, [element('span', 'for', t('for')), element('span', 'quiet', yields)]) : null
+  let now = counted.count
+  const count = element('span', 'count')
+  count.setAttribute('aria-live', 'polite')
+  const fewer = roundButton('minus', t('Less'), () => change((Math.ceil(now - 0.01) - 1) / counted.count))
+  const more = roundButton('plus', t('More'), () => change((Math.floor(now + 0.01) + 1) / counted.count))
+  followers.push((factor) => {
+    now = counted.count * factor
+    count.textContent = fraction(round(now, 100))
+    fewer.disabled = now <= 1.01
+  })
+  return element('section', 'stepper', undefined, [
+    fewer,
+    element('span', 'counted', undefined, [count, counted.unit ? element('span', 'unit', counted.unit) : null]),
+    more,
+  ])
+}
+
+function ingredients(card, field, shown, scaled, factor) {
   const lines = gather(card)
-  const counted = servings(card.yields)
-  const makes = counted
-    ? field({ kind: 'number', value: counted.count, unit: counted.unit }, counted.unit ? t('How much it makes, in {unit}', { unit: counted.unit }) : t('How much it makes'))
-    : element('span', 'quiet', card.yields ?? '')
   const editable = lines.some((line) => line.amounts.length === 1 && line.amounts[0].kind === 'number')
 
   return element('section', 'ingredients', undefined, [
-    card.yields ? element('p', 'yield', undefined, [element('span', 'for', t('for')), makes]) : null,
     overview(lines, factor, (line) => {
       const one = line.amounts.length === 1 ? line.amounts[0] : null
       if (one?.kind === 'number') return element('span', 'amount', undefined, [field(one, one.unit ? t('{name}, in {unit}', { name: line.name, unit: one.unit }) : line.name)])
       // In two units, or as a range, an amount is shown and followed, not typed in.
-      const node = element('span', 'amount', line.amounts.map((each) => formatAmount(scaleAmount(each, factor))).join(' + '))
-      if (line.amounts.length === 1 && one) shown.push({ node, amount: one })
+      const node = element('span', 'amount', line.amounts.map((each) => showAmount(scaleAmount(each, factor))).join(' + '))
+      if (line.amounts.length === 1 && one) shown(node, one)
       return node
     }),
     scaled,
@@ -106,10 +122,10 @@ function ingredients(card, field, scaled, factor, shown) {
 
 /**
  * One amount as a field: its number to type over, its unit after it. Typing a number
- * tells `follow` the factor it makes; leaving the field shows what the factor makes of
+ * tells `change` the factor it makes; leaving the field shows what the factor makes of
  * it again, whatever was left in it.
  */
-function amountField(amount, label, follow) {
+function amountField(amount, label, change) {
   const input = element('input')
   input.type = 'text'
   input.inputMode = 'decimal'
@@ -128,7 +144,7 @@ function amountField(amount, label, follow) {
     const have = Number(input.value.replace(',', '.'))
     if (!Number.isFinite(have) || have <= 0) return
     factor = have / amount.value
-    follow(factor, input)
+    change(factor, input)
   }
   input.onkeydown = (event) => {
     if (event.key === 'Enter') input.blur()
@@ -137,23 +153,22 @@ function amountField(amount, label, follow) {
   input.onfocus = () => input.select()
   return {
     input,
-    show: (next) => show(next),
+    show,
     node: element('label', 'field', undefined, [input, amount.unit ? element('span', 'unit', amount.unit) : null]),
   }
 }
 
-function method(steps, factor, follow) {
+/** The steps: each a wavy rule with its number, its sentence, and what it takes under it. */
+function method(steps, factor, shown) {
   return element(
     'ol',
     'method',
     undefined,
     steps.map((step) =>
       element('li', '', undefined, [
-        wave(),
-        element('div', 'step-row', undefined, [
-          element('span', 'n', String(step.n)),
-          element('p', 'sentence', undefined, said(phrase(step), factor, follow)),
-        ]),
+        divider(step.n),
+        element('p', 'sentence', undefined, said(phrase(step))),
+        step.ingredients.length ? uses(step.ingredients, factor, shown) : null,
       ]),
     ),
   )

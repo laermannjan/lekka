@@ -1,6 +1,6 @@
 import { gather, phrase, stepsOf } from './recipe.js'
 import { t } from './i18n.js'
-import { arcOffset, element, icon, menuItem, overview, picture, ring, roundButton, said, slide, wave } from './ui.js'
+import { arcOffset, divider, element, icon, menuItem, overview, picture, ring, roundButton, said, slide, uses } from './ui.js'
 
 /**
  * Cooking: one recipe at a time, a step at a time, with its timers.
@@ -43,9 +43,10 @@ export function begin(id, card, factor) {
 
 /**
  * The cook screen: the recipe's own list, walked through. The step done last fades out
- * above, the one to do now stands large, its amounts in its sentence, and the next few
+ * above, the one to do now stands large, what it takes listed under it, and the next few
  * wait below - so where you are is never lost, and what comes is never a surprise.
- * Timers left running on other steps stand at the top, and lead back to their step.
+ * Timers left running on other steps stand at the top, and lead back to their step. On a
+ * wide screen every step stands down the side instead, with its timer, a click from it.
  *
  * `on` holds what it cannot do itself: `minimise`, `end`, and `redraw`, which is handed
  * the session as it should be next.
@@ -84,7 +85,26 @@ export function renderCook(card, session, on) {
     .filter(([n]) => Number(n) !== at)
     .sort(([, a], [, b]) => a.ends - b.ends)
 
+  const list = element(
+    'nav',
+    'steps',
+    undefined,
+    steps.map((one) => {
+      const button = element('button', one.n === at ? 'here' : one.n < at ? 'past' : '', undefined, [
+        element('span', 'n', String(one.n)),
+        element('span', 'title', one.title),
+        session.timers[one.n] ? clockOf(session.timers[one.n], 'clock-small') : null,
+      ])
+      button.type = 'button'
+      button.onclick = () => go(one.n)
+      if (one.n === at) button.setAttribute('aria-current', 'step')
+      return button
+    }),
+  )
+  list.setAttribute('aria-label', t('Steps'))
+
   return [
+    list,
     element('div', 'bar', undefined, [
       roundButton('down', t('Back to the recipe'), on.minimise),
       element('span', 'middle', undefined, [
@@ -98,22 +118,15 @@ export function renderCook(card, session, on) {
       : null,
     element('section', 'guide', undefined, [
       at > 1
-        ? element('div', 'step-row done', undefined, [element('span', 'n', undefined, [icon('check', 16)]), element('span', 'title', steps[at - 2].title)])
+        ? element('div', 'done', undefined, [icon('check', 16), element('span', 'title', steps[at - 2].title)])
         : null,
       element('article', 'now', undefined, [
-        wave(),
-        element('div', 'step-row', undefined, [
-          element('span', 'n', String(at)),
-          element('p', 'sentence', undefined, said(phrase(step), session.factor)),
-        ]),
+        divider(at),
+        element('p', 'sentence', undefined, said(phrase(step))),
         step.time ? timerControl(step, timer, timer ? stopTimer : startTimer) : null,
+        step.ingredients.length ? uses(step.ingredients, session.factor) : null,
       ]),
-      ...steps.slice(at, at + 3).map((one) =>
-        element('div', 'later', undefined, [
-          wave(),
-          element('div', 'step-row', undefined, [element('span', 'n', String(one.n)), element('span', 'title', one.title)]),
-        ]),
-      ),
+      ...steps.slice(at, at + 3).map((one) => element('div', 'later', undefined, [divider(one.n), element('p', 'title', one.title)])),
     ]),
     element('div', 'foot', undefined, [previous, next]),
   ]
@@ -127,22 +140,24 @@ function timerControl(step, timer, toggle) {
     start.onclick = toggle
     return start
   }
-  const clock = element('span', 'clock', countdown((timer.ends - Date.now()) / 1000))
-  clock.dataset.ends = String(timer.ends)
-  clock.classList.toggle('over', timer.ends <= Date.now())
   const stop = element('button', 'timer-stop', undefined, [ring(timer, 52), icon('stop', 16)])
   stop.type = 'button'
   stop.setAttribute('aria-label', t('Stop the timer'))
   stop.onclick = toggle
-  return element('div', 'timer-run', undefined, [clock, stop])
+  return element('div', 'timer-run', undefined, [clockOf(timer, 'clock'), stop])
+}
+
+/** What is left of a timer, counting down on its own from the moment it ends. */
+function clockOf(timer, className) {
+  const clock = element('span', className, countdown((timer.ends - Date.now()) / 1000))
+  clock.dataset.ends = String(timer.ends)
+  clock.classList.toggle('over', timer.ends <= Date.now())
+  return clock
 }
 
 /** A timer running on another step: what it is, what is left, and a tap back to it. */
 function banner(n, timer, open) {
-  const clock = element('span', 'clock-small', countdown((timer.ends - Date.now()) / 1000))
-  clock.dataset.ends = String(timer.ends)
-  clock.classList.toggle('over', timer.ends <= Date.now())
-  const button = element('button', 'banner', undefined, [icon('timer', 18), element('span', 'name', t('{title} · step {n}', { title: timer.title, n })), clock])
+  const button = element('button', 'banner', undefined, [icon('timer', 18), element('span', 'name', t('{title} · step {n}', { title: timer.title, n })), clockOf(timer, 'clock-small')])
   button.type = 'button'
   button.setAttribute('aria-label', t('{title} timer, step {n}: back to it', { title: timer.title, n }))
   button.onclick = open
@@ -180,12 +195,7 @@ export function miniBar(session, card, open) {
   const soonest = Object.values(session.timers).sort((a, b) => a.ends - b.ends)[0] ?? null
 
   const sub = element('span', 'sub', `${t('Step {n}', { n: session.at })}${step ? ` · ${step.title}` : ''}`)
-  if (soonest) {
-    const clock = element('span', 'clock-small', countdown((soonest.ends - Date.now()) / 1000))
-    clock.dataset.ends = String(soonest.ends)
-    clock.classList.toggle('over', soonest.ends <= Date.now())
-    sub.append(' · ', clock)
-  }
+  if (soonest) sub.append(' · ', clockOf(soonest, 'clock-small'))
 
   const link = element('a', 'mini glass', undefined, [
     picture(card ?? { title: session.title }, 'round-picture'),

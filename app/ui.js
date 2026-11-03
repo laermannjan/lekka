@@ -1,4 +1,4 @@
-import { formatAmount, scaleAmount } from './amount.js'
+import { scaleAmount, showAmount } from './amount.js'
 import { marks } from './recipe.js'
 
 /**
@@ -136,20 +136,40 @@ export function wave() {
   return holder.firstChild
 }
 
+/** Where a step starts: the wavy rule, its number set into the middle of it. */
+export function divider(n) {
+  return element('div', 'divider', undefined, [wave(), element('span', 'n', String(n)), wave()])
+}
+
 /**
  * The parts `phrase` reads a step out as, drawn: words in the serif, every number out of
- * it, a time or a heat as a token in its own colour, and an ingredient as a token of its
- * amount and name, at `factor`. `follow`, when given, is handed each amount as it is
- * drawn, with what it shows, so it can be shown at another factor without drawing again.
+ * it, a time or a heat as a token in its own colour, and an ingredient by its name, a
+ * little heavier, pointing at its line underneath.
  */
-export function said(parts, factor, follow = null) {
+export function said(parts) {
   return parts.map((part) => {
     if (part.kind === 'text') return document.createTextNode(part.text)
-    if (part.kind !== 'use') return element('span', part.kind === 'number' ? 'num' : `token ${part.kind}`, part.text)
-    const amount = element('span', 'num', formatAmount(scaleAmount(part.node.amount, factor)))
-    if (part.node.amount) follow?.(amount, part.node.amount)
-    return element('span', 'token use', undefined, [part.node.amount ? amount : null, part.node.amount ? ' ' : null, ...said(marks(part.node.name))])
+    if (part.kind === 'use') return element('span', 'use', undefined, said(marks(part.name)))
+    return element('span', part.kind === 'number' ? 'num' : `token ${part.kind}`, part.text)
   })
+}
+
+/**
+ * What goes into a step, under its sentence, on a band of its own: how much against what,
+ * at `factor`. `follow`, when given, is handed each amount as it is drawn, with what it
+ * shows, so it can be shown at another factor without drawing again.
+ */
+export function uses(ingredients, factor, follow = null) {
+  return element(
+    'ul',
+    'uses',
+    undefined,
+    ingredients.map((node) => {
+      const amount = element('span', 'amount', showAmount(scaleAmount(node.amount, factor)))
+      if (node.amount) follow?.(amount, node.amount)
+      return element('li', '', undefined, [amount, element('span', 'name', undefined, said(marks(node.name)))])
+    }),
+  )
 }
 
 /**
@@ -165,7 +185,7 @@ export function overview(lines, factor, amountOf = null) {
     lines.map((line) => {
       const amount =
         amountOf?.(line) ??
-        element('span', 'amount', line.amounts.map((each) => formatAmount(scaleAmount(each, factor))).join(' + '))
+        element('span', 'amount', line.amounts.map((each) => showAmount(scaleAmount(each, factor))).join(' + '))
       const name = element('span', 'name', undefined, said(marks(line.name)))
       if (line.aside) name.append(' ', element('span', 'quiet', line.aside))
       return element('div', 'line', undefined, [amount, name])
