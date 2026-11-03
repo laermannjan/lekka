@@ -372,7 +372,11 @@ const check = (name, ok, detail = '') =>
   said.push(\`\${ok ? 'PASS' : 'FAIL'} \${name}\${detail ? \` :: \${detail}\` : ''}\`)
 
 const editing = () => Boolean(document.querySelector('.datasheet .editor'))
-const named = (text) => [...document.querySelectorAll('button')].find((one) => one.textContent.trim() === text)
+// Only a button that can be seen, as a person would press. A closed sheet stays in the
+// page until its \`close\` event removes it, which headless Chrome can send hundreds of
+// milliseconds late, and its buttons come before those of the sheet opened after it.
+const named = (text) =>
+  [...document.querySelectorAll('button')].find((one) => one.checkVisibility() && one.textContent.trim() === text)
 const labelled = (text) => document.querySelector(\`button[aria-label="\${text}"]\`)
 const after = (wait) => new Promise((go) => setTimeout(go, wait))
 
