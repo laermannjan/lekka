@@ -147,15 +147,20 @@ test('the example in the guide is the card it means, and uses only what the sche
 > aliases: white bread, tin loaf, yeast bread
 
 - bake 220 °C 40 min
+  > bake at 220 °C for 40 min
   - put in tin
+    > put the dough into the tin
     * grease loaf tin
     - rise 1 h (covered)
+      > cover and leave to rise for 1 h
       - knead 10 min
+        > pour in {lukewarm water} and knead for 10 min
         - mix
-          - flour: 500 g
+          > mix {flour}, {salt} and {dry yeast}
+          - flour (strong white, or plain): 500 g
           - salt: 10 g
           - dry yeast: 7 g
-        - water (lukewarm): 350 ml
+        - lukewarm water: 350 ml
 `,
   )
 
@@ -196,4 +201,39 @@ test('JSON is forgiven what an assistant gets wrong in form, not in substance', 
     /Only preparations/,
   )
   assert.throws(() => formatJson({ title: 'A', root: { step: 'nichts', children: [] } }), ParseError)
+})
+
+test('a step may say itself as a sentence, on a line right under it', () => {
+  const text = `# Erdkruste
+
+- verrühren (Flexi-Rührer)
+  > den Sauerteig mit {Wasser 70 °C}, {Roggenvollkornmehl} und {Salz} verrühren
+  - reifen 12 h
+    - Sauerteig: 300 g
+  - Wasser 70 °C: 250 g
+  - Roggenvollkornmehl: 355 g
+  - Salz: 8 g
+`
+  const card = parseCard(text)
+  assert.equal(card.root.sentence, 'den Sauerteig mit {Wasser 70 °C}, {Roggenvollkornmehl} und {Salz} verrühren')
+  assert.equal(card.root.children[0].sentence, undefined, 'a step without one has none')
+  assert.equal(formatCard(card), text)
+
+  const fails = (body, why) => assert.throws(() => parseCard(`# A\n\n${body}`), why)
+  fails('- mischen\n  - Mehl: 1 kg\n  > Mehl mischen\n', /right under its step/)
+  fails('- mischen\n  > Mehl mischen\n  > noch einmal\n  - Mehl: 1 kg\n', /right under its step/)
+  fails('- mischen\n    > Mehl mischen\n  - Mehl: 1 kg\n', /right under its step/)
+  fails('- mischen\n  - Mehl: 1 kg\n    > Mehl\n', /needs an ingredient/)
+  fails('- mischen\n  >\n  - Mehl: 1 kg\n', /needs words/)
+})
+
+test('JSON names in a sentence only what its step takes', () => {
+  const step = (sentence) => ({
+    title: 'A',
+    root: { step: 'mix', sentence, children: [{ ingredient: 'flour', amount: '1 kg' }, { ingredient: 'salt' }] },
+  })
+  assert.match(formatJson(step('mix {flour} and {salt}')), /\n {2}> mix \{flour\} and \{salt\}\n/)
+  assert.match(formatJson(step('mix (gently) {flour}, the rest later')), /> mix \(gently\) \{flour\}/)
+  assert.throws(() => formatJson(step('mix {flour} and {sugar}')), /\{sugar\} is no ingredient of the step mix/)
+  assert.doesNotMatch(formatJson(step('  ')), />/)
 })

@@ -43,7 +43,7 @@
   },
   "$defs": {
     "aside": {
-      "description": "What you must know but do not do: a condition, a choice, a target state.",
+      "description": "What you must know but do not do. On a step: how, or until when (\"covered\", \"until doubled\"), shown beside it in the table; say it in its sentence too. On an ingredient: what matters before cooking, to choose, buy or prepare it (\"Type 550\", \"chopped\"); it is shown with the ingredient list, never in the steps.",
       "type": "string",
       "pattern": "^[^()]+$"
     },
@@ -54,9 +54,14 @@
       "additionalProperties": false,
       "properties": {
         "step": {
-          "description": "The verb first, then its parameters: \"bake 200 °C 40 min\".",
+          "description": "The short form, the verb first, then its parameters: \"bake 200 °C 40 min\". It labels the step in the table, and its time becomes a timer.",
           "type": "string",
           "pattern": "^[^()]+$"
+        },
+        "sentence": {
+          "description": "The step as a cook would write it, in the recipe's language: every ingredient this step takes named once in braces, exactly as its name is written, where its amount should stand: \"mix {flour}, {salt} and {dry yeast}\". No amounts, they come with the braces; what earlier steps made is named in plain words, \"the dough\". Lower case, no full stop.",
+          "type": "string",
+          "minLength": 1
         },
         "aside": { "$ref": "#/$defs/aside" },
         "children": {
@@ -80,7 +85,7 @@
       "additionalProperties": false,
       "properties": {
         "ingredient": {
-          "description": "What you would ask for in a shop: a noun, no attributes.",
+          "description": "What you reach for when the step comes, and all the step shows besides the amount: a noun and any word that changes which thing you take (\"black pepper\", \"lukewarm water\"). What matters only before cooking goes in the aside.",
           "type": "string",
           "pattern": "^[^():]+$"
         },

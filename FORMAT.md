@@ -53,6 +53,7 @@ From that one rule everything follows:
 | `> made this for Ida's birthday` | a note about the whole card. Any number |
 | `* Ofen auf 200 °C vorheizen` | a preparation: something you do that flows nowhere |
 | `- verrühren (von Hand)` | a step: verb first, remark in brackets |
+| `  > {Mehl} und {Milch} glatt verrühren` | the step above, said as a sentence. At most one, right under its step |
 | `- Mehl (Type 550): 250 g` | an ingredient: name, remark, then the amount |
 
 Indent by two spaces per level. Blank lines mean nothing.
@@ -80,6 +81,17 @@ make a card too wide for the screen.
 **Brackets always hold the same kind of thing:** the aside. What it yields, how
 to do it, which sort of flour.
 
+**A sentence says the step as a cook would write it,** and is what the steps
+are read out as. The step line stays the short form the table is drawn with and
+the timer read from; the sentence is for reading. It names each ingredient of
+its step in braces, exactly as the ingredient's line names it, and an amount
+stands there in its place, scaled: `{Mehl} und {Milch} glatt verrühren` reads
+"250 g Mehl und 500 ml Milch glatt verrühren". What earlier steps made is named
+in plain words, `den Teig`. An ingredient the sentence leaves out is read after
+it, so no amount is lost, and a brace naming none of the step's ingredients -
+one renamed since, say - is read as the plain word. A step without a sentence
+is read out as its own line.
+
 **The amount** is everything after the colon: a number and a unit (`250 g`), a
 range (`40-60 g`), a count (`2`), or words (`nach Geschmack`). Whatever unit you
 write is the unit - `3 Zweige` works like `300 g`. Leave the colon off if there
@@ -99,3 +111,7 @@ is no amount.
    ingredient somewhere below it. Both are errors otherwise.
 6. Every line carries text of its own: a step needs a verb, an ingredient a
    name, a preparation something to do. An empty one is an error.
+7. A `>` line indented one level under a step, before anything else under it,
+   is that step's sentence. A step has at most one; a `>` line indented
+   anywhere else is an error. Its text is taken whole: brackets and colons in
+   it are words.

@@ -344,3 +344,10 @@ test('a draft with more than one strand cannot be stored', () => {
   assert.equal(storedForm(draft), null)
 })
 
+
+test('editing a step keeps how it is said', () => {
+  const draft = draftOf('# A\n\n- braten\n  > {Butter} braten\n  - Butter: 30 g\n')
+  const braten = draft.strands[0]
+  editStep(draft, braten, { ...fieldsOf(braten), aside: 'kurz' })
+  assert.equal(formatCard(fromDraft(draft)), '# A\n\n- braten (kurz)\n  > {Butter} braten\n  - Butter: 30 g\n')
+})
