@@ -196,23 +196,35 @@ works offline. Each recipe answers once, with the best reason it answers - its n
 another name it goes by, an ingredient, a step - and says the reason when it is not the
 name. Letters are compared without case or accents (`app/search.js`).
 
-**A recipe at `/r/…`.** What it is, how many steps and how long, where it came from;
-its own notes; then the ingredients, amount first and grouped by the step they go
-into, under how much - a count where the yield starts with one and a factor where it
-does not - and the steps in the order they are done (`app/recipe.js`). An amount can
-be tapped to scale by what you have: one amount decides the factor for every other,
-and the sheet shows what that makes of the rest first. `Start cooking` floats at the
-bottom. The table view, Edit, Share and Delete are behind `…`. A recipe's screens are
-lit from above by its own colour, the way a player is by its cover.
+**A recipe at `/r/…`.** What it is, how long it takes, how many steps, where it came
+from, and its own notes. Then everything that goes in, gathered from the steps once -
+the uses of one thing, one name and aside, added up (`gather` in `app/recipe.js`) - under
+how much it makes. Then the steps, each read out as one sentence with its ingredients'
+amounts where they go in (`phrase`): the step's own sentence where it has one, with each
+`{name}` drawn as that ingredient's amount and name, and otherwise one made of its words,
+its time, its ingredients and its aside. Every amount on the screen, the yield's
+included, opens the same sheet, which asks how much there is of that one thing and
+scales the whole recipe by it as you type. `Start cooking` and the shopping list float
+at the bottom; the table view, Edit, Share and Delete are behind `…`.
 
-**Cooking at `/cook/…`.** One step at a time, read from across the kitchen: its name
-is the largest thing on the screen, its heat and time stand beside each other as
-numbers - the time a tile that starts its timer when tapped - and what goes into it is
-a column of amounts, scaled as the recipe was when cooking began. Timers running on
-other steps wait above the buttons as chips that lead back to their step; one that has
-run out turns amber. `Next`, naming the step it leads to, carries it on, and `Done`
-ends it. All ingredients and ending early are behind `…`. The screen stays on while it
-is up, and it is dark whatever the phone is set to. What is being cooked is kept on the device (`app/cook.js`): which recipe, which
+The look keeps one meaning per highlight: words in a serif, the phone's own, and every
+number in sans; saffron for time and ember for heat, wherever they stand; a tinted token
+for something measured, which tapping acts on. A wavy rule starts every step.
+
+**Shopping at `/shop/…`.** The gathered list at the amount the recipe was last scaled
+to, less what is at home: a line ticked off is at home, one with an amount noted is at
+home in part, and only the rest is bought. Shared as plain text, so it goes into
+Reminders, Notes or a message. What is at home is kept on the device, by recipe
+(`app/shop.js`).
+
+**Cooking at `/cook/…`.** The recipe's own list, walked through: the step done last
+fades out above, the one to do now stands large, its amounts in its sentence, and the
+next three wait below. A step with a time has a button that starts its timer, which then
+counts down in large saffron digits. Timers running on other steps stand at the top and
+lead back to their step; one that has run out turns solid. `Next`, naming the step it
+leads to, carries it on, and `Done cooking` ends it. All ingredients and ending early
+are behind `…`. The screen stays on while it is up, and it is dark whatever the phone is set to.
+What is being cooked is kept on the device (`app/cook.js`): which recipe, which
 step, how much, and when each timer ends - the moment it ends, not a count, so a timer
 is right again the moment the phone wakes. A timer that runs out rings, and again each
 minute for five minutes. While something is cooking, a bar over every other screen says

@@ -1,5 +1,5 @@
-import { stepsOf } from './recipe.js'
-import { arcOffset, element, icon, menuItem, picture, ring, roundButton, slide, uses } from './ui.js'
+import { gather, phrase, stepsOf } from './recipe.js'
+import { arcOffset, element, icon, menuItem, overview, picture, ring, roundButton, said, slide, wave } from './ui.js'
 
 /**
  * Cooking: one recipe at a time, a step at a time, with its timers.
@@ -41,10 +41,10 @@ export function begin(id, card, factor) {
 }
 
 /**
- * The cook screen: what to do now, large enough to read from the stove, and the way on.
- * The step is the biggest thing on it; the heat and the time it needs stand beside each
- * other as numbers; what goes in is a column of amounts. Timers left running on other
- * steps wait above the buttons, and lead back to their step.
+ * The cook screen: the recipe's own list, walked through. The step done last fades out
+ * above, the one to do now stands large, its amounts in its sentence, and the next few
+ * wait below - so where you are is never lost, and what comes is never a surprise.
+ * Timers left running on other steps stand at the top, and lead back to their step.
  *
  * `on` holds what it cannot do itself: `minimise`, `end`, and `redraw`, which is handed
  * the session as it should be next.
@@ -55,7 +55,6 @@ export function renderCook(card, session, on) {
   const step = steps[at - 1]
   const after = steps[at]
   const timer = session.timers[at] ?? null
-  const { title, heat } = heatOf(step)
 
   const go = (n) => on.redraw({ ...session, at: n })
   const startTimer = () => {
@@ -71,11 +70,13 @@ export function renderCook(card, session, on) {
     on.redraw({ ...session, timers })
   }
 
-  const next = element('button', 'primary', after ? `Next: ${after.title}` : 'Done')
+  const next = element('button', 'primary', undefined, [
+    element('span', '', after ? `Next: ${after.title}` : 'Done cooking'),
+    icon('down', 18),
+  ])
   next.type = 'button'
   next.onclick = after ? () => go(at + 1) : on.end
-
-  const previous = roundButton('back', 'Previous step', () => go(at - 1))
+  const previous = roundButton('up', 'Previous step', () => go(at - 1))
   previous.disabled = at === 1
 
   const elsewhere = Object.entries(session.timers)
@@ -85,68 +86,64 @@ export function renderCook(card, session, on) {
   return [
     element('div', 'bar', undefined, [
       roundButton('down', 'Back to the recipe', on.minimise),
-      element('span', 'middle', `Step ${at} of ${steps.length}`),
+      element('span', 'middle', undefined, [
+        element('span', 'name', card.title),
+        element('span', 'count', `Step ${at} of ${steps.length}`),
+      ]),
       roundButton('more', 'All ingredients, or end cooking', () => cookMenu(card, session, on)),
     ]),
-    element('section', 'now', undefined, [
-      element('div', '', undefined, [element('h1', '', title), step.aside ? element('p', 'aside', step.aside) : null]),
-      heat || step.time
-        ? element('div', 'facts', undefined, [
-            heat ? fact('Heat', heat) : null,
-            step.time ? timerFact(step, timer, timer ? stopTimer : startTimer) : null,
-          ])
+    elsewhere.length
+      ? element('div', 'banners', undefined, elsewhere.map(([n, one]) => banner(Number(n), one, () => go(Number(n)))))
+      : null,
+    element('section', 'guide', undefined, [
+      at > 1
+        ? element('div', 'step-row done', undefined, [element('span', 'n', undefined, [icon('check', 16)]), element('span', 'title', steps[at - 2].title)])
         : null,
-      step.ingredients.length ? uses(step.ingredients, session.factor) : null,
+      element('article', 'now', undefined, [
+        wave(),
+        element('div', 'step-row', undefined, [
+          element('span', 'n', String(at)),
+          element('p', 'sentence', undefined, said(phrase(step), session.factor)),
+        ]),
+        step.time ? timerControl(step, timer, timer ? stopTimer : startTimer) : null,
+      ]),
+      ...steps.slice(at, at + 3).map((one) =>
+        element('div', 'later', undefined, [
+          wave(),
+          element('div', 'step-row', undefined, [element('span', 'n', String(one.n)), element('span', 'title', one.title)]),
+        ]),
+      ),
     ]),
-    element('div', 'foot', undefined, [
-      elsewhere.length
-        ? element('div', 'others', undefined, elsewhere.map(([n, one]) => chip(Number(n), one, () => go(Number(n)))))
-        : null,
-      element('div', 'controls', undefined, [previous, next]),
-    ]),
+    element('div', 'foot', undefined, [previous, next]),
   ]
 }
 
-/**
- * `Backen 150 °C` is `Backen`, with 150 °C shown on its own beside the timer. Only a heat
- * that ends the words: `Ofen auf 150 °C vorheizen` says nothing without it.
- */
-export function heatOf(step) {
-  const match = /\s+\d+(?:[.,]\d+)?\s*°\s*[CF]$/.exec(step.title)
-  return match ? { title: step.title.slice(0, match.index), heat: step.temperature } : { title: step.title, heat: null }
+/** A step's timer: a button that starts it, then the time left and a button to stop it. */
+function timerControl(step, timer, toggle) {
+  if (!timer) {
+    const start = element('button', 'timer-start', undefined, [icon('play', 16), `Start ${step.time.text} timer`])
+    start.type = 'button'
+    start.onclick = toggle
+    return start
+  }
+  const clock = element('span', 'clock', countdown((timer.ends - Date.now()) / 1000))
+  clock.dataset.ends = String(timer.ends)
+  clock.classList.toggle('over', timer.ends <= Date.now())
+  const stop = element('button', 'timer-stop', undefined, [ring(timer, 52), icon('stop', 16)])
+  stop.type = 'button'
+  stop.setAttribute('aria-label', 'Stop the timer')
+  stop.onclick = toggle
+  return element('div', 'timer-run', undefined, [clock, stop])
 }
 
-function fact(label, value) {
-  return element('div', 'fact', undefined, [element('span', 'label', label), element('span', 'value', value)])
-}
-
-/** The tile is the button: a tap anywhere on it starts the timer, and stops it again. */
-function timerFact(step, timer, toggle) {
-  const clock = element('span', 'value clock', countdown(timer ? (timer.ends - Date.now()) / 1000 : step.time.from))
-  if (timer) clock.dataset.ends = String(timer.ends)
-  clock.classList.toggle('over', Boolean(timer) && timer.ends <= Date.now())
-  const ranged = step.time.from !== step.time.to
-  const button = element('button', timer ? 'fact timer running' : 'fact timer', undefined, [
-    element('span', 'head', undefined, [
-      element('span', 'label', ranged ? `Timer · ${step.time.text}` : 'Timer'),
-      element('span', 'go', undefined, [timer ? ring(timer, 34) : null, icon(timer ? 'stop' : 'play', 16)]),
-    ]),
-    clock,
-  ])
-  button.type = 'button'
-  button.setAttribute('aria-label', timer ? 'Stop the timer' : `Start a timer for ${step.time.text}`)
-  button.onclick = toggle
-  return button
-}
-
-/** A timer running on another step: its name and what is left, and a tap back to it. */
-function chip(n, timer, open) {
+/** A timer running on another step: what it is, what is left, and a tap back to it. */
+function banner(n, timer, open) {
   const clock = element('span', 'clock-small', countdown((timer.ends - Date.now()) / 1000))
   clock.dataset.ends = String(timer.ends)
   clock.classList.toggle('over', timer.ends <= Date.now())
-  const button = element('button', 'chip glass', undefined, [ring(timer, 22), element('span', 'name', timer.title), clock])
+  const button = element('button', 'banner', undefined, [icon('timer', 18), element('span', 'name', `${timer.title} · step ${n}`), clock])
   button.type = 'button'
-  button.setAttribute('aria-label', `${timer.title}, step ${n}: back to it`)
+  button.setAttribute('aria-label', `${timer.title} timer, step ${n}: back to it`)
   button.onclick = open
   return button
 }
@@ -157,7 +154,7 @@ function cookMenu(card, session, on) {
     element('div', 'menu', undefined, [
       menuItem('list', 'All ingredients', () => {
         sheet.close()
-        ingredientsSheet(card, session)
+        slide(element('h2', '', 'All ingredients'), overview(gather(card), session.factor))
       }),
       menuItem(
         'close',
@@ -169,18 +166,6 @@ function cookMenu(card, session, on) {
         'danger',
       ),
     ]),
-  )
-}
-
-function ingredientsSheet(card, session) {
-  slide(
-    element('h2', '', 'All ingredients'),
-    uses(
-      stepsOf(card)
-        .filter((step) => step.ingredients.length)
-        .flatMap((step) => [`${step.n} · ${step.title}`, ...step.ingredients]),
-      session.factor,
-    ),
   )
 }
 

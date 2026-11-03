@@ -1,4 +1,5 @@
 import { formatAmount, scaleAmount } from './amount.js'
+import { marks } from './recipe.js'
 
 /**
  * The few parts every screen is built from. Icons are drawn here as strokes, the way the
@@ -11,6 +12,9 @@ const ICONS = {
   down: '<path d="M5 9l7 7 7-7"/>',
   up: '<path d="M5 15l7-7 7 7"/>',
   play: '<path d="M7 4.5v15l12.5-7.5z" fill="currentColor" stroke="none"/>',
+  basket: '<path d="M4.5 9h15l-1.5 9.2a2 2 0 0 1-2 1.8H8a2 2 0 0 1-2-1.8z"/><path d="M9 9l3-5 3 5"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M10 2h4"/>',
   stop: '<rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor" stroke="none"/>',
   table: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 10h18M10 10v10"/>',
   list: '<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/>',
@@ -97,32 +101,59 @@ export function menuItem(name, text, run, className = '') {
   return button
 }
 
+/** The wavy rule a step starts with: drawn long, and cut to whatever width it is given. */
+export function wave() {
+  const holder = element('span')
+  holder.innerHTML = `<svg class="wave" height="8" aria-hidden="true"><path d="M1 4q4 -3.5 8 0${'t8 0'.repeat(150)}"/></svg>`
+  return holder.firstChild
+}
+
 /**
- * What goes in, amount first: the amounts stand in a column of their own, where the eye
- * finds them, with the names lined up beside them. A string among the rows is a label
- * over the ones after it. `tap`, when given, is what pressing a measured amount does.
+ * The parts `phrase` reads a step out as, drawn: words in the serif, every number out of
+ * it, a time or a heat as a token in its own colour, and an ingredient as a token of its
+ * amount and name, at `factor`. With `tap`, a measured ingredient's token is a button.
  */
-export function uses(rows, factor, tap = null) {
+export function said(parts, factor, tap = null) {
+  return parts.map((part) => {
+    if (part.kind === 'text') return document.createTextNode(part.text)
+    if (part.kind !== 'use') return element('span', part.kind === 'number' ? 'num' : `token ${part.kind}`, part.text)
+    return quantity(part.node, factor, tap, 'token use', [' ', ...said(marks(part.node.name))])
+  })
+}
+
+/**
+ * Every ingredient once, as `gather` adds them up: how much, right-aligned against what.
+ * Here, and on the shopping list, an ingredient's aside is shown: what to buy, how to
+ * prepare it. In a step it is not.
+ */
+export function overview(lines, factor, tap = null) {
   return element(
     'div',
-    'uses',
+    'overview',
     undefined,
-    rows.map((row) => (typeof row === 'string' ? element('p', 'label', row) : use(row, factor, tap))),
+    lines.map((line) => {
+      const one = line.amounts.length === 1 ? line.amounts[0] : null
+      const amount = one
+        ? quantity({ name: line.name, amount: one }, factor, tap, 'amount')
+        : element('span', 'amount', line.amounts.map((each) => formatAmount(scaleAmount(each, factor))).join(' + '))
+      const name = element('span', 'name', undefined, said(marks(line.name)))
+      if (line.aside) name.append(' ', element('span', 'quiet', line.aside))
+      return element('div', 'line', undefined, [amount, name])
+    }),
   )
 }
 
-function use(node, factor, tap) {
-  const scaled = formatAmount(scaleAmount(node.amount, factor))
-  let amount = element('span', 'amount', scaled)
-  if (tap && node.amount && node.amount.kind !== 'words') {
-    amount = element('button', 'amount', scaled)
-    amount.type = 'button'
-    amount.setAttribute('aria-label', `${scaled} ${node.name}: scale by what you have`)
-    amount.onclick = () => tap(node)
-  }
-  const name = element('span', 'name', node.name)
-  if (node.aside) name.append(' ', element('span', 'quiet', node.aside))
-  return element('div', 'use', undefined, [amount, name])
+/** An amount, scaled: a button that scales by it where it can, words where it cannot. */
+function quantity(node, factor, tap, className, after = []) {
+  const shown = formatAmount(scaleAmount(node.amount, factor))
+  const amount = element('span', 'num', shown)
+  if (!tap || !node.amount || node.amount.kind === 'words')
+    return element('span', className, undefined, [shown ? amount : null, ...(shown ? after : after.slice(1))])
+  const button = element('button', className, undefined, [amount, ...after])
+  button.type = 'button'
+  button.setAttribute('aria-label', `${shown} ${node.name}: scale the recipe by it`)
+  button.onclick = () => tap(node)
+  return button
 }
 
 /**
