@@ -105,3 +105,83 @@ export function sourceName(source) {
 function capital(text) {
   return text.charAt(0).toLocaleUpperCase() + text.slice(1)
 }
+
+/**
+ * A step as it is read out: its sentence, or, where it has none, one made of its words,
+ * its time, its ingredients and its aside. The parts are words (`text`), a `number`, a
+ * `time`, a `heat`, or an ingredient the step takes (`use`, with its `node`), which is
+ * drawn as its amount and name - so how much is always where it goes in.
+ *
+ * A brace naming none of the step's ingredients is read as the plain word, and an
+ * ingredient the sentence leaves out is read after it: nothing a step takes goes unsaid.
+ */
+export function phrase(step) {
+  const parts = []
+  const sentence = step.node.sentence
+  if (sentence) {
+    const left = [...step.ingredients]
+    for (const piece of sentence.split(/(\{[^{}]*\})/)) {
+      if (piece === '') continue
+      const name = /^\{(.*)\}$/.exec(piece)?.[1]
+      const at = name === undefined ? -1 : left.findIndex((one) => one.name === name)
+      if (at === -1) parts.push(...marks(name ?? piece))
+      else parts.push({ kind: 'use', node: left.splice(at, 1)[0] })
+    }
+    for (const node of left) parts.push({ kind: 'text', text: ' ' }, { kind: 'use', node })
+  } else {
+    parts.push(...marks(step.title))
+    if (step.timeShown) parts.push({ kind: 'text', text: ' ' }, { kind: 'time', text: step.time.text })
+    for (const node of step.ingredients) parts.push({ kind: 'text', text: ' ' }, { kind: 'use', node })
+    if (step.aside) parts.push({ kind: 'text', text: ', ' }, ...marks(step.aside))
+  }
+  if (parts[0]?.kind === 'text') parts[0] = { ...parts[0], text: capital(parts[0].text) }
+  return parts
+}
+
+const MARK = /\d+(?:[.,]\d+)?(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?(?:\s*(?:°\s*[CF]|min|h|s|cm|mm|kg|g|ml|l)(?!\p{L}))?/gu
+
+/** Words with their numbers picked out, and a time or a heat said to be one. */
+export function marks(text) {
+  const parts = []
+  let from = 0
+  for (const found of text.matchAll(MARK)) {
+    if (found.index > from) parts.push({ kind: 'text', text: text.slice(from, found.index) })
+    const kind = found[0].includes('°') ? 'heat' : /(min|h|s)$/.test(found[0]) ? 'time' : 'number'
+    parts.push({ kind, text: found[0] })
+    from = found.index + found[0].length
+  }
+  if (from < text.length) parts.push({ kind: 'text', text: text.slice(from) })
+  return parts
+}
+
+/**
+ * Every ingredient once, in the order it is first needed: the uses of one thing - one
+ * name, one aside - added up. Amounts in one unit make one total, a range where any of
+ * them is one; in different units, or in words, they stand side by side. `steps` says
+ * where it goes in, `nodes` which uses it gathers.
+ */
+export function gather(card) {
+  const lines = []
+  for (const step of stepsOf(card))
+    for (const node of step.ingredients) {
+      let line = lines.find((one) => one.name === node.name && one.aside === (node.aside ?? null))
+      if (!line) lines.push((line = { name: node.name, aside: node.aside ?? null, amounts: [], steps: [], nodes: [] }))
+      line.nodes.push(node)
+      if (!line.steps.includes(step.n)) line.steps.push(step.n)
+      if (node.amount) add(line.amounts, node.amount)
+    }
+  return lines
+}
+
+function add(amounts, amount) {
+  if (amount.kind === 'words') {
+    if (!amounts.some((one) => one.kind === 'words' && one.text === amount.text)) amounts.push(amount)
+    return
+  }
+  const at = amounts.findIndex((one) => one.kind !== 'words' && one.unit === amount.unit)
+  if (at === -1) return void amounts.push(amount)
+  const low = (one) => (one.kind === 'range' ? one.from : one.value)
+  const high = (one) => (one.kind === 'range' ? one.to : one.value)
+  const [from, to] = [low(amounts[at]) + low(amount), high(amounts[at]) + high(amount)]
+  amounts[at] = from === to ? { kind: 'number', value: from, unit: amount.unit } : { kind: 'range', from, to, unit: amount.unit }
+}

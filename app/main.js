@@ -14,7 +14,8 @@ import { address, arrive } from './link.js'
 import { renderLibrary, renderResults } from './library.js'
 import { renderRecipe } from './recipe-page.js'
 import { begin, cooking, keep, miniBar, renderCook, stayAwake, stop, tick } from './cook.js'
-import { colourOf, element, icon, menuItem, roundButton, slide } from './ui.js'
+import { renderShopping } from './shop.js'
+import { element, icon, menuItem, roundButton, slide } from './ui.js'
 
 const screen = document.getElementById('screen')
 const dock = document.getElementById('dock')
@@ -56,6 +57,7 @@ async function start() {
 
   if (here.kind === 'card') return showRecipe(here.id)
   if (here.path.startsWith('/cook/')) return showCook(decodeURIComponent(here.path.slice('/cook/'.length)))
+  if (here.path.startsWith('/shop/')) return showShopping(decodeURIComponent(here.path.slice('/shop/'.length)))
   if (here.path === '/new') return showWriting()
   if (here.path === '/devices') return showDevices()
   if (here.path === '/search') return showSearch()
@@ -213,7 +215,7 @@ async function showSearch() {
 
 async function showRecipe(id) {
   history.replaceState(null, '', address(id))
-  go(address(id), { lit: true })
+  go(address(id))
 
   let text = library?.find((entry) => entry.id === id)?.text ?? null
   if (text === null) {
@@ -230,12 +232,12 @@ async function showRecipe(id) {
     return fail(`Line ${error.line}: ${error.message}`)
   }
   opened = { id, card }
-  document.body.style.setProperty('--glow', colourOf(card.title))
 
   const draw = (state) => {
     // Changing how much while cooking it changes how much is being cooked.
     const session = cooking()
     if (session?.id === id && session.factor !== state.factor) keep({ ...session, factor: state.factor })
+    scaled = { id, factor: state.factor }
     show(
       ...renderRecipe(card, state, {
         back: () => {
@@ -247,17 +249,70 @@ async function showRecipe(id) {
       }),
     )
     // While this one is cooking, the cook bar is the way back in.
-    setDock(session?.id === id ? null : cookButton(() => startCooking(id, card, state.factor)))
+    setDock(
+      session?.id === id
+        ? null
+        : element('div', 'row', undefined, [
+            cookButton(() => startCooking(id, card, state.factor)),
+            roundButton('basket', 'Shopping list', () => showShopping(id)),
+          ]),
+    )
   }
   const session = cooking()
-  draw({ factor: session?.id === id ? session.factor : 1, table: false })
+  draw({ factor: session?.id === id ? session.factor : scaled?.id === id ? scaled.factor : 1, table: false })
 }
+
+/** How much the recipe last open was scaled to, so its shopping list buys that much. */
+let scaled = null
 
 function cookButton(run) {
   const button = element('button', 'start', undefined, [icon('play', 18), 'Start cooking'])
   button.type = 'button'
   button.onclick = run
   return button
+}
+
+/* ---- shopping ----------------------------------------------------------------- */
+
+/**
+ * What to buy for one recipe, at the amount it was last scaled to. What is at home is
+ * kept on this device, by recipe, until the list is shared or cleared.
+ */
+async function showShopping(id) {
+  go(`/shop/${encodeURIComponent(id)}`)
+  const card = await cardOf(id)
+  if (!card) return fail('No recipe under this link.')
+  const session = cooking()
+  const factor = session?.id === id ? session.factor : scaled?.id === id ? scaled.factor : 1
+
+  const draw = () =>
+    show(
+      ...renderShopping(card, factor, shoppingKept(id), {
+        back: () => showRecipe(id),
+        keep: (kept) => {
+          shoppingKeep(id, kept)
+          draw()
+        },
+        dock: (...rows) => setDock(...rows),
+      }),
+    )
+  draw()
+}
+
+function shoppingKept(id) {
+  try {
+    return JSON.parse(localStorage.getItem(`lekka.shop.${id}`)) ?? { home: {}, have: {} }
+  } catch {
+    return { home: {}, have: {} }
+  }
+}
+
+function shoppingKeep(id, kept) {
+  try {
+    localStorage.setItem(`lekka.shop.${id}`, JSON.stringify(kept))
+  } catch {
+    // A browser that keeps nothing still shops; it only forgets on reload.
+  }
 }
 
 /* ---- cooking ------------------------------------------------------------------ */
@@ -279,11 +334,10 @@ function startCooking(id, card, factor) {
 async function showCook(id) {
   const session = cooking()
   if (!session || session.id !== id) return showRecipe(id)
-  go(`/cook/${encodeURIComponent(id)}`, { cook: true, lit: true })
+  go(`/cook/${encodeURIComponent(id)}`, { cook: true })
 
   const card = await cardOf(id)
   if (!card) return fail('No recipe under this link.')
-  document.body.style.setProperty('--glow', colourOf(card.title))
 
   const draw = (now) => {
     keep(now)
@@ -663,15 +717,10 @@ function band(message, kind = '') {
  * A new screen: scrolled to its top, with nothing floating over it but the cook bar -
  * which floats over every screen while something is cooking, except the cook screen.
  */
-/**
- * Onto another screen. A recipe's screens are `lit` from above by its own colour, the way
- * a player is by its cover; the caller sets which colour.
- */
-function go(path, { home = false, cook = false, lit = false } = {}) {
+function go(path, { home = false, cook = false } = {}) {
   onCookScreen = cook
   document.body.classList.toggle('home', home)
   document.body.classList.toggle('cook', cook)
-  document.body.classList.toggle('lit', lit)
   if (!cook) stayAwake(false)
   setDock()
   window.scrollTo(0, 0)

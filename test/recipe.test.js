@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 
 import { parseCard } from '../app/card.js'
 import { aboutOf, clock, servings, sourceName, stepsOf, totalTime } from '../app/recipe.js'
+import { formatAmount } from '../app/amount.js'
 import { fold, search } from '../app/search.js'
 
 const card = (name) => parseCard(readFileSync(new URL(`./cards/${name}.lekka`, import.meta.url), 'utf8'))
@@ -121,9 +122,54 @@ test('a timer counts down in hours, minutes and seconds, and then says so', asyn
   assert.equal(countdown(-30), 'Done')
 })
 
-test('cooking, a heat that ends a step stands beside it, and one inside it stays', async () => {
-  const { heatOf } = await import('../app/cook.js')
-  const steps = stepsOf(parseCard('# P\n\n- backen 150 °C 3 h\n  - Ofen auf 150°C vorheizen\n    - Teig\n'))
-  assert.deepEqual(heatOf(steps[0]), { title: 'Ofen auf 150°C vorheizen', heat: null })
-  assert.deepEqual(heatOf(steps[1]), { title: 'Backen', heat: '150 °C' })
+test('a step is read out as its sentence, its ingredients where the braces stand', async () => {
+  const { phrase } = await import('../app/recipe.js')
+  const card = parseCard(`# Brot
+
+- verrühren (Flexi-Rührer)
+  > den Sauerteig mit {Wasser 70 °C}, {Salz} und {Zucker} 2 min verrühren
+  - reifen 12 h
+    - Sauerteig: 300 g
+  - Wasser 70 °C: 250 g
+  - Salz: 8 g
+  - Roggenmehl: 355 g
+`)
+  const [reifen, verruehren] = stepsOf(card)
+  const read = (parts) => parts.map((part) => (part.kind === 'use' ? `[${part.node.name}]` : part.kind === 'text' ? part.text : `<${part.kind} ${part.text}>`)).join('')
+  assert.equal(read(phrase(verruehren)), 'Den Sauerteig mit [Wasser 70 °C], [Salz] und Zucker <time 2 min> verrühren [Roggenmehl]',
+    'a brace naming nothing is a plain word, an ingredient left unsaid comes last')
+  assert.equal(read(phrase(reifen)), 'Reifen <time 12 h> [Sauerteig]', 'no sentence: its words, its time, its ingredients')
+
+  const braten = stepsOf(parseCard('# P\n\n- backen 150 °C 3 h (nach 1 h begießen)\n  - Bauch: 2 kg\n'))[0]
+  assert.equal(read(phrase(braten)), 'Backen <heat 150 °C> <time 3 h> [Bauch], nach <time 1 h> begießen')
+})
+
+test('the ingredients are gathered from the steps: one line a thing, its uses added up', async () => {
+  const { gather } = await import('../app/recipe.js')
+  const lines = gather(parseCard(`# Brot
+
+- backen
+  - verrühren
+    - reifen
+      - Mehl: 250 g
+      - Salz: 5 g
+      - Wasser (50 °C): 285 g
+    - Mehl: 355 g
+    - Salz: 1 EL
+    - Wasser (70 °C): 250 g
+    - Saaten: 40-60 g
+  - Saaten: 10 g
+  - Pfeffer: nach Geschmack
+  - Pfeffer: nach Geschmack
+`))
+  const shown = lines.map((line) => `${line.name}${line.aside ? ` (${line.aside})` : ''}: ${line.amounts.map(formatAmount).join(' + ')} [${line.steps.join(', ')}]`)
+  assert.deepEqual(shown, [
+    'Mehl: 605 g [1, 2]',
+    'Salz: 5 g + 1 EL [1, 2]',
+    'Wasser (50 °C): 285 g [1]',
+    'Wasser (70 °C): 250 g [2]',
+    'Saaten: 50-70 g [2, 3]',
+    'Pfeffer: nach Geschmack [3]',
+  ])
+  assert.equal(lines[0].nodes.length, 2)
 })

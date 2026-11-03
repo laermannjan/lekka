@@ -1,10 +1,19 @@
 /* =========================================================================
  * lekka
  *
- * Looks like the phone it runs on: the system's face, its grouped lists, its
- * light and dark, and one tint for what can be pressed. Controls that float
- * over the content are glass; everything else sits in rounded groups on the
- * ground. Nothing is coloured to look important.
+ * A recipe reads like a page of a cookbook: words in a serif, warm ground,
+ * nothing boxed. Every highlight means one thing, everywhere:
+ *
+ *   serif    words: what it is and what to do
+ *   sans     numbers, every one of them, even inside a sentence
+ *   label    what you read, and how much
+ *   second   context: asides, counts, where it came from
+ *   time     saffron, for time and nothing else
+ *   heat     ember, for heat and nothing else
+ *
+ * A tinted token is something measured, and tapping it acts on it: an amount
+ * scales the recipe, a time starts a timer. One filled button per screen is
+ * the thing to do next; round glass gets around; the rest is plain text.
  *
  * The screens not drawn this way yet are in `sheet.css`, under `.datasheet`.
  * ========================================================================= */
@@ -12,46 +21,55 @@
 :root {
   color-scheme: light dark;
 
-  --ground: #f2f2f7;
-  --group: #ffffff;
-  --raised: #e5e5ea;
-  --label: #000000;
-  --secondary: #6c6c70;
-  --separator: rgb(60 60 67 / 18%);
-  --tint: #0071e3;
-  --tint-text: #0066cc;
-  --tint-soft: rgb(0 113 227 / 10%);
-  --on-tint: #ffffff;
-  --danger: #d70015;
-  --glass: rgb(255 255 255 / 72%);
-  --glass-edge: rgb(255 255 255 / 80%);
-  --glass-shadow: 0 10px 30px rgb(0 0 0 / 14%);
-  --scrim: rgb(0 0 0 / 40%);
-  --glow-strength: 30%;
+  --ground: #f7f2e9;
+  --sheet: #fffcf6;
+  --raised: rgb(42 36 32 / 9%);
+  --label: #2a2420;
+  --secondary: #756a5c;
+  --rule: rgb(42 36 32 / 11%);
+  --wave: rgb(117 106 92 / 45%);
+  --ink: #2a2420;
+  --on-ink: #f7f2e9;
+  --time: #965c05;
+  --time-bg: rgb(233 162 59 / 22%);
+  --heat: #b03a26;
+  --heat-bg: rgb(232 99 79 / 15%);
+  --use-bg: rgb(42 36 32 / 7%);
+  --danger: #b03a26;
+  --glass: rgb(255 252 246 / 82%);
+  --glass-edge: rgb(42 36 32 / 10%);
+  --glass-shadow: 0 8px 24px rgb(60 40 20 / 14%);
+  --scrim: rgb(20 16 12 / 35%);
 
+  --serif: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
   --face: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto,
     'Helvetica Neue', sans-serif;
-  --gutter: 16px;
+  --gutter: 20px;
   --top: max(env(safe-area-inset-top), 16px);
   --bottom: max(env(safe-area-inset-bottom), 16px);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --ground: #1c1c1e;
-    --group: #2c2c2e;
-    --raised: #3a3a3c;
-    --label: #f5f5f7;
-    --secondary: #98989f;
-    --separator: rgb(255 255 255 / 8%);
-    --tint-text: #4da3ff;
-    --tint-soft: rgb(10 132 255 / 14%);
-    --danger: #ff6961;
-    --glass: rgb(58 58 60 / 68%);
-    --glass-edge: rgb(255 255 255 / 14%);
-    --glass-shadow: 0 10px 30px rgb(0 0 0 / 50%);
-    --scrim: rgb(0 0 0 / 55%);
-    --glow-strength: 45%;
+    --ground: #1a1814;
+    --sheet: #26221c;
+    --raised: rgb(244 239 230 / 11%);
+    --label: #f4efe6;
+    --secondary: #a89f8f;
+    --rule: rgb(244 239 230 / 10%);
+    --wave: rgb(168 159 143 / 40%);
+    --ink: #f4efe6;
+    --on-ink: #1a1814;
+    --time: #f2b354;
+    --time-bg: rgb(233 162 59 / 17%);
+    --heat: #f47f69;
+    --heat-bg: rgb(232 99 79 / 20%);
+    --use-bg: rgb(244 239 230 / 10%);
+    --danger: #f47f69;
+    --glass: rgb(38 34 28 / 82%);
+    --glass-edge: rgb(244 239 230 / 12%);
+    --glass-shadow: 0 10px 30px rgb(0 0 0 / 45%);
+    --scrim: rgb(0 0 0 / 50%);
   }
 }
 
@@ -73,7 +91,7 @@ body {
 }
 
 a {
-  color: var(--tint-text);
+  color: inherit;
   text-decoration: none;
 }
 
@@ -89,11 +107,11 @@ button {
 
 button:disabled {
   cursor: default;
-  opacity: 0.4;
+  opacity: 0.35;
 }
 
 :focus-visible {
-  outline: 2px solid var(--tint-text);
+  outline: 2px solid var(--label);
   outline-offset: 2px;
 }
 
@@ -141,16 +159,18 @@ body:not(.home) .build {
   display: none;
 }
 
-.title {
-  font-size: 34px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+h1.title {
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
 }
 
 .heading {
-  font-size: 22px;
-  font-weight: 700;
+  font-family: var(--serif);
+  font-size: 24px;
+  font-weight: 600;
   line-height: 1.25;
   margin-top: 16px;
 }
@@ -159,12 +179,32 @@ body:not(.home) .build {
   color: var(--secondary);
 }
 
+.hint {
+  color: var(--secondary);
+  font-size: 14px;
+  line-height: 19px;
+}
+
+.hint.warning {
+  color: var(--danger);
+}
+
+.notice {
+  background: var(--raised);
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+
+.notice.warning {
+  color: var(--danger);
+}
+
 .bar {
   align-items: center;
   display: flex;
   gap: 12px;
   justify-content: space-between;
-  min-height: 48px;
+  min-height: 44px;
 }
 
 .bar > .middle {
@@ -181,8 +221,8 @@ body:not(.home) .build {
 /* ---- glass: what floats over the content ---------------------------------- */
 
 .glass {
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
-  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
   background: var(--glass);
   border: 1px solid var(--glass-edge);
   box-shadow: var(--glass-shadow);
@@ -193,25 +233,14 @@ body:not(.home) .build {
   border-radius: 50%;
   display: inline-flex;
   flex: none;
-  height: 48px;
+  height: 44px;
   justify-content: center;
-  width: 48px;
+  width: 44px;
 }
 
-.pill {
-  align-items: center;
-  border-radius: 24px;
-  display: inline-flex;
-  flex: none;
-  font-size: 17px;
-  height: 48px;
-  padding: 0 18px;
-}
-
-.pill.filled {
-  background: var(--tint);
-  color: var(--on-tint);
-  font-weight: 600;
+.round svg {
+  height: 20px;
+  width: 20px;
 }
 
 .dock {
@@ -238,20 +267,36 @@ body:not(.home) .build {
 }
 
 .dock .round {
-  height: 60px;
-  width: 60px;
+  height: 52px;
+  width: 52px;
+}
+
+/* The one thing to do next. */
+.start {
+  align-items: center;
+  background: var(--ink);
+  border-radius: 26px;
+  box-shadow: var(--glass-shadow);
+  color: var(--on-ink);
+  display: flex;
+  flex: 1;
+  font-size: 17px;
+  font-weight: 600;
+  gap: 8px;
+  height: 52px;
+  justify-content: center;
 }
 
 .searchbox {
   align-items: center;
-  border-radius: 30px;
+  border-radius: 26px;
   color: var(--secondary);
   display: flex;
   flex: 1;
   gap: 10px;
-  height: 60px;
+  height: 52px;
   min-width: 0;
-  padding: 0 8px 0 20px;
+  padding: 0 6px 0 18px;
 }
 
 .searchbox svg {
@@ -276,36 +321,19 @@ body:not(.home) .build {
   display: none;
 }
 
-/* ---- groups: rounded lists on the ground ---------------------------------- */
-
-.group {
-  background: var(--group);
-  border-radius: 16px;
-  overflow: hidden;
+.searchbox button.quiet {
+  align-items: center;
+  color: var(--secondary);
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
 }
+
+/* ---- lists: the library and what search finds ----------------------------- */
 
 .group > * + * {
-  border-top: 1px solid var(--separator);
-}
-
-.group > .label + *,
-.group > .label {
-  border-top: 0;
-}
-
-.group > .label {
-  color: var(--secondary);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 14px 16px 2px;
-  text-transform: uppercase;
-}
-
-.group > .label:not(:first-child) {
-  border-top: 1px solid var(--separator);
-  margin-top: 6px;
-  padding-top: 16px;
+  border-top: 1px solid var(--rule);
 }
 
 .item {
@@ -313,64 +341,47 @@ body:not(.home) .build {
   color: var(--label);
   display: flex;
   gap: 14px;
-  min-height: 52px;
-  padding: 10px 16px;
+  min-height: 64px;
+  padding: 12px 0;
   text-align: left;
   width: 100%;
-}
-
-.item.thumbed {
-  padding-left: 10px;
 }
 
 .item .text {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
   min-width: 0;
 }
 
 .item .main {
-  font-size: 17px;
-  line-height: 22px;
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 25px;
 }
 
 .item .sub {
   color: var(--secondary);
   font-size: 14px;
-  line-height: 19px;
-}
-
-.item .sub b,
-.item .main b {
-  color: var(--label);
-  font-weight: 700;
-}
-
-.item .end {
-  color: var(--secondary);
-  flex: none;
   font-variant-numeric: tabular-nums;
+  line-height: 18px;
 }
 
-.hint {
-  color: var(--secondary);
-  font-size: 14px;
-  line-height: 19px;
-  padding: 0 4px;
+.item .sub .time {
+  color: var(--time);
 }
 
-/* ---- pictures of recipes ---------------------------------------------------- */
-
-/* A recipe with no photo has its first letter instead, on a colour of its own. */
+/* A recipe's picture: its photo, or its first letter on a colour of its own. */
 .picture {
   align-items: center;
   background: var(--raised);
-  border-radius: 10px;
+  border-radius: 14px;
   color: #f7f1e6;
   display: flex;
   flex: none;
+  font-family: var(--serif);
   font-size: 26px;
   font-weight: 600;
   justify-content: center;
@@ -385,231 +396,249 @@ body:not(.home) .build {
 }
 
 .thumb {
-  border-radius: 8px;
-  height: 52px;
-  width: 52px;
+  height: 64px;
+  width: 64px;
 }
 
 /* ---- a recipe -------------------------------------------------------------- */
 
-/* A recipe's screens are lit from above by its own colour, the way a player is by its
-   cover. */
-body.lit {
-  background:
-    radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--glow, #8e3b26) var(--glow-strength), transparent), transparent)
-      top / 100% 520px no-repeat,
-    var(--ground);
-}
-
 .recipe-head {
+  align-items: center;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 4px;
+  gap: 12px;
+  padding: 4px 12px 0;
+  text-align: center;
 }
 
 .recipe-title {
+  font-family: var(--serif);
   font-size: 34px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 40px;
 }
 
-.meta {
+.facts {
+  align-items: center;
   color: var(--secondary);
-  font-size: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  gap: 4px 14px;
+  justify-content: center;
   line-height: 22px;
+}
+
+.facts a {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--secondary) 45%, transparent);
+  text-underline-offset: 3px;
 }
 
 .note {
+  color: var(--secondary);
+  font-family: var(--serif);
   font-size: 16px;
+  font-style: italic;
   line-height: 22px;
-  margin-top: 6px;
 }
 
-.section-head {
-  align-items: center;
+.ingredients {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 8px;
   margin-top: 16px;
 }
 
-.section-head .heading {
-  margin-top: 0;
-}
-
-.stepper {
-  align-items: center;
-  background: var(--group);
-  border-radius: 20px;
+.yield {
+  align-items: baseline;
   display: flex;
-  height: 40px;
-  padding: 0 2px;
+  font-size: 17px;
+  gap: 6px;
+  justify-content: center;
+  line-height: 26px;
+  margin-bottom: 8px;
 }
 
-.stepper .count {
+.yield .for {
+  color: var(--secondary);
+  font-family: var(--serif);
+  font-style: italic;
+}
+
+.yield .token {
+  font-family: var(--face);
+  font-weight: 600;
+}
+
+/* Everything that goes in, once: how much, right-aligned against what. */
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.overview .line {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+}
+
+.overview .amount {
+  flex: 0 0 calc(42% - 6px);
   font-size: 16px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  padding: 0 4px;
-  white-space: nowrap;
-}
-
-.stepper button {
-  align-items: center;
-  border-radius: 50%;
-  color: var(--tint-text);
-  display: inline-flex;
-  height: 36px;
-  justify-content: center;
-  width: 36px;
-}
-
-/* The method: a column of numbers to find your place by. */
-.steps {
-  column-gap: 14px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  row-gap: 18px;
-}
-
-.steps > li {
-  align-items: baseline;
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
-}
-
-.steps .n {
-  color: var(--secondary);
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  min-width: 1.2em;
-}
-
-.steps .text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.steps .main {
-  font-weight: 600;
-}
-
-.steps .sub {
-  color: var(--secondary);
-  font-size: 15px;
-  line-height: 20px;
-}
-
-.steps .end {
-  color: var(--secondary);
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
+  line-height: 24px;
   text-align: right;
 }
 
-/* Into cook mode, from the bottom of the recipe's screen. */
-.start {
-  align-items: center;
-  background: var(--tint);
-  border-radius: 28px;
-  box-shadow: var(--glass-shadow);
-  color: var(--on-tint);
-  display: flex;
-  font-size: 17px;
-  font-weight: 600;
-  gap: 8px;
-  height: 56px;
-  justify-content: center;
+.overview .amount .num {
+  font-size: inherit;
+  font-weight: inherit;
 }
 
-textarea.paste {
-  background: var(--raised);
-  border: 0;
-  border-radius: 16px;
-  color: var(--label);
-  font: 15px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
-  min-height: 220px;
-  outline: none;
-  padding: 14px 16px;
-  resize: vertical;
+.overview .name {
+  flex: 1;
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 24px;
+  min-width: 0;
+}
+
+.ingredients .hint {
+  font-size: 13px;
+  margin-top: 6px;
+  text-align: center;
+}
+
+/* The steps: a wavy rule starts each, its number before it, its amounts in it. */
+.method {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  list-style: none;
+  margin: 24px 0 0;
+  padding: 0;
+}
+
+.wave {
+  display: block;
+  height: 8px;
+  overflow: hidden;
   width: 100%;
 }
 
-.hint.warning {
-  color: var(--danger);
+.wave path {
+  fill: none;
+  stroke: var(--wave);
+  stroke-linecap: round;
+  stroke-width: 1.5;
 }
 
-.searchbox button.quiet {
-  align-items: center;
-  color: var(--secondary);
-  display: inline-flex;
-  height: 44px;
-  justify-content: center;
-  width: 44px;
+.method .wave {
+  margin-bottom: 16px;
 }
 
-.table {
-  overflow-x: auto;
-}
-
-/* What goes in: amounts in a column of their own, names lined up beside them. */
-.uses {
-  column-gap: 16px;
-  display: grid;
-  grid-template-columns: fit-content(40%) 1fr;
-  row-gap: 10px;
-}
-
-.uses > .use {
+.step-row {
   align-items: baseline;
-  display: grid;
-  grid-column: 1 / -1;
-  grid-template-columns: subgrid;
+  display: flex;
+  gap: 12px;
 }
 
-.use .amount {
+.step-row .n {
+  color: var(--secondary);
+  flex: 0 0 22px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  text-align: right;
+}
+
+.sentence {
+  flex: 1;
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 31px;
+  min-width: 0;
+}
+
+/* Numbers leave the serif wherever they stand. */
+.num {
+  font-family: var(--face);
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.token {
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  border-radius: 7px;
+  font-family: var(--face);
+  font-size: 0.88em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding: 1px 6px;
+}
+
+.token.time {
+  background: var(--time-bg);
+  color: var(--time);
+}
+
+.token.heat {
+  background: var(--heat-bg);
+  color: var(--heat);
+}
+
+/* An ingredient in a step: its amount and name, in the sentence's own words. */
+.token.use {
+  background: var(--use-bg);
+  color: var(--label);
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  padding: 1px 7px;
+}
+
+.token.use .num {
+  font-size: 0.88em;
+  font-weight: 600;
+}
+
+/* A token too long for its line wraps inside, like the words around it. */
+button.token {
+  max-width: 100%;
   text-align: left;
 }
 
-button.amount {
-  color: inherit;
-}
-
-.uses > .label {
-  color: var(--secondary);
-  font-size: 15px;
-  font-weight: 600;
-  grid-column: 1 / -1;
-  margin-top: 12px;
-}
-
-.uses > .label:first-child {
-  margin-top: 0;
+/* A time or a heat inside a name keeps its colour, without a token of its own. */
+.token.use .token,
+.overview .token {
+  background: none;
+  font-size: 0.9em;
+  padding: 0;
 }
 
 /* ---- sheets: what slides up from the bottom --------------------------------- */
 
 dialog.slide {
-  background: var(--group);
+  background: var(--sheet);
   border: 0;
-  border-radius: 30px 30px 0 0;
+  border-radius: 28px 28px 0 0;
   bottom: 0;
+  box-shadow: 0 -12px 40px rgb(0 0 0 / 25%);
   color: var(--label);
   margin: 0 auto;
   max-height: 88dvh;
   max-width: 720px;
   overflow-y: auto;
-  padding: 8px 20px calc(var(--bottom) + 8px);
+  padding: 8px var(--gutter) calc(var(--bottom) + 8px);
   position: fixed;
   top: auto;
   width: 100%;
@@ -617,6 +646,11 @@ dialog.slide {
 
 dialog.slide::backdrop {
   background: var(--scrim);
+}
+
+/* A sheet that changes what is behind it leaves it in sight. */
+dialog.slide.clear::backdrop {
+  background: transparent;
 }
 
 dialog.slide form,
@@ -628,41 +662,65 @@ dialog.slide > div {
 
 dialog.slide .grabber {
   align-self: center;
-  background: var(--separator);
+  background: var(--rule);
   border-radius: 3px;
   height: 5px;
-  width: 38px;
+  width: 36px;
 }
 
 dialog.slide h2 {
+  font-family: var(--serif);
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 600;
+}
+
+dialog.slide .says {
+  color: var(--secondary);
+  font-family: var(--serif);
+  font-size: 16px;
+  line-height: 22px;
+  margin-top: 2px;
 }
 
 dialog.slide .actions {
+  align-items: center;
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
-dialog.slide .actions > * {
+dialog.slide .actions .first,
+dialog.slide .actions .second {
   align-items: center;
-  border-radius: 16px;
+  border-radius: 26px;
   display: flex;
   flex: 1;
   font-size: 17px;
   font-weight: 600;
-  height: 54px;
+  height: 52px;
   justify-content: center;
+}
+
+dialog.slide .actions .first {
+  background: var(--ink);
+  color: var(--on-ink);
 }
 
 dialog.slide .actions .second {
   background: var(--raised);
 }
 
-dialog.slide .actions .first {
-  background: var(--tint);
-  color: var(--on-tint);
-  flex: 2;
+dialog.slide .actions .plain {
+  color: var(--secondary);
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  min-height: 44px;
+  text-align: left;
+}
+
+dialog.slide .actions .plain + .first {
+  flex: none;
+  padding: 0 32px;
 }
 
 dialog.slide .menu {
@@ -672,7 +730,7 @@ dialog.slide .menu {
 }
 
 dialog.slide .menu > * + * {
-  border-top: 1px solid var(--separator);
+  border-top: 1px solid var(--rule);
 }
 
 dialog.slide .menu button {
@@ -690,34 +748,13 @@ dialog.slide .menu .danger {
   color: var(--danger);
 }
 
+/* How much there is of the one thing the recipe is scaled by. */
 .have {
-  align-items: center;
-  background: var(--raised);
-  border-radius: 16px;
-  display: flex;
-  gap: 12px;
-  padding: 12px 16px;
-}
-
-.have label {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.have .small {
-  color: var(--secondary);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.have .entry {
   align-items: baseline;
+  border-bottom: 1px solid var(--rule);
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  padding-bottom: 8px;
 }
 
 .have input {
@@ -725,255 +762,417 @@ dialog.slide .menu .danger {
   border: 0;
   color: var(--label);
   font: inherit;
-  font-size: 40px;
+  font-size: 44px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  line-height: 52px;
   outline: none;
   padding: 0;
-  width: 4.5ch;
+  width: 4.2ch;
 }
 
 .have .unit {
   color: var(--secondary);
+  flex: 1;
   font-size: 22px;
 }
 
-.factor {
-  background: var(--tint);
-  border-radius: 20px;
-  color: var(--on-tint);
-  flex: none;
+.have .factor {
+  color: var(--secondary);
   font-size: 17px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  padding: 9px 14px;
 }
 
-.becomes {
+textarea.paste {
+  background: var(--raised);
+  border: 0;
+  border-radius: 16px;
+  color: var(--label);
+  font: 15px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  min-height: 220px;
+  outline: none;
+  padding: 14px 16px;
+  resize: vertical;
+  width: 100%;
+}
+
+/* ---- shopping --------------------------------------------------------------- */
+
+.shop-head {
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 
-.becomes .item {
-  min-height: 0;
-  padding: 9px 2px;
+.shop-head .quiet {
+  font-family: var(--serif);
+  font-size: 16px;
 }
 
-.becomes > * + * {
-  border-top: 1px solid var(--separator);
+ul.shop {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.shop .line {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+/* A circle to tick, in a target a thumb can find. */
+.shop .check {
+  align-items: center;
+  display: flex;
+  flex: 0 0 44px;
+  height: 44px;
+  justify-content: center;
+  margin-left: -9px;
+  position: relative;
+}
+
+.shop .check::before {
+  border: 1.5px solid color-mix(in srgb, var(--label) 35%, transparent);
+  border-radius: 50%;
+  content: '';
+  height: 26px;
+  position: absolute;
+  width: 26px;
+}
+
+.shop .check.done::before {
+  background: var(--secondary);
+  border-color: transparent;
+}
+
+.shop .check.done svg {
+  color: var(--ground);
+  position: relative;
+}
+
+.shop .text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.shop .name {
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 24px;
+}
+
+.shop .sub {
+  color: var(--secondary);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+}
+
+.shop .amount {
+  align-items: center;
+  display: flex;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.shop.home .name {
+  color: var(--secondary);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--secondary) 60%, transparent);
+}
+
+.shop.home .amount {
+  color: var(--secondary);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.noting {
+  align-items: baseline;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 0 44px;
+  padding-bottom: 6px;
+}
+
+.noting .quiet:first-child {
+  flex: 1;
+  font-family: var(--serif);
+  font-style: italic;
+}
+
+.noting input {
+  background: transparent;
+  border: 0;
+  color: var(--label);
+  font: inherit;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  outline: none;
+  padding: 0;
+  text-align: right;
+  width: 4ch;
+}
+
+p.label {
+  color: var(--secondary);
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 16px;
 }
 
 /* ---- cooking ----------------------------------------------------------------- */
 
 /* Cook mode is dark whatever the phone is set to: a kitchen is no place for a white
-   screen, and it is the one screen read from across the room. It is lit from above by
-   the recipe's own colour. */
+   screen, and it is the one screen read from across the room. */
 body.cook {
-  --ground: #121110;
-  --group: rgb(255 255 255 / 8%);
-  --raised: rgb(255 255 255 / 14%);
-  --label: #f5f5f7;
-  --secondary: rgb(245 245 247 / 62%);
-  --separator: rgb(255 255 255 / 10%);
-  --tint-text: #4da3ff;
-  --glass: rgb(255 255 255 / 10%);
-  --glass-edge: rgb(255 255 255 / 14%);
+  --ground: #12100d;
+  --sheet: #26221c;
+  --raised: rgb(244 239 230 / 11%);
+  --label: #f4efe6;
+  --secondary: #a89f8f;
+  --rule: rgb(244 239 230 / 10%);
+  --wave: rgb(168 159 143 / 45%);
+  --ink: #f4efe6;
+  --on-ink: #12100d;
+  --time: #f2b354;
+  --time-bg: rgb(233 162 59 / 17%);
+  --heat: #f47f69;
+  --heat-bg: rgb(232 99 79 / 20%);
+  --use-bg: rgb(244 239 230 / 11%);
+  --danger: #f47f69;
+  --glass: rgb(244 239 230 / 8%);
+  --glass-edge: rgb(244 239 230 / 12%);
   --glass-shadow: none;
-  --glow-strength: 60%;
+  --scrim: rgb(0 0 0 / 55%);
+  background: var(--ground);
+  color: var(--label);
   color-scheme: dark;
   min-height: 100dvh;
 }
 
-/* A sheet over the cook screen is solid, or the step would show through it. */
-body.cook dialog.slide {
-  background: #1f1d1b;
-}
-
-/* The step at the top, the way on at the bottom, where a thumb is, and kept there when
-   the step is longer than the screen. */
 body.cook #screen {
   min-height: 100dvh;
   padding-bottom: 0;
 }
 
-.now {
+body.cook .bar .middle {
+  align-items: center;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  padding-top: 8px;
 }
 
-.now h1 {
-  font-size: 44px;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.05;
-  overflow-wrap: anywhere;
+.middle .name {
+  font-family: var(--serif);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.now .aside {
-  color: var(--secondary);
-  font-size: 21px;
-  line-height: 28px;
-  margin-top: 10px;
-}
-
-/* The numbers a step is cooked by, each in a tile of its own. */
-.facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.fact {
-  background: var(--group);
-  border-radius: 22px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  justify-content: center;
-  min-height: 92px;
-  padding: 12px 18px;
-}
-
-.fact .label {
+.middle .count {
   color: var(--secondary);
   font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  line-height: 30px;
-  text-transform: uppercase;
-}
-
-.fact .value {
-  font-size: 34px;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.15;
 }
 
-.facts > * {
-  flex: 1 1 0;
+/* Timers running on other steps: saffron, and solid once one has rung. */
+.banners {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.fact.timer {
-  padding-right: 12px;
+.banner {
+  align-items: center;
+  background: var(--time-bg);
+  border-radius: 14px;
+  color: var(--time);
+  display: flex;
+  gap: 10px;
+  height: 48px;
+  padding: 0 16px;
   text-align: left;
 }
 
-.fact .head {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-  margin: -2px 0;
-}
-
-.go {
-  align-items: center;
-  background: var(--label);
-  border-radius: 50%;
-  color: var(--ground);
-  display: inline-flex;
-  height: 34px;
-  justify-content: center;
-  position: relative;
-  width: 34px;
-}
-
-.running .go {
-  background: none;
-  color: var(--label);
-}
-
-.go .ring {
-  inset: 0;
-  position: absolute;
-}
-
-/* Run out: amber, like the light on a cooker. */
-.clock.over,
-.clock-small.over {
-  color: #ffb340;
-}
-
-.now .uses {
-  font-size: 22px;
-  line-height: 28px;
-  row-gap: 14px;
-}
-
-.foot {
-  background: linear-gradient(to bottom, transparent, var(--ground) 24px);
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin: auto calc(-1 * var(--gutter)) 0;
-  padding: 28px var(--gutter) var(--bottom);
-  position: sticky;
-}
-
-.others {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chip {
-  align-items: center;
-  border-radius: 22px;
-  display: inline-flex;
-  font-size: 16px;
-  gap: 8px;
-  height: 44px;
-  max-width: 100%;
-  padding: 0 16px 0 11px;
-}
-
-.chip .name {
+.banner .name {
+  flex: 1;
+  font-family: var(--serif);
+  font-size: 17px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.chip .clock-small {
+.banner .clock-small {
   font-weight: 600;
 }
 
-/* A timer that has run out is the brightest thing on the screen until it is seen to. */
-.chip:has(.over) {
-  background: #ffb340;
-  border-color: transparent;
-  color: #121110;
+.banner:has(.over) {
+  background: #e9a23b;
+  color: #12100d;
 }
 
-.chip:has(.over) .clock-small {
+.banner .clock-small.over {
   color: inherit;
 }
 
-.controls {
+.guide {
+  display: flex;
+  flex-direction: column;
+  padding-top: 8px;
+}
+
+.guide .step-row .n {
+  flex-basis: 30px;
+}
+
+.guide .title {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+}
+
+.guide .done {
+  opacity: 0.4;
+}
+
+.guide .done .n {
+  align-self: center;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.now {
+  display: flex;
+  flex-direction: column;
+}
+
+.now .wave {
+  margin: 18px 0 20px;
+}
+
+.now .step-row .n {
+  font-size: 17px;
+  line-height: 44px;
+}
+
+.now .sentence {
+  font-size: 27px;
+  line-height: 44px;
+}
+
+.now .token {
+  border-radius: 9px;
+  padding: 2px 8px;
+}
+
+.timer-start {
+  align-items: center;
+  align-self: flex-start;
+  background: var(--time-bg);
+  border-radius: 26px;
+  color: var(--time);
+  display: inline-flex;
+  font-size: 17px;
+  font-weight: 600;
+  gap: 8px;
+  height: 52px;
+  margin: 18px 0 0 42px;
+  padding: 0 22px 0 18px;
+}
+
+.timer-run {
   align-items: center;
   display: flex;
   gap: 12px;
+  justify-content: space-between;
+  margin: 14px 0 0 42px;
 }
 
-.controls .round {
-  height: 64px;
-  width: 64px;
+.timer-run .clock {
+  color: var(--time);
+  font-size: 52px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 56px;
 }
 
-.controls .primary {
-  background: #f5f5f7;
-  border-radius: 32px;
-  color: #121110;
+.timer-stop {
+  align-items: center;
+  background: var(--time-bg);
+  border-radius: 50%;
+  color: var(--time);
+  display: flex;
+  flex: 0 0 52px;
+  height: 52px;
+  justify-content: center;
+  position: relative;
+}
+
+.timer-stop .ring {
+  color: var(--time);
+  inset: 0;
+  position: absolute;
+}
+
+.later {
+  opacity: 0.5;
+}
+
+.later .wave {
+  margin: 20px 0 14px;
+}
+
+/* The way on, at the bottom where a thumb is, and kept there on a long step. */
+.foot {
+  background: linear-gradient(to bottom, transparent, var(--ground) 32px);
+  bottom: 0;
+  display: flex;
+  gap: 12px;
+  margin: auto calc(-1 * var(--gutter)) 0;
+  padding: 40px var(--gutter) var(--bottom);
+  position: sticky;
+}
+
+.foot .round {
+  height: 52px;
+  width: 52px;
+}
+
+.foot .primary {
+  align-items: center;
+  background: var(--ink);
+  border-radius: 26px;
+  color: var(--on-ink);
+  display: flex;
   flex: 1;
-  font-size: 18px;
-  font-weight: 700;
-  height: 64px;
+  font-size: 17px;
+  font-weight: 600;
+  gap: 8px;
+  height: 52px;
+  justify-content: center;
   min-width: 0;
+  padding: 0 20px;
+}
+
+.foot .primary span {
   overflow: hidden;
-  padding: 0 22px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -981,12 +1180,12 @@ body.cook #screen {
 /* Over every other screen while something is cooking. */
 .mini {
   align-items: center;
-  border-radius: 31px;
+  border-radius: 32px;
   color: var(--label);
   display: flex;
   gap: 12px;
-  height: 62px;
-  padding: 0 16px 0 9px;
+  height: 64px;
+  padding: 0 12px 0 10px;
 }
 
 .mini .text {
@@ -1004,7 +1203,8 @@ body.cook #screen {
 }
 
 .mini .main {
-  font-size: 16px;
+  font-family: var(--serif);
+  font-size: 17px;
   font-weight: 600;
 }
 
@@ -1012,6 +1212,11 @@ body.cook #screen {
   color: var(--secondary);
   font-size: 14px;
   font-variant-numeric: tabular-nums;
+}
+
+.mini .clock-small {
+  color: var(--time);
+  font-weight: 600;
 }
 
 .round-picture {
@@ -1022,16 +1227,17 @@ body.cook #screen {
 }
 
 .ring {
-  color: var(--label);
+  color: var(--time);
   display: inline-flex;
-}
-
-.mini .ring {
-  color: var(--tint-text);
 }
 
 .clock-small {
   font-variant-numeric: tabular-nums;
+}
+
+.clock.over,
+.clock-small.over {
+  color: #ffb340;
 }
 
 /* ---- what is still drawn as the datasheet ----------------------------------- */
@@ -1042,13 +1248,6 @@ body.cook #screen {
   display: contents;
 }
 
-.notice {
-  background: var(--group);
-  border-radius: 16px;
-  color: var(--label);
-  padding: 14px 16px;
-}
-
-.notice.warning {
-  color: var(--danger);
+.table {
+  overflow-x: auto;
 }

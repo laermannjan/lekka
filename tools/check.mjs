@@ -391,14 +391,19 @@ addEventListener('load', async () => {
 
   const title = document.querySelector('.recipe-title')?.textContent
   check('the recipe is open, under its name', title === 'Pfannkuchen', String(title))
-  const steps = [...document.querySelectorAll('ol.steps > li .main')].map((one) => one.textContent)
-  check('its steps in the order they are done', steps.join(' | ') === 'Pfanne vorheizen | Verrühren | Schmelzen | Braten 2 min je Seite',
+  // Each step read out as a sentence, its ingredients' amounts where they go in.
+  const steps = [...document.querySelectorAll('ol.method > li .sentence')].map((one) => one.textContent.replace(/\\s+/g, ' '))
+  check('its steps in the order they are done, with their amounts in them',
+    steps.join(' | ') === 'Pfanne vorheizen | Verrühren 250 g Mehl 500 ml Milch 2 Eier | Schmelzen 30 g Butter | Braten 2 min je Seite',
     steps.join(' | '))
+  const gathered = [...document.querySelectorAll('.overview .line')].map((one) => [...one.children].map((part) => part.textContent).join(' ').replace(/\\s+/g, ' '))
+  check('and above them everything that goes in, once', gathered.join(' | ') === '250 g Mehl Type 550 | 500 ml Milch | 2 Eier | 30 g Butter',
+    gathered.join(' | '))
 
   check('cooking starts from the bar at the bottom', Boolean(document.querySelector('#dock .start')))
 
   // The table is the datasheet's, inside a box of its own, so its rules reach it.
-  labelled('Edit, share or delete').click()
+  labelled('Table, edit, share or delete').click()
   await after(300)
   named('Show as a table').click()
   await after(400)
@@ -407,7 +412,7 @@ addEventListener('load', async () => {
     Boolean(grid) && getComputedStyle(grid).display === 'grid',
     grid ? getComputedStyle(grid).display : 'no table')
 
-  labelled('Edit, share or delete').click()
+  labelled('Table, edit, share or delete').click()
   await after(300)
   check('the menu offers to edit it', Boolean(named('Edit')))
   named('Edit').click()

@@ -52,7 +52,7 @@ function row(entry, open, photo, why = null) {
     shown ? picture(entry.card, 'thumb', shown) : null,
     element('span', 'text', undefined, [
       element('span', 'main', title(entry)),
-      element('span', 'sub', why ?? about(entry.card)),
+      why ? element('span', 'sub', why) : about(entry.card),
     ]),
   ])
   link.href = `/r/${entry.id}`
@@ -62,8 +62,13 @@ function row(entry, open, photo, why = null) {
 
 /** `15 h 15 min · 10 Portionen`: what decides whether it is the one to cook today. */
 function about(card) {
-  if (!card) return 'This recipe does not read.'
-  return [totalTime(stepsOf(card)), card.yields].filter(Boolean).join(' · ')
+  if (!card) return element('span', 'sub', 'This recipe does not read.')
+  const total = totalTime(stepsOf(card))
+  return element('span', 'sub', undefined, [
+    total ? element('span', 'time', total) : null,
+    total && card.yields ? ' · ' : null,
+    card.yields,
+  ])
 }
 
 function title(entry) {
