@@ -1,4 +1,4 @@
-import { formatAmount, formatNumber, scaleAmount } from './amount.js'
+import { formatNumber, fraction, scaleAmount, showAmount } from './amount.js'
 import { gather, marks, servings } from './recipe.js'
 import { element, icon, roundButton, said } from './ui.js'
 import { t } from './i18n.js'
@@ -108,15 +108,15 @@ function homeRow(row, toggle) {
 function rowOf(line, factor, kept) {
   const key = `${line.name}\u0000${line.aside ?? ''}`
   const one = line.amounts.length === 1 && line.amounts[0].kind !== 'words' ? scaleAmount(line.amounts[0], factor) : null
-  const all = line.amounts.map((amount) => formatAmount(scaleAmount(amount, factor))).join(' + ')
+  const all = line.amounts.map((amount) => showAmount(scaleAmount(amount, factor))).join(' + ')
   const held = one ? Number(String(kept.have[key] ?? '').replace(',', '.')) || 0 : 0
   const less = (value) => Math.max(0, Math.round((value - held) * 100) / 100)
   const left = one && (one.kind === 'range' ? { ...one, from: less(one.from), to: less(one.to) } : { ...one, value: less(one.value) })
   const gone = Boolean(left) && (left.kind === 'range' ? left.to : left.value) === 0
-  const amount = left ? formatAmount(left) : all
+  const amount = left ? showAmount(left) : all
 
   const steps = line.steps.length > 1 ? t('for steps {list} and {last}', { list: line.steps.slice(0, -1).join(', '), last: line.steps.at(-1) }) : ''
-  const part = held > 0 && !gone ? t('{held} at home, {all} in all', { held: `${formatNumber(held)} ${one.unit}`.trim(), all: formatAmount(one) }) : ''
+  const part = held > 0 && !gone ? t('{held} at home, {all} in all', { held: `${formatNumber(held)} ${one.unit}`.trim(), all: showAmount(one) }) : ''
   return {
     key,
     name: line.name,
@@ -134,5 +134,5 @@ function rowOf(line, factor, kept) {
 function makes(card, factor) {
   const counted = servings(card.yields)
   if (!counted) return card.yields
-  return `${formatNumber(Math.round(counted.count * factor * 10) / 10)} ${counted.unit}`.trim()
+  return `${fraction(Math.round(counted.count * factor * 100) / 100)} ${counted.unit}`.trim()
 }

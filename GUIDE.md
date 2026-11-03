@@ -12,8 +12,9 @@ ingredients and columns for time, and also reads it out as a list of steps. Both
 from the same structure, so the structure has to be right.
 
 In the list, each step is read out as its sentence: the instruction as a cook would
-write it, with every ingredient the step takes named in braces. lekka puts the
-amount and name there, scaled to however much is being made:
+write it, with every ingredient the step takes named in braces. lekka sets those names
+apart, and lists each one right under the sentence with its amount, scaled to however
+much is being made:
 
 > `pour in {lukewarm water} and knead for 10 min, until smooth`
 >
@@ -92,9 +93,9 @@ cook reads.
   order: `mix {flour}, {salt} and {dry yeast}`; in German the verb last, `{Mehl},
   {Salz} und {Hefe} mischen`.
 - **Name every ingredient the step takes in braces, once**, exactly as its name is
-  written: `{lukewarm water}`, not `{water}`. The braces stand where the amount should
-  be read, and lekka puts it there. Never mention one of them without braces, and
-  never write an amount: the braces bring it, scaled.
+  written: `{lukewarm water}`, not `{water}`. The braces point at the ingredient's line
+  under the sentence, which says how much. Never mention one of them without braces,
+  and never write an amount: the line brings it, scaled.
 - **Name what earlier steps made in plain words:** `the dough`, `den Sauerteig`, or
   nothing at all where it is obvious. Only the step's own ingredients take braces.
 - **Say the step's time, heat and aside** where they belong in the sentence: `bake at

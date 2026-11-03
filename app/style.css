@@ -34,7 +34,8 @@
   --time-bg: rgb(233 162 59 / 22%);
   --heat: #b03a26;
   --heat-bg: rgb(232 99 79 / 15%);
-  --use-bg: rgb(42 36 32 / 7%);
+  --band: rgb(42 36 32 / 5%);
+  --band-edge: rgb(255 255 255 / 80%);
   --field: #fffcf6;
   --field-edge: rgb(42 36 32 / 22%);
   --danger: #b03a26;
@@ -66,7 +67,8 @@
     --time-bg: rgb(233 162 59 / 17%);
     --heat: #f47f69;
     --heat-bg: rgb(232 99 79 / 20%);
-    --use-bg: rgb(244 239 230 / 10%);
+    --band: rgb(244 239 230 / 6.5%);
+    --band-edge: rgb(244 239 230 / 7%);
     --field: rgb(244 239 230 / 7%);
     --field-edge: rgb(244 239 230 / 22%);
     --danger: #f47f69;
@@ -274,6 +276,7 @@ h1.title {
   align-items: center;
   display: flex;
   gap: 12px;
+  justify-content: center;
 }
 
 .dock .round {
@@ -295,6 +298,7 @@ h1.title {
   gap: 8px;
   height: 52px;
   justify-content: center;
+  max-width: 340px;
 }
 
 .searchbox {
@@ -455,6 +459,46 @@ h1.title {
   line-height: 22px;
 }
 
+/* How much it makes: counted large, a whole one more or less either side of it. */
+.stepper {
+  align-items: center;
+  display: flex;
+  gap: 28px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.stepper .round {
+  height: 60px;
+  width: 60px;
+}
+
+.stepper .round svg {
+  height: 24px;
+  width: 24px;
+}
+
+.stepper .counted {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  min-width: 72px;
+}
+
+.stepper .count {
+  font-size: 56px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 300;
+  line-height: 60px;
+}
+
+.stepper .unit {
+  color: var(--secondary);
+  font-family: var(--serif);
+  font-size: 17px;
+  font-style: italic;
+}
+
 .ingredients {
   display: flex;
   flex-direction: column;
@@ -492,7 +536,7 @@ h1.title {
 }
 
 .overview .amount {
-  flex: 0 0 calc(42% - 6px);
+  flex: 0 0 calc(50% - 6px);
   font-size: 16px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -572,13 +616,13 @@ h1.title {
   text-underline-offset: 3px;
 }
 
-/* The steps: a wavy rule starts each, its number before it, its amounts in it. */
+/* The steps: a wavy rule starts each, its number set into it, what it takes under it. */
 .method {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 26px;
   list-style: none;
-  margin: 24px 0 0;
+  margin: 32px 0 0;
   padding: 0;
 }
 
@@ -596,34 +640,91 @@ h1.title {
   stroke-width: 1.5;
 }
 
-.method .wave {
-  margin-bottom: 16px;
-}
-
-.step-row {
-  align-items: baseline;
+.divider {
+  align-items: center;
   display: flex;
   gap: 12px;
 }
 
-/* A step's number is where you are, not how much: the serif's italic, at the size of the
-   sentence it starts, so it reads as the first word and not as a label beside it. */
-.step-row .n {
+.divider .wave {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A step's number is where you are, not how much: the serif's italic, in the rule's gap. */
+.divider .n {
   color: var(--secondary);
-  flex: 0 0 24px;
   font-family: var(--serif);
-  font-size: 19px;
+  font-size: 22px;
   font-style: italic;
   font-variant-numeric: oldstyle-nums;
-  text-align: right;
+  line-height: 24px;
 }
 
 .sentence {
-  flex: 1;
   font-family: var(--serif);
-  font-size: 19px;
-  line-height: 31px;
+  font-size: 20px;
+  line-height: 30px;
+  margin-top: 14px;
+}
+
+/* An ingredient the sentence names, a little heavier, pointing at its line below. */
+.use {
+  font-weight: 600;
+}
+
+/* What a step takes, under its sentence, on a band lit along its top and fading into the
+   page below: how much, right-aligned on a third of the line, against what. */
+.uses {
+  background: linear-gradient(to bottom, var(--band) calc(100% - 30px), transparent);
+  box-shadow: inset 0 1px 0 var(--band-edge);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 12px calc(-1 * var(--gutter)) 0;
+  padding: 10px var(--gutter) 22px;
+}
+
+.uses li {
+  align-items: baseline;
+  display: flex;
+  font-size: 15px;
+  gap: 12px;
+  line-height: 22px;
+}
+
+.uses .amount {
+  flex: 0 0 calc(33.3% - 6px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+
+.uses .name {
+  flex: 1;
   min-width: 0;
+}
+
+/* Wider than a phone, the band has no edge of the screen to run to, and fades out at its
+   ends instead. */
+@media (min-width: 760px) {
+  .uses {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+    margin-inline: -32px;
+    padding-inline: 32px;
+  }
+
+  .sentence {
+    font-size: 21px;
+    line-height: 32px;
+  }
+
+  .uses li {
+    font-size: 16px;
+    line-height: 24px;
+  }
 }
 
 /* Numbers leave the serif wherever they stand. */
@@ -656,24 +757,9 @@ h1.title {
   color: var(--heat);
 }
 
-/* An ingredient in a step: its amount and name, in the sentence's own words. */
-.token.use {
-  background: var(--use-bg);
-  color: var(--label);
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
-  padding: 1px 7px;
-}
-
-.token.use .num {
-  font-size: 0.88em;
-  font-weight: 600;
-}
-
 /* A time or a heat inside a name keeps its colour, without a token of its own. */
-.token.use .token,
+.use .token,
+.uses .token,
 .overview .token,
 .shop .name .token {
   background: none;
@@ -950,7 +1036,8 @@ body.cook {
   --time-bg: rgb(233 162 59 / 17%);
   --heat: #f47f69;
   --heat-bg: rgb(232 99 79 / 20%);
-  --use-bg: rgb(244 239 230 / 11%);
+  --band: rgb(244 239 230 / 6.5%);
+  --band-edge: rgb(244 239 230 / 7%);
   --danger: #f47f69;
   --glass: rgb(244 239 230 / 8%);
   --glass-edge: rgb(244 239 230 / 12%);
@@ -1034,48 +1121,62 @@ body.cook .bar .middle {
   padding-top: 8px;
 }
 
-.guide .step-row .n {
-  flex-basis: 30px;
-  font-size: 20px;
-}
-
 .guide .title {
   font-family: var(--serif);
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 26px;
+  font-size: 19px;
+  line-height: 27px;
 }
 
 .guide .done {
-  opacity: 0.4;
+  align-items: center;
+  color: var(--secondary);
+  display: flex;
+  gap: 10px;
+  opacity: 0.6;
 }
 
-.guide .done .n {
-  align-self: center;
-  display: flex;
-  justify-content: flex-end;
+.guide .done .title {
+  font-size: 18px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .now {
   display: flex;
   flex-direction: column;
+  margin-top: 16px;
 }
 
-.now .wave {
-  margin: 18px 0 20px;
-}
-
-.now .step-row .n {
-  font-size: 27px;
-  line-height: 44px;
+.now .divider .n {
+  font-size: 28px;
+  line-height: 30px;
 }
 
 .now .sentence {
-  font-size: 27px;
-  line-height: 44px;
+  font-size: 28px;
+  line-height: 40px;
+  margin-top: 16px;
 }
 
-.now .token {
+.now .uses {
+  gap: 6px;
+  margin-top: 18px;
+  padding-block: 12px 26px;
+}
+
+.now .uses li {
+  font-size: 21px;
+  gap: 14px;
+  line-height: 28px;
+}
+
+.now .uses .amount {
+  flex-basis: calc(33.3% - 7px);
+}
+
+.now .sentence > .token {
   border-radius: 9px;
   padding: 2px 8px;
 }
@@ -1091,7 +1192,7 @@ body.cook .bar .middle {
   font-weight: 600;
   gap: 8px;
   height: 52px;
-  margin: 18px 0 0 42px;
+  margin-top: 18px;
   padding: 0 22px 0 18px;
 }
 
@@ -1100,7 +1201,7 @@ body.cook .bar .middle {
   display: flex;
   gap: 12px;
   justify-content: space-between;
-  margin: 14px 0 0 42px;
+  margin-top: 14px;
 }
 
 .timer-run .clock {
@@ -1131,11 +1232,133 @@ body.cook .bar .middle {
 }
 
 .later {
-  opacity: 0.5;
+  margin-top: 22px;
+  opacity: 0.45;
 }
 
-.later .wave {
-  margin: 20px 0 14px;
+.later .divider .n {
+  font-size: 20px;
+}
+
+.later .title {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+/* Every step, down the side of a wide screen: where you are, what is done, what is
+   ticking, each a click away. A phone has no room for it, and shows the timers on top. */
+.steps {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  body.cook #screen {
+    margin-left: 320px;
+    max-width: none;
+    padding-inline: 80px;
+  }
+
+  body.cook #screen > :not(.steps) {
+    margin-inline: auto;
+    max-width: 760px;
+    width: 100%;
+  }
+
+  .steps {
+    background: rgb(244 239 230 / 2.5%);
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    left: 0;
+    overflow-y: auto;
+    padding: calc(var(--top) + 8px) 16px 32px 24px;
+    position: fixed;
+    top: 0;
+    width: 320px;
+  }
+
+  .steps button {
+    align-items: center;
+    border-radius: 10px;
+    display: flex;
+    flex: none;
+    gap: 14px;
+    min-height: 44px;
+    opacity: 0.8;
+    padding: 0 12px;
+    text-align: left;
+  }
+
+  .steps button.here {
+    background: rgb(244 239 230 / 8%);
+    font-weight: 600;
+    opacity: 1;
+  }
+
+  .steps button.past {
+    opacity: 0.45;
+  }
+
+  .steps .n {
+    color: var(--secondary);
+    flex: 0 0 20px;
+    font-family: var(--serif);
+    font-size: 19px;
+    font-style: italic;
+    font-variant-numeric: oldstyle-nums;
+    text-align: right;
+  }
+
+  .steps .title {
+    flex: 1;
+    font-family: var(--serif);
+    font-size: 17px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .steps .clock-small {
+    background: var(--time-bg);
+    border-radius: 7px;
+    color: var(--time);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 1px 7px;
+  }
+
+  .steps .clock-small.over {
+    background: #e9a23b;
+    color: #12100d;
+  }
+
+  .banners {
+    display: none;
+  }
+
+  .now .divider .n {
+    font-size: 32px;
+    line-height: 34px;
+  }
+
+  .now .sentence {
+    font-size: 36px;
+    line-height: 50px;
+  }
+
+  .now .uses li {
+    font-size: 26px;
+    line-height: 36px;
+  }
+
+  body.cook .foot .primary {
+    flex: 0 1 360px;
+  }
 }
 
 /* The way on, at the bottom where a thumb is, and kept there on a long step. */

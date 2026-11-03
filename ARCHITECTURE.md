@@ -197,22 +197,26 @@ another name it goes by, an ingredient, a step - and says the reason when it is 
 name. Letters are compared without case or accents (`app/search.js`).
 
 **A recipe at `/r/…`.** What it is, how long it takes, how many steps, where it came
-from, and its own notes. Then everything that goes in, gathered from the steps once -
-the uses of one thing, one name and aside, added up (`gather` in `app/recipe.js`) - under
-how much it makes. Then the steps, each read out as one sentence with its ingredients'
-amounts where they go in (`phrase`): the step's own sentence where it has one, with each
-`{name}` drawn as that ingredient's amount and name, and otherwise one made of its words,
-its time, its ingredients and its aside. How much is set where it is listed: the yield
-and every amount in the gathered list are fields that look like fields, and typing in
-one scales the whole recipe by it. The rest follows as it is typed, in place, so the
-field keeps the keyboard. `Start cooking` and the shopping list float at the bottom; the
-table view, Edit, Share and Delete are behind `…`.
+from, and its own notes. Then how much it makes, a stepper when it is counted, and
+everything that goes in, gathered from the steps once - the uses of one thing, one name
+and aside, added up (`gather` in `app/recipe.js`) - its amounts ending under the middle
+of the count. Then the steps, each read out as one sentence (`phrase`): the step's own
+where it has one, each `{name}` drawn a little heavier, and otherwise one made of its
+words, its time and its aside. What a step takes is listed right under its sentence, on
+a band lit along its top that fades into the page, how much ending a third of the way
+along the line. How much is set where it is shown: the stepper adds or takes a whole one,
+and every amount in the gathered list is a field that looks like one, typing in which
+scales the whole recipe by it. The rest follows in place, so a field keeps the keyboard.
+Spoons, cups, litres and counts read in fractions, `1½ EL`; weights as a scale shows
+them (`showAmount` in `app/amount.js`). `Start cooking` and the shopping list float at
+the bottom; the table view, Edit, Share and Delete are behind `…`. On a wide screen it
+is the same single column, and the bands fade out at their ends instead of meeting the
+edge of the screen.
 
 The look keeps one meaning per highlight: words in a serif, the phone's own, and every
-amount and time in sans; a step's number in the serif's italic, as the first word of
-its sentence; saffron for time and ember for heat, wherever they stand. A wavy rule
-starts every step. Durations are as short as they go and still never read as a time of
-day: `15h15`, `45 min`, `2h`.
+amount and time in sans; a step's number in the serif's italic, set into the wavy rule
+that starts it; saffron for time and ember for heat, wherever they stand. Durations are
+as short as they go and still never read as a time of day: `15h15`, `45 min`, `2h`.
 
 What lekka says is German or English, as the phone is set (`app/i18n.js`); a recipe is
 in its own words whatever that is. The English is the key, so a line nobody translated
@@ -229,8 +233,9 @@ Reminders, Notes or a message. What is at home is kept on the device, by recipe
 (`app/shop.js`).
 
 **Cooking at `/cook/…`.** The recipe's own list, walked through: the step done last
-fades out above, the one to do now stands large, its amounts in its sentence, and the
-next three wait below. A step with a time has a button that starts its timer, which then
+fades out above, the one to do now stands large with what it takes on a band under it,
+and the next three wait below. On a wide screen every step stands down the side, with
+its timer, a click from it. A step with a time has a button that starts its timer, which then
 counts down in large saffron digits. Timers running on other steps stand at the top and
 lead back to their step; one that has run out turns solid. `Next`, naming the step it
 leads to, carries it on, and `Done cooking` ends it. All ingredients and ending early

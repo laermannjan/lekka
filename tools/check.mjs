@@ -391,16 +391,36 @@ addEventListener('load', async () => {
 
   const title = document.querySelector('.recipe-title')?.textContent
   check('the recipe is open, under its name', title === 'Pfannkuchen', String(title))
-  // Each step read out as a sentence, its ingredients' amounts where they go in.
+  // Each step read out as a sentence, and what it takes listed under it.
   const steps = [...document.querySelectorAll('ol.method > li .sentence')].map((one) => one.textContent.replace(/\\s+/g, ' '))
-  check('its steps in the order they are done, with their amounts in them',
-    steps.join(' | ') === 'Pfanne vorheizen | Verrühren 250 g Mehl 500 ml Milch 2 Eier | Schmelzen 30 g Butter | Braten 2 min je Seite',
+  check('its steps in the order they are done',
+    steps.join(' | ') === 'Pfanne vorheizen | Verrühren | Schmelzen | Braten 2 min je Seite',
     steps.join(' | '))
+  const listed = () => [...document.querySelectorAll('ol.method > li .uses')]
+    .map((list) => [...list.children].map((one) => [...one.children].map((part) => part.textContent).join(' ')).join(', '))
+    .join(' | ')
+  check('and what each takes, under it', listed() === '250 g Mehl, 500 ml Milch, 2 Eier | 30 g Butter', listed())
   // An amount is a field to type in; what it says is its value, then its unit.
   const shows = (part) => [...part.querySelectorAll('input')].map((field) => field.value).concat(part.textContent).join(' ')
   const gathered = [...document.querySelectorAll('.overview .line')].map((one) => [...one.children].map(shows).join(' ').replace(/\\s+/g, ' ').trim())
   check('and above them everything that goes in, once', gathered.join(' | ') === '250 g Mehl Type 550 | 500 ml Milch | 2 Eier | 30 g Butter',
     gathered.join(' | '))
+
+  // The stepper counts what it makes, and the gathered amounts hang from the middle of it.
+  const count = () => document.querySelector('.stepper .count')?.textContent
+  const middle = (box) => (box.left + box.right) / 2
+  const counted = document.querySelector('.stepper .count').getBoundingClientRect()
+  const mehl = document.querySelector('.overview .amount').getBoundingClientRect()
+  check('the amounts gathered end under the middle of the count', Math.abs(mehl.right + 6 - middle(counted)) < 2,
+    \`amount to \${mehl.right.toFixed(0)}, count's middle at \${middle(counted).toFixed(0)}\`)
+  labelled('More').click()
+  await after(100)
+  check('one more makes one more, and every amount follows',
+    count() === '13' && document.querySelector('.overview input').value === '271' && listed().startsWith('271 g Mehl'),
+    \`\${count()}, \${document.querySelector('.overview input').value}, \${listed()}\`)
+  labelled('Less').click()
+  await after(100)
+  check('and one fewer takes it back', count() === '12' && listed().startsWith('250 g Mehl'), \`\${count()}, \${listed()}\`)
 
   check('cooking starts from the bar at the bottom', Boolean(document.querySelector('#dock .start')))
 

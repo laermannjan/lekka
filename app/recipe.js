@@ -111,12 +111,12 @@ function capital(text) {
 
 /**
  * A step as it is read out: its sentence, or, where it has none, one made of its words,
- * its time, its ingredients and its aside. The parts are words (`text`), a `number`, a
- * `time`, a `heat`, or an ingredient the step takes (`use`, with its `node`), which is
- * drawn as its amount and name - so how much is always where it goes in.
+ * its time and its aside. The parts are words (`text`), a `number`, a `time`, a `heat`,
+ * or an ingredient the sentence names (`use`, with its `node`, and the `name` it is said
+ * by - capitalised when it opens the sentence). How much goes in is not said in it:
+ * everything a step takes is listed right under it, named or not.
  *
- * A brace naming none of the step's ingredients is read as the plain word, and an
- * ingredient the sentence leaves out is read after it: nothing a step takes goes unsaid.
+ * A brace naming none of the step's ingredients is read as the plain word.
  */
 export function phrase(step) {
   const parts = []
@@ -127,17 +127,20 @@ export function phrase(step) {
       if (piece === '') continue
       const name = /^\{(.*)\}$/.exec(piece)?.[1]
       const at = name === undefined ? -1 : left.findIndex((one) => one.name === name)
-      if (at === -1) parts.push(...marks(name ?? piece))
-      else parts.push({ kind: 'use', node: left.splice(at, 1)[0] })
+      if (at === -1) {
+        parts.push(...marks(name ?? piece))
+        continue
+      }
+      const [node] = left.splice(at, 1)
+      parts.push({ kind: 'use', node, name: node.name })
     }
-    for (const node of left) parts.push({ kind: 'text', text: ' ' }, { kind: 'use', node })
   } else {
     parts.push(...marks(step.title))
     if (step.timeShown) parts.push({ kind: 'text', text: ' ' }, { kind: 'time', text: step.time.text })
-    for (const node of step.ingredients) parts.push({ kind: 'text', text: ' ' }, { kind: 'use', node })
     if (step.aside) parts.push({ kind: 'text', text: ', ' }, ...marks(step.aside))
   }
   if (parts[0]?.kind === 'text') parts[0] = { ...parts[0], text: capital(parts[0].text) }
+  if (parts[0]?.kind === 'use') parts[0] = { ...parts[0], name: capital(parts[0].name) }
   return parts
 }
 
