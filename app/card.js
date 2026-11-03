@@ -22,6 +22,16 @@ export function parseCard(text) {
       parseHeadLine(card, marker, body.slice(1).trim(), number)
       continue
     }
+    if (marker === '>') {
+      // The step above, said as a sentence: one line, right under its step.
+      const level = indent / INDENT
+      const owner = stack.length === level ? stack[level - 1] : null
+      if (!owner || owner.marker !== '-' || owner.children.length > 0 || owner.sentence !== undefined)
+        throw new ParseError('A sentence stands right under its step', number)
+      owner.sentence = body.slice(1).trim()
+      if (owner.sentence === '') throw new ParseError('A sentence needs words', number)
+      continue
+    }
     if (marker !== '-' && marker !== '*')
       throw new ParseError('Only steps, ingredients and preparations are indented', number)
 
@@ -88,8 +98,9 @@ function toNode(raw) {
     const children = raw.children.map(toNode)
     if (children.every((child) => child.kind === 'preparation'))
       throw new ParseError('A step needs an ingredient', raw.line)
-    return { kind: 'step', verb: text, aside, children }
+    return { kind: 'step', verb: text, aside, ...(raw.sentence ? { sentence: raw.sentence } : {}), children }
   }
+  if (raw.sentence) throw new ParseError('A step needs an ingredient', raw.line)
 
   const colon = raw.text.indexOf(':')
   const head = colon === -1 ? raw.text : raw.text.slice(0, colon)
@@ -125,6 +136,7 @@ function* formatNode(node, level) {
   }
   if (node.kind === 'step') {
     yield withAside(`${indent}- ${node.verb}`, node.aside)
+    if (node.sentence) yield `${indent}  > ${node.sentence}`
     for (const child of node.children) yield* formatNode(child, level + 1)
     return
   }
@@ -144,7 +156,9 @@ function withAside(text, aside) {
  *
  * What the schema asks and the text cannot hold is refused here: brackets, which the text
  * would read as an aside, a colon in a name, which it would read as the amount, and a step
- * with nothing under it, which it would read as an ingredient. The rest is left to the
+ * with nothing under it, which it would read as an ingredient. So is a sentence naming in
+ * braces an ingredient its step does not take: whoever wrote it is there to be told, which
+ * a card edited later, with an ingredient renamed, has nobody for. The rest is left to the
  * text it becomes, which is parsed like any other.
  */
 export function formatJson(json) {
@@ -175,7 +189,12 @@ function nodeFromJson(json) {
   if ('step' in json) {
     const verb = plain(json.step, 'step')
     if (list(json.children).length === 0) throw new ParseError(`A step needs an ingredient: ${verb}`, 1)
-    return { kind: 'step', verb, aside, children: list(json.children).map(nodeFromJson) }
+    const children = list(json.children).map(nodeFromJson)
+    const sentence = words(json.sentence)
+    const takes = children.filter((child) => child.kind === 'ingredient').map((child) => child.name)
+    for (const [, name] of sentence.matchAll(/\{([^{}]*)\}/g))
+      if (!takes.includes(name)) throw new ParseError(`{${name}} is no ingredient of the step ${verb}`, 1)
+    return { kind: 'step', verb, aside, ...(sentence ? { sentence } : {}), children }
   }
   if ('ingredient' in json) {
     const name = plain(json.ingredient, 'ingredient')
