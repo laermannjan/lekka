@@ -103,6 +103,13 @@ async function send(method, path, options) {
   return options?.text ? response.text() : response.json()
 }
 
+/**
+ * When the last answer was the worker's copy rather than the server's, the time that copy
+ * was made; null while the server answers. It is the last answer and not every one, since
+ * a recipe opened from the library shows what the library was read as.
+ */
+export let offline = null
+
 async function call(method, path, { body } = {}) {
   const response = await fetch(path, {
     method,
@@ -114,6 +121,7 @@ async function call(method, path, { body } = {}) {
       ...(method === 'GET' ? {} : { 'x-lekka': '1' }),
     },
   })
+  offline = response.headers.has('x-lekka-offline') ? new Date(response.headers.get('date')) : null
   if (!response.ok) throw new ApiError(response.status, await response.text())
   return response
 }

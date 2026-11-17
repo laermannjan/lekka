@@ -205,6 +205,10 @@ h1.title {
   color: var(--danger);
 }
 
+.notice.offline {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
 .bar {
   align-items: center;
   display: flex;
