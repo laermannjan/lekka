@@ -20,6 +20,7 @@ export const GERMAN = {
   // The library, search and adding
   Recipes: 'Rezepte',
   'The library did not load. {reason}': 'Die Rezepte wurden nicht geladen. {reason}',
+  'No connection. Showing recipes as of {when}.': 'Keine Verbindung. Rezepte mit Stand vom {when}.',
   'Add a recipe': 'Rezept hinzufügen',
   '{name}: devices and sign out': '{name}: Geräte und Abmelden',
   'Search recipes, ingredients': 'Rezepte, Zutaten suchen',

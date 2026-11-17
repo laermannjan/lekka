@@ -392,7 +392,10 @@ serves the worker. Changed file, new version; unchanged file, same version and
 the cache survives. Never a hand-maintained number.
 
 Offline you can read every card you have opened, because each one is kept in
-`localStorage` as it is fetched. Writing fails, and the overview says so. The
+`localStorage` as it is fetched. Writing fails, and the overview says so. What the
+worker hands back from its copy carries `X-Lekka-Offline`, and its `Date` is still the
+server's, so every screen but cook mode says it is a copy and how old - otherwise a phone
+off the network shows last week's library as if it were today's. The
 server stays the single source, so two devices on the same edit link cannot
 diverge.
 

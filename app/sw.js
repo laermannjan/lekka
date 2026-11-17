@@ -70,12 +70,22 @@ self.addEventListener('fetch', (event) => {
 
 async function fallback(request) {
   const hit = await caches.match(request)
-  if (hit) return hit
+  if (hit) return marked(hit)
   if (request.mode === 'navigate') {
     const shell = await caches.match('/')
     if (shell) return shell
   }
   return Response.error()
+}
+
+/**
+ * A kept answer, said to be one, so the app can tell it from the server's. Its `Date`
+ * is still the server's, which is when the copy was made.
+ */
+function marked(response) {
+  const headers = new Headers(response.headers)
+  headers.set('x-lekka-offline', '1')
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
 async function keep(request, response) {

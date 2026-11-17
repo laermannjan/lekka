@@ -756,7 +756,17 @@ function fail(message) {
 }
 
 function show(...parts) {
-  screen.replaceChildren(...parts.filter(Boolean))
+  screen.replaceChildren(...[offlineBanner(), ...parts].filter(Boolean))
+}
+
+/**
+ * Over every screen drawn from the worker's copy, so an old library never passes for the
+ * server's. Not while cooking: a kitchen without a signal is what the copy is for.
+ */
+function offlineBanner() {
+  if (!api.offline || onCookScreen) return null
+  const when = api.offline.toLocaleString(language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return element('p', 'notice', t('No connection. Showing recipes as of {when}.', { when }))
 }
 
 /**
