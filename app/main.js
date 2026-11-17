@@ -766,7 +766,7 @@ function show(...parts) {
 function offlineBanner() {
   if (!api.offline || onCookScreen) return null
   const when = api.offline.toLocaleString(language, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-  return element('p', 'notice', t('No connection. Showing recipes as of {when}.', { when }))
+  return element('p', 'notice warning offline', t('No connection. Showing recipes as of {when}.', { when }))
 }
 
 /**
